@@ -5,7 +5,7 @@ export interface User {
   username: string;
   email?: string;
   avatarUrl: string | null;
-  status: 'online' | 'offline' | 'away';
+  status: 'online' | 'offline' | 'away' | 'in_call';
   createdAt: string;
 }
 
@@ -24,6 +24,7 @@ export interface Message {
   senderId: number;
   createdAt: string;
   sender: Pick<User, 'id' | 'username' | 'avatarUrl'>;
+  isSystem?: boolean;
 }
 
 export interface ChannelMember {
@@ -88,7 +89,7 @@ export interface TypingEvent {
 export interface UserStatusEvent {
   userId: number;
   username: string;
-  status: User['status'];
+  status: User['status'] | 'in_call';
 }
 
 // ─── Electron ───────────────────────────────────
@@ -97,6 +98,9 @@ declare global {
   interface Window {
     electronAPI?: {
       platform: string;
+      windowMinimize: () => void;
+      windowMaximize: () => void;
+      windowClose: () => void;
     };
   }
 }

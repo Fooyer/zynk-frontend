@@ -2,6 +2,7 @@ import { MessageList } from '../chat/MessageList';
 import { MessageInput } from '../chat/MessageInput';
 import { TypingIndicator } from '../chat/TypingIndicator';
 import { useFriendStore } from '../../stores/friendStore';
+import { useCallStore } from '../../stores/callStore';
 import { getInitials, getUserColor } from '../../utils/formatDate';
 import type { DmChannel } from '../../types';
 
@@ -9,18 +10,21 @@ interface Props {
   dm: DmChannel;
 }
 
-function HeaderIconButton({ title, onClick, children, danger }: {
+function HeaderIconButton({ title, onClick, children, danger, active }: {
   title: string;
   onClick?: () => void;
   children: React.ReactNode;
   danger?: boolean;
+  active?: boolean;
 }) {
   return (
     <button
       onClick={onClick}
       title={title}
       className={`p-1.5 rounded transition-colors ${
-        danger
+        active
+          ? 'text-success bg-surface-700'
+          : danger
           ? 'text-surface-400 hover:text-danger hover:bg-surface-700'
           : 'text-surface-400 hover:text-surface-100 hover:bg-surface-700'
       }`}
@@ -34,6 +38,11 @@ export function DMChatArea({ dm }: Props) {
   const { friend, channelId } = dm;
   const color = getUserColor(friend.username);
   const setActiveDm = useFriendStore((s) => s.setActiveDm);
+  const initCall = useCallStore((s) => s.initCall);
+  const callStatus = useCallStore((s) => s.status);
+  const callPeerId = useCallStore((s) => s.peerId);
+
+  const isInCallWithFriend = callPeerId === friend.id && callStatus !== 'idle';
 
   return (
     <main className="flex-1 flex flex-col min-w-0 bg-surface-900">
@@ -85,8 +94,14 @@ export function DMChatArea({ dm }: Props) {
 
         {/* Right: action buttons */}
         <div className="ml-auto flex items-center gap-0.5">
-          {/* Chamada de voz — futuro */}
-          <HeaderIconButton title="Chamada de voz (em breve)">
+          {/* Chamada de voz */}
+          <HeaderIconButton
+            title={isInCallWithFriend ? 'Em chamada' : 'Chamada de voz'}
+            onClick={() => {
+              if (callStatus === 'idle') initCall(Number(friend.id), friend.username, channelId);
+            }}
+            active={isInCallWithFriend}
+          >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 13a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.62 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 9.91a16 16 0 0 0 6.29 6.29l.97-.97a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z" />
             </svg>

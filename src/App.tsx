@@ -12,17 +12,8 @@ import { MemberList } from './components/layout/MemberList';
 import { HomeLayout } from './components/home/HomeLayout';
 import { LoginForm } from './components/auth/LoginForm';
 import { RegisterForm } from './components/auth/RegisterForm';
+import { CallManager } from './components/call/CallManager';
 
-declare global {
-  interface Window {
-    electronAPI?: {
-      platform: string;
-      windowMinimize: () => void;
-      windowMaximize: () => void;
-      windowClose: () => void;
-    };
-  }
-}
 
 function TitleBar() {
   const isLinux = window.electronAPI?.platform === 'linux';
@@ -107,6 +98,7 @@ function AppLayout() {
         <NavBar />
         {view === 'home' ? <HomeLayout /> : <ServerLayout />}
       </div>
+      <CallManager />
     </div>
   );
 }

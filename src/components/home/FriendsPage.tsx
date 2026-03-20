@@ -16,7 +16,7 @@ export function FriendsPage() {
     loadAll();
   }, []);
 
-  const onlineFriends = friends.filter((f) => f.friend.status === 'online');
+  const onlineFriends = friends.filter((f) => f.friend.status === 'online' || f.friend.status === 'in_call');
 
   const handleSendRequest = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -219,7 +219,8 @@ export function FriendsPage() {
                         </div>
                         <div
                           className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-surface-900 ${
-                            f.friend.status === 'online' ? 'bg-online' : 'bg-offline'
+                            f.friend.status === 'online' ? 'bg-online' :
+                            f.friend.status === 'in_call' ? 'bg-warning' : 'bg-offline'
                           }`}
                         />
                       </div>
@@ -227,10 +228,12 @@ export function FriendsPage() {
                         <p className="text-sm font-medium text-surface-100">{f.friend.username}</p>
                         <p
                           className={`text-xs ${
-                            f.friend.status === 'online' ? 'text-success' : 'text-surface-400'
+                            f.friend.status === 'online' ? 'text-success' :
+                            f.friend.status === 'in_call' ? 'text-warning' : 'text-surface-400'
                           }`}
                         >
-                          {f.friend.status === 'online' ? 'Online' : 'Offline'}
+                          {f.friend.status === 'online' ? 'Online' :
+                           f.friend.status === 'in_call' ? 'Em chamada' : 'Offline'}
                         </p>
                       </div>
                       <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">

@@ -16,6 +16,7 @@ interface ChatState {
   loadMessages: (channelId: number) => Promise<void>;
   loadMore: (channelId: number) => Promise<void>;
   addMessage: (message: Message) => void;
+  addSystemMessage: (channelId: number, content: string) => void;
   setTyping: (event: TypingEvent) => void;
   clearMessages: () => void;
 }
@@ -89,6 +90,30 @@ export const useChatStore = create<ChatState>((set, get) => ({
         messagesByChannel: {
           ...state.messagesByChannel,
           [message.channelId]: [...existing, message],
+        },
+      };
+    });
+  },
+
+  /**
+   * Adiciona uma mensagem local de sistema (ex: "Chamada iniciada").
+   */
+  addSystemMessage: (channelId, content) => {
+    const systemMessage: Message = {
+      id: -Date.now(),
+      content,
+      channelId,
+      senderId: 0,
+      createdAt: new Date().toISOString(),
+      sender: { id: 0, username: '', avatarUrl: null },
+      isSystem: true,
+    };
+    set((state) => {
+      const existing = state.messagesByChannel[channelId] || [];
+      return {
+        messagesByChannel: {
+          ...state.messagesByChannel,
+          [channelId]: [...existing, systemMessage],
         },
       };
     });

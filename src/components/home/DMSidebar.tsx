@@ -1,16 +1,24 @@
 import { useEffect } from 'react';
 import { useFriendStore } from '../../stores/friendStore';
+import { useCallStore } from '../../stores/callStore';
 import { getInitials, getUserColor } from '../../utils/formatDate';
 
 export function DMSidebar() {
   const { friends, dmChannels, activeDmChannelId, loadDmChannels, openDm, closeDm, setActiveDm } =
     useFriendStore();
 
+  const callStatus = useCallStore((s) => s.status);
+  const callPeerUsername = useCallStore((s) => s.peerUsername);
+  const callPeerId = useCallStore((s) => s.peerId);
+  const isMuted = useCallStore((s) => s.isMuted);
+  const volume = useCallStore((s) => s.volume);
+  const setVolume = useCallStore((s) => s.setVolume);
+
   useEffect(() => {
     loadDmChannels();
   }, []);
 
-  const onlineFriends = friends.filter((f) => f.friend.status === 'online');
+  const onlineFriends = friends.filter((f) => f.friend.status === 'online' || f.friend.status === 'in_call');
 
   const handleOpenDm = async (friendId: number) => {
     try {
@@ -18,6 +26,32 @@ export function DMSidebar() {
     } catch {
       // silencioso
     }
+  };
+
+  const handleToggleMute = () => {
+    window.dispatchEvent(new CustomEvent('call:toggle-mute'));
+  };
+
+  const handleHangup = () => {
+    window.dispatchEvent(new CustomEvent('call:hangup'));
+  };
+
+  const getStatusDotClass = (status: string) => {
+    if (status === 'online') return 'bg-online';
+    if (status === 'in_call') return 'bg-warning';
+    return 'bg-offline';
+  };
+
+  const getStatusText = (status: string) => {
+    if (status === 'online') return 'Online';
+    if (status === 'in_call') return 'Em chamada';
+    return 'Offline';
+  };
+
+  const getStatusTextClass = (status: string) => {
+    if (status === 'online') return 'text-success';
+    if (status === 'in_call') return 'text-warning';
+    return 'text-surface-500';
   };
 
   return (
@@ -38,6 +72,7 @@ export function DMSidebar() {
             {dmChannels.map((dm) => {
               const isActive = activeDmChannelId === dm.channelId;
               const color = getUserColor(dm.friend.username);
+              const isInCallWithMe = callStatus !== 'idle' && callPeerId === dm.friend.id;
               return (
                 <div
                   key={dm.channelId}
@@ -64,31 +99,37 @@ export function DMSidebar() {
                       )}
                     </div>
                     <div
-                      className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-surface-800 ${
-                        dm.friend.status === 'online' ? 'bg-online' : 'bg-offline'
-                      }`}
+                      className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-surface-800 ${getStatusDotClass(dm.friend.status)}`}
                     />
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium truncate">{dm.friend.username}</p>
-                    <p
-                      className={`text-xs ${
-                        dm.friend.status === 'online' ? 'text-success' : 'text-surface-500'
-                      }`}
-                    >
-                      {dm.friend.status === 'online' ? 'Online' : 'Offline'}
+                    <p className={`text-xs ${getStatusTextClass(dm.friend.status)}`}>
+                      {getStatusText(dm.friend.status)}
                     </p>
                   </div>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); closeDm(dm.channelId); }}
-                    className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-surface-500 text-surface-400 hover:text-surface-100 transition-all flex-shrink-0"
-                    title="Fechar conversa"
-                  >
-                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                      <line x1="1" y1="1" x2="11" y2="11" />
-                      <line x1="11" y1="1" x2="1" y2="11" />
+                  {isInCallWithMe ? (
+                    <svg
+                      width="12"
+                      height="12"
+                      viewBox="0 0 24 24"
+                      fill="currentColor"
+                      className="flex-shrink-0 text-success animate-pulse"
+                    >
+                      <path d="M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1-9.4 0-17-7.6-17-17 0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.3 0 .7-.2 1L6.6 10.8z"/>
                     </svg>
-                  </button>
+                  ) : (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); closeDm(dm.channelId); }}
+                      className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-surface-500 text-surface-400 hover:text-surface-100 transition-all flex-shrink-0"
+                      title="Fechar conversa"
+                    >
+                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                        <line x1="1" y1="1" x2="11" y2="11" />
+                        <line x1="11" y1="1" x2="1" y2="11" />
+                      </svg>
+                    </button>
+                  )}
                 </div>
               );
             })}
@@ -119,7 +160,7 @@ export function DMSidebar() {
                       >
                         {getInitials(f.friend.username)}
                       </div>
-                      <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-surface-800 bg-online" />
+                      <div className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-surface-800 ${getStatusDotClass(f.friend.status)}`} />
                     </div>
                     <p className="text-sm font-medium truncate">{f.friend.username}</p>
                   </button>
@@ -129,6 +170,67 @@ export function DMSidebar() {
           </div>
         )}
       </div>
+
+      {/* Active call bar */}
+      {callStatus !== 'idle' && (
+        <div className="px-3 py-2.5 bg-surface-900 border-t border-surface-700/50">
+          <div className="flex items-center gap-2">
+            <div className={`w-2 h-2 rounded-full flex-shrink-0 ${callStatus === 'active' ? 'bg-success animate-pulse' : 'bg-warning animate-pulse'}`} />
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-semibold text-success truncate">
+                {callStatus === 'active' ? 'Em chamada' : callStatus === 'calling' ? 'Chamando...' : 'Conectando...'}
+              </p>
+              {callPeerUsername && (
+                <p className="text-xs text-surface-400 truncate">{callPeerUsername}</p>
+              )}
+            </div>
+            {/* Mute toggle */}
+            <button
+              onClick={handleToggleMute}
+              title={isMuted ? 'Ativar mic' : 'Silenciar'}
+              className={`p-1.5 rounded transition-colors ${isMuted ? 'bg-danger text-white' : 'text-surface-400 hover:text-surface-100 hover:bg-surface-700'}`}
+            >
+              {isMuted ? (
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                  <line x1="1" y1="1" x2="23" y2="23" />
+                  <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6" />
+                  <path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23" />
+                  <line x1="12" y1="19" x2="12" y2="23" />
+                  <line x1="8" y1="23" x2="16" y2="23" />
+                </svg>
+              ) : (
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                  <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+                  <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                  <line x1="12" y1="19" x2="12" y2="23" />
+                  <line x1="8" y1="23" x2="16" y2="23" />
+                </svg>
+              )}
+            </button>
+            {/* Volume */}
+            <input
+              type="range"
+              min="0"
+              max="100"
+              value={Math.round(volume * 100)}
+              onChange={(e) => setVolume(Number(e.target.value) / 100)}
+              title={`Volume: ${Math.round(volume * 100)}%`}
+              className="w-16 h-1 accent-success cursor-pointer"
+            />
+
+            {/* Hangup */}
+            <button
+              onClick={handleHangup}
+              title="Encerrar chamada"
+              className="p-1.5 rounded bg-danger text-white hover:bg-red-700 transition-colors"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1-9.4 0-17-7.6-17-17 0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.3 0 .7-.2 1L6.6 10.8z"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
     </aside>
   );
 }

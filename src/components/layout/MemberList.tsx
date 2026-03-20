@@ -82,14 +82,15 @@ export function MemberList() {
 
   if (!activeChannelId) return null;
 
-  const onlineMembers = members.filter((m) => m.user.status === 'online');
-  const offlineMembers = members.filter((m) => m.user.status !== 'online');
+  const onlineMembers = members.filter((m) => m.user.status === 'online' || m.user.status === 'in_call');
+  const offlineMembers = members.filter((m) => m.user.status !== 'online' && m.user.status !== 'in_call');
 
   const renderMember = (member: ChannelMember) => {
     const { user, role } = member;
     const color = getUserColor(user.username);
     const statusColor =
       user.status === 'online' ? 'bg-online' :
+      user.status === 'in_call' ? 'bg-warning' :
       user.status === 'away' ? 'bg-away' : 'bg-offline';
     const isSelf = Number(user.id) === Number(currentUserId);
 
@@ -159,8 +160,8 @@ export function MemberList() {
             {/* User info */}
             <div className="px-3 py-2 border-b border-surface-700/50">
               <p className="text-sm font-semibold text-surface-100">{member.user.username}</p>
-              <p className={`text-xs ${member.user.status === 'online' ? 'text-success' : 'text-surface-400'}`}>
-                {member.user.status === 'online' ? 'Online' : 'Offline'}
+              <p className={`text-xs ${member.user.status === 'online' ? 'text-success' : member.user.status === 'in_call' ? 'text-warning' : 'text-surface-400'}`}>
+                {member.user.status === 'online' ? 'Online' : member.user.status === 'in_call' ? 'Em chamada' : 'Offline'}
               </p>
             </div>
 
