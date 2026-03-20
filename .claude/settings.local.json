@@ -9,7 +9,8 @@
       "Bash(NODE_BIN=/home/fooyer/.var/app/com.visualstudio.code/config/nvm/versions/node/v24.12.0/bin export PATH=\"$NODE_BIN:$PATH\" npx tsc --noEmit)",
       "Bash(NODE_BIN=/home/fooyer/.var/app/com.visualstudio.code/config/nvm/versions/node/v24.12.0/bin export PATH=\"$NODE_BIN:$PATH\" cd /home/fooyer/Projetos/zynk-backend)",
       "Bash(NODE_BIN=/home/fooyer/.var/app/com.visualstudio.code/config/nvm/versions/node/v24.12.0/bin)",
-      "Bash(export PATH=\"$NODE_BIN:$PATH\")"
+      "Bash(export PATH=\"$NODE_BIN:$PATH\")",
+      "Bash(npm show:*)"
     ]
   }
 }

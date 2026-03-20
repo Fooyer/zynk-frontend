@@ -23,16 +23,23 @@ async function getProcessedStream(): Promise<MediaStream> {
 
   try {
     const audioCtx = new AudioContext({ sampleRate: 48000 });
+
+    // Carrega o noise gate worklet (arquivo em /public)
+    await audioCtx.audioWorklet.addModule('/noise-gate-processor.js');
+
     const source = audioCtx.createMediaStreamSource(rawStream);
     const destination = audioCtx.createMediaStreamDestination();
 
-    // High-pass: removes low-freq rumble/A/C noise (below 80Hz)
+    // High-pass: remove ruído de baixa frequência (< 80Hz) — ventilador, A/C
     const highPass = audioCtx.createBiquadFilter();
     highPass.type = 'highpass';
     highPass.frequency.value = 80;
     highPass.Q.value = 0.7;
 
-    // Dynamics compressor: evens out voice volume, reduces background spikes
+    // Noise gate: silencia quando não há voz, detecta e descarta cliques (teclado/mouse)
+    const noiseGate = new AudioWorkletNode(audioCtx, 'noise-gate-processor');
+
+    // Dynamics compressor: normaliza volume da voz
     const compressor = audioCtx.createDynamicsCompressor();
     compressor.threshold.value = -24;
     compressor.knee.value = 10;
@@ -40,12 +47,15 @@ async function getProcessedStream(): Promise<MediaStream> {
     compressor.attack.value = 0.003;
     compressor.release.value = 0.1;
 
+    // Chain: source → high-pass → noise gate → compressor → output
     source.connect(highPass);
-    highPass.connect(compressor);
+    highPass.connect(noiseGate);
+    noiseGate.connect(compressor);
     compressor.connect(destination);
 
     return new MediaStream([...destination.stream.getAudioTracks()]);
   } catch {
+    // Fallback sem worklet (Firefox ou ambientes sem suporte)
     return rawStream;
   }
 }
