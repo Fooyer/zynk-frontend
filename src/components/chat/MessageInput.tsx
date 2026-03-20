@@ -1,23 +1,21 @@
 import { useState, useRef, useCallback } from 'react';
 import { getSocket } from '../../services/socket';
-import { useChannelStore } from '../../stores/channelStore';
 
-export function MessageInput() {
+interface Props {
+  channelId: number;
+  placeholder?: string;
+}
+
+export function MessageInput({ channelId, placeholder = 'Envie uma mensagem...' }: Props) {
   const [content, setContent] = useState('');
-  const activeChannelId = useChannelStore((s) => s.activeChannelId);
   const lastTypingEmit = useRef(0);
 
   const handleSend = useCallback(() => {
-    if (!content.trim() || !activeChannelId) return;
-
+    if (!content.trim()) return;
     const socket = getSocket();
-    socket.emit('message:send', {
-      channelId: activeChannelId,
-      content: content.trim(),
-    });
-
+    socket.emit('message:send', { channelId, content: content.trim() });
     setContent('');
-  }, [content, activeChannelId]);
+  }, [content, channelId]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -26,20 +24,15 @@ export function MessageInput() {
     }
   };
 
-  // Emit typing com throttle de 2s (evita spam)
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setContent(e.target.value);
-
-    if (!activeChannelId) return;
     const now = Date.now();
     if (now - lastTypingEmit.current > 2000) {
       lastTypingEmit.current = now;
       const socket = getSocket();
-      socket.emit('message:typing', { channelId: activeChannelId });
+      socket.emit('message:typing', { channelId });
     }
   };
-
-  if (!activeChannelId) return null;
 
   return (
     <div className="px-4 pb-4 pt-1">
@@ -49,11 +42,10 @@ export function MessageInput() {
           onChange={handleChange}
           onKeyDown={handleKeyDown}
           rows={1}
-          placeholder="Envie uma mensagem..."
+          placeholder={placeholder}
           className="flex-1 bg-transparent text-surface-100 placeholder-surface-500 resize-none focus:outline-none text-sm leading-relaxed max-h-32 py-1.5"
           style={{ minHeight: '24px' }}
           onInput={(e) => {
-            // Auto-resize textarea
             const el = e.currentTarget;
             el.style.height = 'auto';
             el.style.height = Math.min(el.scrollHeight, 128) + 'px';

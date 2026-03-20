@@ -1,4 +1,4 @@
-import { app, BrowserWindow, shell, session } from 'electron';
+import { app, BrowserWindow, shell, session, ipcMain } from 'electron';
 import path from 'path';
 
 // Desabilita aceleração de hardware se causar problemas
@@ -53,6 +53,13 @@ function createWindow() {
     mainWindow = null;
   });
 }
+
+ipcMain.on('window:minimize', () => mainWindow?.minimize());
+ipcMain.on('window:maximize', () => {
+  if (mainWindow?.isMaximized()) mainWindow.unmaximize();
+  else mainWindow?.maximize();
+});
+ipcMain.on('window:close', () => mainWindow?.close());
 
 app.whenReady().then(() => {
   // CSP apenas em produção — em dev o Vite precisa de HMR/websocket/inline scripts

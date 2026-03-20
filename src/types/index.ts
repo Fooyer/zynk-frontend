@@ -33,6 +33,37 @@ export interface ChannelMember {
   user: Pick<User, 'id' | 'username' | 'avatarUrl' | 'status'>;
 }
 
+// ─── DMs ────────────────────────────────────────
+
+export interface DmChannel {
+  channelId: number;
+  createdAt: string;
+  friend: Pick<User, 'id' | 'username' | 'avatarUrl' | 'status'>;
+}
+
+// ─── Friends ────────────────────────────────────
+
+export interface FriendEntry {
+  id: number;
+  status: 'accepted';
+  createdAt: string;
+  friend: Pick<User, 'id' | 'username' | 'avatarUrl' | 'status'>;
+}
+
+export interface FriendRequest {
+  id: number;
+  status: 'pending';
+  createdAt: string;
+  requester: Pick<User, 'id' | 'username' | 'avatarUrl'>;
+}
+
+export interface SentRequest {
+  id: number;
+  status: 'pending';
+  createdAt: string;
+  addressee: Pick<User, 'id' | 'username' | 'avatarUrl'>;
+}
+
 // ─── API Responses ──────────────────────────────
 
 export interface AuthResponse {

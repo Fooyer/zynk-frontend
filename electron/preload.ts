@@ -1,4 +1,4 @@
-import { contextBridge } from 'electron';
+import { contextBridge, ipcRenderer } from 'electron';
 
 /**
  * Preload script — ponte segura entre Node.js e o renderer (React).
@@ -12,5 +12,7 @@ import { contextBridge } from 'electron';
  */
 contextBridge.exposeInMainWorld('electronAPI', {
   platform: process.platform,
-  // Futuros métodos aqui
+  windowMinimize: () => ipcRenderer.send('window:minimize'),
+  windowMaximize: () => ipcRenderer.send('window:maximize'),
+  windowClose: () => ipcRenderer.send('window:close'),
 });

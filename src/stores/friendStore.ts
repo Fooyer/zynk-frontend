@@ -1,0 +1,150 @@
+import { create } from 'zustand';
+import { friendsAPI, channelsAPI } from '../services/api';
+import { getSocket } from '../services/socket';
+import { useChatStore } from './chatStore';
+import type { FriendEntry, FriendRequest, SentRequest, DmChannel } from '../types';
+
+interface FriendState {
+  friends: FriendEntry[];
+  requests: FriendRequest[];
+  sent: SentRequest[];
+  dmChannels: DmChannel[];
+  activeDmChannelId: number | null;
+  isLoading: boolean;
+  isDmLoading: boolean;
+  error: string | null;
+
+  loadAll: () => Promise<void>;
+  loadDmChannels: () => Promise<void>;
+  openDm: (targetUserId: number) => Promise<number>;
+  closeDm: (channelId: number) => void;
+  setActiveDm: (channelId: number | null) => void;
+  sendRequest: (username: string) => Promise<void>;
+  accept: (id: number) => Promise<void>;
+  reject: (id: number) => Promise<void>;
+  remove: (id: number) => Promise<void>;
+  clearError: () => void;
+}
+
+// Guarda contra chamadas concorrentes de openDm para o mesmo usuário
+const pendingOpenDm = new Map<number, Promise<number>>();
+
+export const useFriendStore = create<FriendState>((set, get) => ({
+  friends: [],
+  requests: [],
+  sent: [],
+  dmChannels: [],
+  activeDmChannelId: null,
+  isLoading: false,
+  isDmLoading: false,
+  error: null,
+
+  loadAll: async () => {
+    set({ isLoading: true, error: null });
+    try {
+      const [friendsRes, requestsRes, sentRes] = await Promise.all([
+        friendsAPI.listFriends(),
+        friendsAPI.listRequests(),
+        friendsAPI.listSent(),
+      ]);
+      set({ friends: friendsRes.data, requests: requestsRes.data, sent: sentRes.data, isLoading: false });
+    } catch {
+      set({ isLoading: false, error: 'Erro ao carregar amigos' });
+    }
+  },
+
+  loadDmChannels: async () => {
+    set({ isDmLoading: true });
+    try {
+      const { data } = await channelsAPI.getDmChannels();
+      set({ dmChannels: data, isDmLoading: false });
+    } catch {
+      set({ isDmLoading: false });
+    }
+  },
+
+  openDm: async (targetUserId: number): Promise<number> => {
+    // Evita criar múltiplos DMs com o mesmo usuário por cliques rápidos
+    if (pendingOpenDm.has(targetUserId)) {
+      return pendingOpenDm.get(targetUserId)!;
+    }
+
+    const promise = (async () => {
+      const { data } = await channelsAPI.openDM(targetUserId);
+      const channelId = data.channelId;
+
+      await useChatStore.getState().loadMessages(channelId);
+
+      const socket = getSocket();
+      if (socket?.connected) {
+        socket.emit('channel:join', { channelId });
+      }
+
+      await get().loadDmChannels();
+
+      set({ activeDmChannelId: channelId });
+      return channelId;
+    })().finally(() => pendingOpenDm.delete(targetUserId));
+
+    pendingOpenDm.set(targetUserId, promise);
+    return promise;
+  },
+
+  closeDm: (channelId) => {
+    set((s) => ({
+      dmChannels: s.dmChannels.filter((d) => d.channelId !== channelId),
+      activeDmChannelId: s.activeDmChannelId === channelId ? null : s.activeDmChannelId,
+    }));
+  },
+
+  setActiveDm: (channelId) => {
+    set({ activeDmChannelId: channelId });
+    if (channelId) {
+      useChatStore.getState().loadMessages(channelId);
+    }
+  },
+
+  sendRequest: async (username) => {
+    set({ error: null });
+    try {
+      await friendsAPI.sendRequest(username);
+      await get().loadAll();
+    } catch (err: any) {
+      const msg = err.response?.data?.message || 'Erro ao enviar solicitação';
+      set({ error: Array.isArray(msg) ? msg.join(', ') : msg });
+      throw err;
+    }
+  },
+
+  accept: async (id) => {
+    try {
+      await friendsAPI.accept(id);
+      await get().loadAll();
+    } catch (err: any) {
+      const msg = err.response?.data?.message || 'Erro ao aceitar solicitação';
+      set({ error: Array.isArray(msg) ? msg.join(', ') : msg });
+    }
+  },
+
+  reject: async (id) => {
+    try {
+      await friendsAPI.reject(id);
+      await get().loadAll();
+    } catch (err: any) {
+      const msg = err.response?.data?.message || 'Erro ao recusar solicitação';
+      set({ error: Array.isArray(msg) ? msg.join(', ') : msg });
+    }
+  },
+
+  remove: async (id) => {
+    try {
+      await friendsAPI.remove(id);
+      await get().loadAll();
+    } catch (err: any) {
+      const msg = err.response?.data?.message || 'Erro ao remover amigo';
+      set({ error: Array.isArray(msg) ? msg.join(', ') : msg });
+    }
+  },
+
+  clearError: () => set({ error: null }),
+}));

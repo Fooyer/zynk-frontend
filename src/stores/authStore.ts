@@ -2,6 +2,10 @@ import { create } from 'zustand';
 import { authAPI } from '../services/api';
 import { connectSocket, disconnectSocket } from '../services/socket';
 import type { User } from '../types';
+import { useChannelStore } from './channelStore';
+import { useChatStore } from './chatStore';
+import { useFriendStore } from './friendStore';
+import { useUiStore } from './uiStore';
 
 interface AuthState {
   user: User | null;
@@ -16,14 +20,6 @@ interface AuthState {
   clearError: () => void;
 }
 
-/**
- * Store de autenticação.
- * 
- * Por que Zustand?
- * - API mínima (~1KB), zero boilerplate
- * - Selectors automáticos (re-render só quando muda o que o componente usa)
- * - Sem providers/context wrappers
- */
 export const useAuthStore = create<AuthState>((set) => ({
   user: null,
   token: localStorage.getItem('token'),
@@ -59,6 +55,11 @@ export const useAuthStore = create<AuthState>((set) => ({
   logout: () => {
     localStorage.removeItem('token');
     disconnectSocket();
+    // Limpa todos os stores para não vazar dados entre contas
+    useChannelStore.setState({ channels: [], activeChannelId: null, members: [], discoverChannels: [] });
+    useChatStore.setState({ messagesByChannel: {}, cursors: {}, hasMore: {}, typingUsers: {} });
+    useFriendStore.setState({ friends: [], requests: [], sent: [], dmChannels: [], activeDmChannelId: null, error: null });
+    useUiStore.setState({ view: 'home' });
     set({ user: null, token: null });
   },
 

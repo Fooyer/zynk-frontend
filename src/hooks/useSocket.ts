@@ -2,19 +2,14 @@ import { useEffect, useRef } from 'react';
 import { getSocket } from '../services/socket';
 import { useChatStore } from '../stores/chatStore';
 import { useChannelStore } from '../stores/channelStore';
+import { useFriendStore } from '../stores/friendStore';
 import type { Message, TypingEvent, UserStatusEvent } from '../types';
 
-/**
- * Hook que conecta os eventos do Socket.IO às stores.
- * Deve ser usado UMA vez no componente raiz do chat (AppLayout).
- *
- * Centraliza todo o binding de eventos — componentes individuais
- * só leem da store, nunca escutam socket diretamente.
- */
 export function useSocket() {
   const addMessage = useChatStore((s) => s.addMessage);
   const setTyping = useChatStore((s) => s.setTyping);
   const loadChannels = useChannelStore((s) => s.loadChannels);
+  const loadDmChannels = useFriendStore((s) => s.loadDmChannels);
   const hasSetup = useRef(false);
 
   useEffect(() => {
@@ -23,48 +18,42 @@ export function useSocket() {
 
     const socket = getSocket();
 
-    // Nova mensagem
     socket.on('message:new', (message: Message) => {
       addMessage(message);
     });
 
-    // Typing
     socket.on('message:typing', (event: TypingEvent) => {
       setTyping(event);
     });
 
-    // Alguém entrou no canal
     socket.on('channel:user_joined', () => {
-      loadChannels(); // Recarrega lista de membros
+      loadChannels();
     });
 
-    // Status de usuário mudou
+    // Novo DM aberto pelo outro usuário — recarrega lista de DMs
+    socket.on('dm:new', () => {
+      loadDmChannels();
+    });
+
     socket.on('user:status', (_event: UserStatusEvent) => {
-      // Futuramente: atualizar na store de membros
+      // Futuramente: atualizar status na store de membros / amigos
     });
 
-    // Erro do servidor
     socket.on('error', (err: { message: string }) => {
       console.error('[Socket Error]', err.message);
     });
 
-    // Eventos de conexão
-    socket.on('connect', () => {
-      console.log('[Socket] Conectado');
-    });
-
-    socket.on('disconnect', (reason: string) => {
-      console.log('[Socket] Desconectado:', reason);
-    });
-
-    socket.on('reconnect', (attempt: number) => {
-      console.log(`[Socket] Reconectado após ${attempt} tentativa(s)`);
-    });
+    socket.on('connect', () => console.log('[Socket] Conectado'));
+    socket.on('disconnect', (reason: string) => console.log('[Socket] Desconectado:', reason));
+    socket.on('reconnect', (attempt: number) =>
+      console.log(`[Socket] Reconectado após ${attempt} tentativa(s)`),
+    );
 
     return () => {
       socket.off('message:new');
       socket.off('message:typing');
       socket.off('channel:user_joined');
+      socket.off('dm:new');
       socket.off('user:status');
       socket.off('error');
       socket.off('connect');
@@ -72,5 +61,5 @@ export function useSocket() {
       socket.off('reconnect');
       hasSetup.current = false;
     };
-  }, [addMessage, setTyping, loadChannels]);
+  }, [addMessage, setTyping, loadChannels, loadDmChannels]);
 }

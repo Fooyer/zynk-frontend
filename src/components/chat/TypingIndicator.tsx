@@ -1,15 +1,13 @@
 import { useChatStore } from '../../stores/chatStore';
-import { useChannelStore } from '../../stores/channelStore';
 import { useAuthStore } from '../../stores/authStore';
 
-export function TypingIndicator() {
-  const activeChannelId = useChannelStore((s) => s.activeChannelId);
-  const currentUserId = useAuthStore((s) => s.user?.id);
-  const typingUsers = useChatStore((s) =>
-    activeChannelId ? s.typingUsers[activeChannelId] || [] : [],
-  );
+interface Props {
+  channelId: number;
+}
 
-  // Filtra o próprio usuário
+export function TypingIndicator({ channelId }: Props) {
+  const currentUserId = useAuthStore((s) => s.user?.id);
+  const typingUsers = useChatStore((s) => s.typingUsers[channelId] || []);
   const others = typingUsers.filter((t) => t.userId !== currentUserId);
 
   if (others.length === 0) return <div className="h-6 px-4" />;
@@ -23,7 +21,6 @@ export function TypingIndicator() {
 
   return (
     <div className="h-6 px-4 flex items-center gap-2">
-      {/* Dots animados */}
       <div className="flex gap-0.5">
         <span className="w-1.5 h-1.5 bg-surface-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
         <span className="w-1.5 h-1.5 bg-surface-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
