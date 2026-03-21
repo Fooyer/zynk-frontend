@@ -13,6 +13,7 @@ import { HomeLayout } from './components/home/HomeLayout';
 import { LoginForm } from './components/auth/LoginForm';
 import { RegisterForm } from './components/auth/RegisterForm';
 import { CallManager } from './components/call/CallManager';
+import { SettingsPage } from './components/settings/SettingsPage';
 
 
 function TitleBar() {
@@ -96,7 +97,7 @@ function AppLayout() {
       <TitleBar />
       <div className="flex-1 flex overflow-hidden">
         <NavBar />
-        {view === 'home' ? <HomeLayout /> : <ServerLayout />}
+        {view === 'settings' ? <SettingsPage /> : view === 'home' ? <HomeLayout /> : <ServerLayout />}
       </div>
       <CallManager />
     </div>

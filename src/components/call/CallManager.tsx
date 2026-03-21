@@ -1,6 +1,7 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { useCallStore } from '../../stores/callStore';
 import { useChatStore } from '../../stores/chatStore';
+import { useSettingsStore } from '../../stores/settingsStore';
 import { getSocket } from '../../services/socket';
 import { remoteScreenStreamRef, localScreenStreamRef } from '../../services/callStream';
 import { IncomingCallModal } from './IncomingCallModal';
@@ -12,42 +13,106 @@ const ICE_SERVERS: RTCIceServer[] = [
 ];
 
 async function getProcessedStream(): Promise<MediaStream> {
-  const rawStream = await navigator.mediaDevices.getUserMedia({
-    audio: {
-      noiseSuppression: true,
-      echoCancellation: true,
-      autoGainControl: true,
-      channelCount: 1,
-      sampleRate: 48000,
-    },
-  });
+  const settings = useSettingsStore.getState();
+  const deviceConstraints: MediaTrackConstraints = {
+    noiseSuppression: settings.echoCancellation,
+    echoCancellation: settings.echoCancellation,
+    autoGainControl: settings.autoGainControl,
+    channelCount: 1,
+    sampleRate: 48000,
+  };
+  if (settings.inputDeviceId) {
+    deviceConstraints.deviceId = { exact: settings.inputDeviceId };
+  }
+
+  const rawStream = await navigator.mediaDevices.getUserMedia({ audio: deviceConstraints });
+
+  // Nível 'off' — retorna stream cru sem processamento
+  if (settings.noiseSuppression === 'off') return rawStream;
 
   try {
     const audioCtx = new AudioContext({ sampleRate: 48000 });
-    await audioCtx.audioWorklet.addModule('/noise-gate-processor.js');
-
     const source = audioCtx.createMediaStreamSource(rawStream);
     const destination = audioCtx.createMediaStreamDestination();
 
+    // Input gain (volume do microfone)
+    const inputGain = audioCtx.createGain();
+    inputGain.gain.value = settings.inputVolume;
+
+    // Nível 'low': apenas filtros básicos (highpass + lowpass + compressor)
+    // Nível 'medium': filtros + noise gate
+    // Nível 'high': cadeia completa (filtros + EQ + noise gate + compressor + makeup)
+
+    const isLow = settings.noiseSuppression === 'low';
+    const isMediumOrHigh = settings.noiseSuppression === 'medium' || settings.noiseSuppression === 'high';
+    const isHigh = settings.noiseSuppression === 'high';
+
+    // 1. High-pass: remove rumble e ruído de baixa frequência
     const highPass = audioCtx.createBiquadFilter();
     highPass.type = 'highpass';
-    highPass.frequency.value = 80;
-    highPass.Q.value = 0.7;
+    highPass.frequency.value = isHigh ? 100 : 80;
+    highPass.Q.value = 0.71;
 
-    const noiseGate = new AudioWorkletNode(audioCtx, 'noise-gate-processor');
+    // 2. Low-pass: corta frequências acima da voz
+    const lowPass = audioCtx.createBiquadFilter();
+    lowPass.type = 'lowpass';
+    lowPass.frequency.value = isHigh ? 8000 : 12000;
+    lowPass.Q.value = 0.71;
 
+    // Conecta início: source → inputGain → highPass → lowPass
+    source.connect(inputGain);
+    inputGain.connect(highPass);
+    highPass.connect(lowPass);
+
+    let lastNode: AudioNode = lowPass;
+
+    // 3. Presença vocal (apenas 'high')
+    if (isHigh) {
+      const presence = audioCtx.createBiquadFilter();
+      presence.type = 'peaking';
+      presence.frequency.value = 2500;
+      presence.Q.value = 1.2;
+      presence.gain.value = 3;
+      lastNode.connect(presence);
+      lastNode = presence;
+
+      // 4. De-esser (apenas 'high')
+      const deesser = audioCtx.createBiquadFilter();
+      deesser.type = 'peaking';
+      deesser.frequency.value = 6000;
+      deesser.Q.value = 2;
+      deesser.gain.value = -3;
+      lastNode.connect(deesser);
+      lastNode = deesser;
+    }
+
+    // 5. Noise gate (medium e high)
+    if (isMediumOrHigh) {
+      await audioCtx.audioWorklet.addModule('/noise-gate-processor.js');
+      const noiseGate = new AudioWorkletNode(audioCtx, 'noise-gate-processor');
+      lastNode.connect(noiseGate);
+      lastNode = noiseGate;
+    }
+
+    // 6. Compressor
     const compressor = audioCtx.createDynamicsCompressor();
-    compressor.threshold.value = -24;
-    compressor.knee.value = 10;
-    compressor.ratio.value = 8;
+    compressor.threshold.value = isHigh ? -28 : -20;
+    compressor.knee.value = isHigh ? 12 : 15;
+    compressor.ratio.value = isHigh ? 6 : 4;
     compressor.attack.value = 0.003;
-    compressor.release.value = 0.1;
+    compressor.release.value = isLow ? 0.1 : 0.15;
+    lastNode.connect(compressor);
+    lastNode = compressor;
 
-    source.connect(highPass);
-    highPass.connect(noiseGate);
-    noiseGate.connect(compressor);
-    compressor.connect(destination);
+    // 7. Makeup gain (medium e high)
+    if (isMediumOrHigh) {
+      const makeupGain = audioCtx.createGain();
+      makeupGain.gain.value = isHigh ? 1.4 : 1.2;
+      lastNode.connect(makeupGain);
+      lastNode = makeupGain;
+    }
 
+    lastNode.connect(destination);
     return new MediaStream([...destination.stream.getAudioTracks()]);
   } catch {
     return rawStream;
@@ -76,6 +141,8 @@ export function CallManager() {
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
   const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
+  const remoteGainRef = useRef<GainNode | null>(null);
+  const remoteAudioCtxRef = useRef<AudioContext | null>(null);
   const pendingCandidates = useRef<RTCIceCandidateInit[]>([]);
   const screenSenderRef = useRef<RTCRtpSender | null>(null);
   const screenAudioSenderRef = useRef<RTCRtpSender | null>(null);
@@ -83,8 +150,14 @@ export function CallManager() {
   const initialRemoteAudioTrackRef = useRef<MediaStreamTrack | null>(null);
   const isConnectedRef = useRef(false);
 
+  // Volume: usa GainNode para permitir amplificação acima de 100% (até 200%)
   useEffect(() => {
-    if (remoteAudioRef.current) remoteAudioRef.current.volume = volume;
+    if (remoteGainRef.current) {
+      remoteGainRef.current.gain.value = volume;
+    } else if (remoteAudioRef.current) {
+      // Fallback sem GainNode
+      remoteAudioRef.current.volume = Math.min(volume, 1);
+    }
   }, [volume]);
 
   // Sons de chamada: ringback (ligando) e ringtone (recebendo)
@@ -155,6 +228,9 @@ export function CallManager() {
     pendingCandidates.current = [];
     isConnectedRef.current = false;
     if (remoteAudioRef.current) remoteAudioRef.current.srcObject = null;
+    remoteAudioCtxRef.current?.close().catch(() => {});
+    remoteAudioCtxRef.current = null;
+    remoteGainRef.current = null;
     remoteScreenStreamRef.current = null;
     window.dispatchEvent(new CustomEvent('call:screen-stream-changed'));
   }, []);
@@ -165,10 +241,39 @@ export function CallManager() {
 
       // Stream acumulador: todos os tracks de áudio remoto (mic + áudio da tela)
       const remoteAudioStream = new MediaStream();
+
+      // Audio element como destino do áudio remoto
       if (!remoteAudioRef.current) remoteAudioRef.current = new Audio();
       remoteAudioRef.current.srcObject = remoteAudioStream;
       remoteAudioRef.current.autoplay = true;
-      remoteAudioRef.current.play().catch(() => {});
+
+      // Aplica dispositivo de saída configurado
+      const outputId = useSettingsStore.getState().outputDeviceId;
+      if (outputId && typeof remoteAudioRef.current.setSinkId === 'function') {
+        remoteAudioRef.current.setSinkId(outputId).catch(() => {});
+      }
+
+      // Função para configurar Web Audio com GainNode (chamada quando o primeiro track chegar)
+      let remoteAudioSetup = false;
+      const setupRemoteGain = () => {
+        if (remoteAudioSetup) return;
+        remoteAudioSetup = true;
+        try {
+          const remoteCtx = new AudioContext({ sampleRate: 48000 });
+          remoteAudioCtxRef.current = remoteCtx;
+          // Usa o audio element como source (ele já tem os tracks)
+          const source = remoteCtx.createMediaElementSource(remoteAudioRef.current!);
+          const gainNode = remoteCtx.createGain();
+          gainNode.gain.value = useCallStore.getState().volume;
+          remoteGainRef.current = gainNode;
+          source.connect(gainNode);
+          gainNode.connect(remoteCtx.destination);
+          remoteCtx.resume().catch(() => {});
+        } catch {
+          // Fallback: volume normal via audio element (sem boost)
+          remoteAudioRef.current!.volume = Math.min(useCallStore.getState().volume, 1);
+        }
+      };
 
       pc.onicecandidate = ({ candidate }) => {
         if (candidate) {
@@ -183,6 +288,9 @@ export function CallManager() {
         const track = event.track;
         if (track.kind === 'audio') {
           remoteAudioStream.addTrack(track);
+          // Configura o GainNode na primeira vez que um track de áudio chega
+          setupRemoteGain();
+          remoteAudioRef.current?.play().catch(() => {});
           // Salva o primeiro track (microfone) para não removê-lo no screen-stop
           if (!initialRemoteAudioTrackRef.current) {
             initialRemoteAudioTrackRef.current = track;
