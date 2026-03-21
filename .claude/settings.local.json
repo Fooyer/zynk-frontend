@@ -10,7 +10,12 @@
       "Bash(NODE_BIN=/home/fooyer/.var/app/com.visualstudio.code/config/nvm/versions/node/v24.12.0/bin export PATH=\"$NODE_BIN:$PATH\" cd /home/fooyer/Projetos/zynk-backend)",
       "Bash(NODE_BIN=/home/fooyer/.var/app/com.visualstudio.code/config/nvm/versions/node/v24.12.0/bin)",
       "Bash(export PATH=\"$NODE_BIN:$PATH\")",
-      "Bash(npm show:*)"
+      "Bash(npm show:*)",
+      "Read(//usr/bin/**)",
+      "Read(//var/**)",
+      "Bash(NODE=/var/config/nvm/versions/node/v24.12.0/bin/node)",
+      "Bash($NODE node_modules/.bin/tsc --noEmit)",
+      "Bash(NODE=/var/config/nvm/versions/node/v24.12.0/bin/node $NODE node_modules/.bin/tsc --noEmit)"
     ]
   }
 }

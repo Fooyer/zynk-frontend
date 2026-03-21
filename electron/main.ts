@@ -1,4 +1,4 @@
-import { app, BrowserWindow, shell, session, ipcMain } from 'electron';
+import { app, BrowserWindow, shell, session, ipcMain, desktopCapturer } from 'electron';
 import path from 'path';
 
 // Desabilita aceleração de hardware se causar problemas
@@ -62,6 +62,15 @@ ipcMain.on('window:maximize', () => {
 ipcMain.on('window:close', () => mainWindow?.close());
 
 app.whenReady().then(() => {
+  // Permite que o renderer use getDisplayMedia para compartilhar a tela (Windows)
+  session.defaultSession.setDisplayMediaRequestHandler((_request, callback) => {
+    desktopCapturer.getSources({ types: ['screen', 'window'] }).then((sources) => {
+      if (sources.length === 0) { callback({}); return; }
+      callback({ video: sources[0], audio: 'loopback' });
+    }).catch(() => callback({}));
+  });
+
+
   // CSP apenas em produção — em dev o Vite precisa de HMR/websocket/inline scripts
   if (!process.env.VITE_DEV_SERVER_URL) {
     session.defaultSession.webRequest.onHeadersReceived((details, callback) => {

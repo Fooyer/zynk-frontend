@@ -10,12 +10,16 @@ interface CallState {
   pendingOffer: RTCSessionDescriptionInit | null;
   isMuted: boolean;
   volume: number;
+  isScreenSharing: boolean;
+  remoteHasScreen: boolean;
 
   initCall: (peerId: number, peerUsername: string, channelId: number) => void;
   receiveCall: (from: { id: number; username: string }, channelId: number, offer: RTCSessionDescriptionInit) => void;
   setActive: () => void;
   setMuted: (muted: boolean) => void;
   setVolume: (volume: number) => void;
+  setScreenSharing: (v: boolean) => void;
+  setRemoteHasScreen: (v: boolean) => void;
   reset: () => void;
 }
 
@@ -27,6 +31,8 @@ export const useCallStore = create<CallState>((set) => ({
   pendingOffer: null,
   isMuted: false,
   volume: 1,
+  isScreenSharing: false,
+  remoteHasScreen: false,
 
   initCall: (peerId, peerUsername, channelId) =>
     set({ status: 'calling', peerId, peerUsername, channelId }),
@@ -37,5 +43,10 @@ export const useCallStore = create<CallState>((set) => ({
   setActive: () => set({ status: 'active', pendingOffer: null }),
   setMuted: (isMuted) => set({ isMuted }),
   setVolume: (volume) => set({ volume }),
-  reset: () => set({ status: 'idle', peerId: null, peerUsername: null, channelId: null, pendingOffer: null, isMuted: false, volume: 1 }),
+  setScreenSharing: (isScreenSharing) => set({ isScreenSharing }),
+  setRemoteHasScreen: (remoteHasScreen) => set({ remoteHasScreen }),
+  reset: () => set({
+    status: 'idle', peerId: null, peerUsername: null, channelId: null,
+    pendingOffer: null, isMuted: false, volume: 1, isScreenSharing: false, remoteHasScreen: false,
+  }),
 }));
