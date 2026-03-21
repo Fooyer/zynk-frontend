@@ -17,9 +17,19 @@ export interface Channel {
   createdAt: string;
 }
 
+export interface ReplyTo {
+  id: number;
+  content: string;
+  imageUrl?: string | null;
+  sender: Pick<User, 'id' | 'username' | 'avatarUrl'>;
+}
+
 export interface Message {
   id: number;
   content: string;
+  imageUrl?: string | null;
+  replyToId?: number | null;
+  replyTo?: ReplyTo | null;
   channelId: number;
   senderId: number;
   createdAt: string;

@@ -12,12 +12,16 @@ interface ChatState {
   // Typing
   typingUsers: Record<number, { userId: number; username: string; timeout: NodeJS.Timeout }[]>;
 
+  // Reply
+  replyingTo: Message | null;
+
   // Actions
   loadMessages: (channelId: number) => Promise<void>;
   loadMore: (channelId: number) => Promise<void>;
   addMessage: (message: Message) => void;
   addSystemMessage: (channelId: number, content: string) => void;
   setTyping: (event: TypingEvent) => void;
+  setReplyingTo: (message: Message | null) => void;
   clearMessages: () => void;
 }
 
@@ -27,6 +31,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   hasMore: {},
   isLoading: false,
   typingUsers: {},
+  replyingTo: null,
 
   /**
    * Carrega as mensagens iniciais de um canal.
@@ -153,7 +158,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
     });
   },
 
+  setReplyingTo: (message) => {
+    set({ replyingTo: message });
+  },
+
   clearMessages: () => {
-    set({ messagesByChannel: {}, cursors: {}, hasMore: {} });
+    set({ messagesByChannel: {}, cursors: {}, hasMore: {}, replyingTo: null });
   },
 }));

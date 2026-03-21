@@ -11,6 +11,7 @@ export function MessageList({ channelId }: Props) {
   const hasMore = useChatStore((s) => s.hasMore[channelId] ?? true);
   const loadMore = useChatStore((s) => s.loadMore);
   const isLoading = useChatStore((s) => s.isLoading);
+  const setReplyingTo = useChatStore((s) => s.setReplyingTo);
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -71,8 +72,16 @@ export function MessageList({ channelId }: Props) {
             !!prev &&
             !prev.isSystem &&
             prev.senderId === msg.senderId &&
+            !msg.replyTo &&
             new Date(msg.createdAt).getTime() - new Date(prev.createdAt).getTime() < 300000;
-          return <MessageItem key={msg.id} message={msg} isGrouped={isGrouped} />;
+          return (
+            <MessageItem
+              key={msg.id}
+              message={msg}
+              isGrouped={isGrouped}
+              onReply={setReplyingTo}
+            />
+          );
         })}
       </div>
       <div ref={bottomRef} />

@@ -15,7 +15,10 @@
       "Read(//var/**)",
       "Bash(NODE=/var/config/nvm/versions/node/v24.12.0/bin/node)",
       "Bash($NODE node_modules/.bin/tsc --noEmit)",
-      "Bash(NODE=/var/config/nvm/versions/node/v24.12.0/bin/node $NODE node_modules/.bin/tsc --noEmit)"
+      "Bash(NODE=/var/config/nvm/versions/node/v24.12.0/bin/node $NODE node_modules/.bin/tsc --noEmit)",
+      "Bash(find /c/Projects/zynk-frontend/src -type f \\\\\\(-name *.tsx -o -name *.ts \\\\\\))",
+      "Bash(grep -r \"upload\\\\|file\\\\|FormData\" /c/Projects/zynk-frontend/src --include=*.tsx --include=*.ts)",
+      "Bash(npm install:*)"
     ]
   }
 }
