@@ -14,6 +14,11 @@ interface SettingsState {
   echoCancellation: boolean;
   autoGainControl: boolean;
 
+  // Notificações
+  notifSound: boolean;
+  notifPush: boolean;
+  notifVolume: number;  // 0–1
+
   // Ações
   setInputDevice: (id: string) => void;
   setOutputDevice: (id: string) => void;
@@ -21,6 +26,9 @@ interface SettingsState {
   setNoiseSuppression: (v: NoiseSuppression) => void;
   setEchoCancellation: (v: boolean) => void;
   setAutoGainControl: (v: boolean) => void;
+  setNotifSound: (v: boolean) => void;
+  setNotifPush: (v: boolean) => void;
+  setNotifVolume: (v: number) => void;
 }
 
 export const useSettingsStore = create<SettingsState>()(
@@ -33,12 +41,19 @@ export const useSettingsStore = create<SettingsState>()(
       echoCancellation: true,
       autoGainControl: true,
 
+      notifSound: true,
+      notifPush: true,
+      notifVolume: 0.5,
+
       setInputDevice: (inputDeviceId) => set({ inputDeviceId }),
       setOutputDevice: (outputDeviceId) => set({ outputDeviceId }),
       setInputVolume: (inputVolume) => set({ inputVolume }),
       setNoiseSuppression: (noiseSuppression) => set({ noiseSuppression }),
       setEchoCancellation: (echoCancellation) => set({ echoCancellation }),
       setAutoGainControl: (autoGainControl) => set({ autoGainControl }),
+      setNotifSound: (notifSound) => set({ notifSound }),
+      setNotifPush: (notifPush) => set({ notifPush }),
+      setNotifVolume: (notifVolume) => set({ notifVolume }),
     }),
     { name: 'zynk-audio-settings' },
   ),

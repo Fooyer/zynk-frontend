@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { getSocket } from '../services/socket';
+import { notifyMessage, requestNotificationPermission } from '../services/notification';
 import { useChatStore } from '../stores/chatStore';
 import { useChannelStore } from '../stores/channelStore';
 import { useFriendStore } from '../stores/friendStore';
@@ -18,8 +19,11 @@ export function useSocket() {
 
     const socket = getSocket();
 
+    requestNotificationPermission();
+
     socket.on('message:new', (message: Message) => {
       addMessage(message);
+      notifyMessage(message);
     });
 
     socket.on('message:typing', (event: TypingEvent) => {

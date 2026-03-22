@@ -127,6 +127,16 @@ export default function App() {
     loadUser();
   }, [loadUser]);
 
+  useEffect(() => {
+    if (!isLoading) {
+      const splash = document.getElementById('splash');
+      if (splash) {
+        splash.classList.add('fade-out');
+        setTimeout(() => splash.remove(), 300);
+      }
+    }
+  }, [isLoading]);
+
   if (isLoading) {
     return (
       <div className="h-screen flex flex-col bg-surface-950">

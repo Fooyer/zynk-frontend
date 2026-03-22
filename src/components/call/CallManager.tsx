@@ -1,10 +1,12 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 import { useCallStore } from '../../stores/callStore';
 import { useChatStore } from '../../stores/chatStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { getSocket } from '../../services/socket';
 import { remoteScreenStreamRef, localScreenStreamRef } from '../../services/callStream';
 import { IncomingCallModal } from './IncomingCallModal';
+import { ScreenPicker } from './ScreenPicker';
+import type { ScreenSource } from '../../types';
 
 const ICE_SERVERS: RTCIceServer[] = [
   { urls: 'stun:stun.l.google.com:19302' },
@@ -35,38 +37,29 @@ async function getProcessedStream(): Promise<MediaStream> {
     const source = audioCtx.createMediaStreamSource(rawStream);
     const destination = audioCtx.createMediaStreamDestination();
 
-    // Input gain (volume do microfone)
     const inputGain = audioCtx.createGain();
     inputGain.gain.value = settings.inputVolume;
-
-    // Nível 'low': apenas filtros básicos (highpass + lowpass + compressor)
-    // Nível 'medium': filtros + noise gate
-    // Nível 'high': cadeia completa (filtros + EQ + noise gate + compressor + makeup)
 
     const isLow = settings.noiseSuppression === 'low';
     const isMediumOrHigh = settings.noiseSuppression === 'medium' || settings.noiseSuppression === 'high';
     const isHigh = settings.noiseSuppression === 'high';
 
-    // 1. High-pass: remove rumble e ruído de baixa frequência
     const highPass = audioCtx.createBiquadFilter();
     highPass.type = 'highpass';
     highPass.frequency.value = isHigh ? 100 : 80;
     highPass.Q.value = 0.71;
 
-    // 2. Low-pass: corta frequências acima da voz
     const lowPass = audioCtx.createBiquadFilter();
     lowPass.type = 'lowpass';
     lowPass.frequency.value = isHigh ? 8000 : 12000;
     lowPass.Q.value = 0.71;
 
-    // Conecta início: source → inputGain → highPass → lowPass
     source.connect(inputGain);
     inputGain.connect(highPass);
     highPass.connect(lowPass);
 
     let lastNode: AudioNode = lowPass;
 
-    // 3. Presença vocal (apenas 'high')
     if (isHigh) {
       const presence = audioCtx.createBiquadFilter();
       presence.type = 'peaking';
@@ -76,7 +69,6 @@ async function getProcessedStream(): Promise<MediaStream> {
       lastNode.connect(presence);
       lastNode = presence;
 
-      // 4. De-esser (apenas 'high')
       const deesser = audioCtx.createBiquadFilter();
       deesser.type = 'peaking';
       deesser.frequency.value = 6000;
@@ -86,7 +78,6 @@ async function getProcessedStream(): Promise<MediaStream> {
       lastNode = deesser;
     }
 
-    // 5. Noise gate (medium e high)
     if (isMediumOrHigh) {
       await audioCtx.audioWorklet.addModule('/noise-gate-processor.js');
       const noiseGate = new AudioWorkletNode(audioCtx, 'noise-gate-processor');
@@ -94,7 +85,6 @@ async function getProcessedStream(): Promise<MediaStream> {
       lastNode = noiseGate;
     }
 
-    // 6. Compressor
     const compressor = audioCtx.createDynamicsCompressor();
     compressor.threshold.value = isHigh ? -28 : -20;
     compressor.knee.value = isHigh ? 12 : 15;
@@ -104,7 +94,6 @@ async function getProcessedStream(): Promise<MediaStream> {
     lastNode.connect(compressor);
     lastNode = compressor;
 
-    // 7. Makeup gain (medium e high)
     if (isMediumOrHigh) {
       const makeupGain = audioCtx.createGain();
       makeupGain.gain.value = isHigh ? 1.4 : 1.2;
@@ -119,17 +108,35 @@ async function getProcessedStream(): Promise<MediaStream> {
   }
 }
 
-/** Aplica parâmetros de qualidade no sender de vídeo da tela após renegociação. */
 async function applyScreenVideoParams(sender: RTCRtpSender) {
   try {
     const params = sender.getParameters();
     if (!params.encodings || params.encodings.length === 0) return;
-    params.encodings[0].maxBitrate = 3_000_000;  // 3 Mbps — suficiente para 1080p@30
+    params.encodings[0].maxBitrate = 3_000_000;
     params.encodings[0].maxFramerate = 30;
-    // degradationPreference 'maintain-framerate': reduz resolução se necessário mas mantém FPS
     params.degradationPreference = 'maintain-framerate';
     await sender.setParameters(params);
-  } catch { /* setParameters pode falhar antes da negociação completar */ }
+  } catch { /* pode falhar antes da negociação completar */ }
+}
+
+/**
+ * Captura a tela usando getDisplayMedia.
+ * Se sourceId é fornecido, avisa o main process antes para que o
+ * setDisplayMediaRequestHandler use o source escolhido pelo usuário.
+ */
+async function captureScreen(sourceId?: string): Promise<MediaStream> {
+  try {
+    // Se tem sourceId, avisa o main process qual source usar.
+    // O await garante que o main process já guardou o source ANTES
+    // de getDisplayMedia disparar o handler.
+    if (sourceId && window.electronAPI?.selectScreenSource) {
+      await window.electronAPI.selectScreenSource(sourceId);
+    }
+    return await navigator.mediaDevices.getDisplayMedia({ video: true });
+  } catch (e) {
+    console.error('[captureScreen] getDisplayMedia falhou:', e);
+    throw e;
+  }
 }
 
 export function CallManager() {
@@ -137,6 +144,8 @@ export function CallManager() {
     status, peerId, peerUsername, pendingOffer, volume,
     setActive, setMuted, setScreenSharing, setRemoteHasScreen, reset,
   } = useCallStore();
+  const [showScreenPicker, setShowScreenPicker] = useState(false);
+  const startScreenShareRef = useRef<((sourceId: string) => Promise<void>) | null>(null);
 
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
@@ -146,21 +155,17 @@ export function CallManager() {
   const pendingCandidates = useRef<RTCIceCandidateInit[]>([]);
   const screenSenderRef = useRef<RTCRtpSender | null>(null);
   const screenAudioSenderRef = useRef<RTCRtpSender | null>(null);
-  // Ref ao primeiro track de áudio remoto (microfone) para distinguir do áudio da tela
   const initialRemoteAudioTrackRef = useRef<MediaStreamTrack | null>(null);
   const isConnectedRef = useRef(false);
 
-  // Volume: usa GainNode para permitir amplificação acima de 100% (até 200%)
   useEffect(() => {
     if (remoteGainRef.current) {
       remoteGainRef.current.gain.value = volume;
     } else if (remoteAudioRef.current) {
-      // Fallback sem GainNode
       remoteAudioRef.current.volume = Math.min(volume, 1);
     }
   }, [volume]);
 
-  // Sons de chamada: ringback (ligando) e ringtone (recebendo)
   useEffect(() => {
     if (status !== 'calling' && status !== 'ringing') return;
 
@@ -168,7 +173,6 @@ export function CallManager() {
     let timerId: ReturnType<typeof setTimeout> | null = null;
     let stopped = false;
 
-    // Toca um burst de tom com envelope suave de ataque/release
     const playBurst = (durationSec: number, delayMs = 0) => {
       setTimeout(() => {
         if (stopped || !audioCtx) return;
@@ -179,7 +183,6 @@ export function CallManager() {
         gain.gain.setValueAtTime(0.18, now + durationSec - 0.015);
         gain.gain.linearRampToValueAtTime(0, now + durationSec);
         gain.connect(audioCtx.destination);
-        // 440 + 480 Hz = tom clássico de telefone
         [440, 480].forEach((freq) => {
           const osc = audioCtx!.createOscillator();
           osc.type = 'sine';
@@ -194,12 +197,10 @@ export function CallManager() {
     const schedulePattern = () => {
       if (stopped) return;
       if (status === 'ringing') {
-        // Ringtone: duplo toque (0.4s, pausa, 0.4s) a cada 4s
         playBurst(0.4);
         playBurst(0.4, 600);
         timerId = setTimeout(schedulePattern, 4000);
       } else {
-        // Ringback: toque longo (1s) a cada 4s (som que o chamador ouve)
         playBurst(1.0);
         timerId = setTimeout(schedulePattern, 4000);
       }
@@ -239,21 +240,17 @@ export function CallManager() {
     (currentPeerId: number) => {
       const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
 
-      // Stream acumulador: todos os tracks de áudio remoto (mic + áudio da tela)
       const remoteAudioStream = new MediaStream();
 
-      // Audio element como destino do áudio remoto
       if (!remoteAudioRef.current) remoteAudioRef.current = new Audio();
       remoteAudioRef.current.srcObject = remoteAudioStream;
       remoteAudioRef.current.autoplay = true;
 
-      // Aplica dispositivo de saída configurado
       const outputId = useSettingsStore.getState().outputDeviceId;
       if (outputId && typeof remoteAudioRef.current.setSinkId === 'function') {
         remoteAudioRef.current.setSinkId(outputId).catch(() => {});
       }
 
-      // Função para configurar Web Audio com GainNode (chamada quando o primeiro track chegar)
       let remoteAudioSetup = false;
       const setupRemoteGain = () => {
         if (remoteAudioSetup) return;
@@ -261,7 +258,6 @@ export function CallManager() {
         try {
           const remoteCtx = new AudioContext({ sampleRate: 48000 });
           remoteAudioCtxRef.current = remoteCtx;
-          // Usa o audio element como source (ele já tem os tracks)
           const source = remoteCtx.createMediaElementSource(remoteAudioRef.current!);
           const gainNode = remoteCtx.createGain();
           gainNode.gain.value = useCallStore.getState().volume;
@@ -270,7 +266,6 @@ export function CallManager() {
           gainNode.connect(remoteCtx.destination);
           remoteCtx.resume().catch(() => {});
         } catch {
-          // Fallback: volume normal via audio element (sem boost)
           remoteAudioRef.current!.volume = Math.min(useCallStore.getState().volume, 1);
         }
       };
@@ -288,10 +283,8 @@ export function CallManager() {
         const track = event.track;
         if (track.kind === 'audio') {
           remoteAudioStream.addTrack(track);
-          // Configura o GainNode na primeira vez que um track de áudio chega
           setupRemoteGain();
           remoteAudioRef.current?.play().catch(() => {});
-          // Salva o primeiro track (microfone) para não removê-lo no screen-stop
           if (!initialRemoteAudioTrackRef.current) {
             initialRemoteAudioTrackRef.current = track;
           }
@@ -322,7 +315,7 @@ export function CallManager() {
     [cleanup, reset],
   );
 
-  // Caller: starts when status becomes 'calling'
+  // Caller
   useEffect(() => {
     if (status !== 'calling' || !peerId) return;
 
@@ -352,7 +345,7 @@ export function CallManager() {
     })();
   }, [status]);
 
-  // Socket event handlers
+  // Socket + window events
   useEffect(() => {
     const socket = getSocket();
     if (!socket) return;
@@ -404,7 +397,6 @@ export function CallManager() {
       reset();
     };
 
-    // Renegotiation — usado para screen share
     const onReoffer = async (data: { offer: RTCSessionDescriptionInit }) => {
       if (!pcRef.current) return;
       try {
@@ -422,7 +414,6 @@ export function CallManager() {
       if (!pcRef.current) return;
       try {
         await pcRef.current.setRemoteDescription(new RTCSessionDescription(data.answer));
-        // Aplica parâmetros de qualidade após renegociação concluída
         if (screenSenderRef.current) {
           await applyScreenVideoParams(screenSenderRef.current);
         }
@@ -431,9 +422,7 @@ export function CallManager() {
       }
     };
 
-    // Receptor: o outro lado parou de compartilhar
     const onScreenStop = () => {
-      // Remove tracks de áudio da tela (mantém apenas o microfone)
       if (remoteAudioRef.current?.srcObject) {
         const stream = remoteAudioRef.current.srcObject as MediaStream;
         stream.getAudioTracks().forEach((t) => {
@@ -464,7 +453,6 @@ export function CallManager() {
       reset();
     };
 
-    // Helper: renegociar após mudança de tracks
     const renegotiate = async (targetPeerId: number) => {
       if (!pcRef.current) return;
       const pc = pcRef.current;
@@ -493,50 +481,45 @@ export function CallManager() {
       await renegotiate(targetPeerId);
     };
 
+    // ── Screen share toggle ──
     const onScreenShareToggle = async () => {
       const { isScreenSharing, peerId } = useCallStore.getState();
-      if (!pcRef.current || !peerId) {
-        console.warn('[screen-share] PC ou peerId não disponível', { pc: !!pcRef.current, peerId });
-        return;
-      }
+      if (!pcRef.current || !peerId) return;
 
       if (isScreenSharing) {
         await stopScreenShare(peerId);
         return;
       }
 
+      // Abre o picker — a captura real acontece via startScreenShareRef
+      setShowScreenPicker(true);
+    };
+
+    // Função chamada pelo picker após o usuário escolher o source
+    startScreenShareRef.current = async (sourceId: string) => {
+      const pc = pcRef.current;
+      if (!pc) return;
+      const { peerId: pid } = useCallStore.getState();
+      if (!pid) return;
+
       try {
-        const screenStream = await navigator.mediaDevices.getDisplayMedia({
-          video: {
-            frameRate: { ideal: 30, min: 10 },
-            width: { ideal: 1920 },
-            height: { ideal: 1080 },
-          } as MediaTrackConstraints,
-          audio: {
-            echoCancellation: false,
-            noiseSuppression: false,
-            autoGainControl: false,
-          },
-        });
+        const screenStream = await captureScreen(sourceId);
 
         const videoTrack = screenStream.getVideoTracks()[0];
-        // 'detail' diz ao encoder para priorizar nitidez vs motion blur (ideal para tela)
+        if (!videoTrack) return;
         videoTrack.contentHint = 'detail';
 
         localScreenStreamRef.current = screenStream;
-        screenSenderRef.current = pcRef.current.addTrack(videoTrack, screenStream);
+        screenSenderRef.current = pc.addTrack(videoTrack, screenStream);
 
-        // Áudio do sistema/aba (disponível no Linux com PipeWire ou Windows)
         const audioTracks = screenStream.getAudioTracks();
         if (audioTracks.length > 0) {
-          screenAudioSenderRef.current = pcRef.current.addTrack(audioTracks[0], screenStream);
+          screenAudioSenderRef.current = pc.addTrack(audioTracks[0], screenStream);
         }
 
         setScreenSharing(true);
-        await renegotiate(peerId);
-        // Os parâmetros de qualidade são aplicados em onReanswer após a resposta
+        await renegotiate(pid);
 
-        // Usuário parou pelo controle nativo do sistema (botão "parar compartilhamento")
         videoTrack.onended = async () => {
           const currentPeerId = useCallStore.getState().peerId;
           if (currentPeerId && pcRef.current) {
@@ -544,7 +527,9 @@ export function CallManager() {
           }
         };
       } catch (e) {
-        console.error('[screen-share] getDisplayMedia falhou:', e);
+        console.error('[screen-share] ERRO:', e);
+        localScreenStreamRef.current?.getTracks().forEach((t) => t.stop());
+        localScreenStreamRef.current = null;
       }
     };
 
@@ -572,6 +557,7 @@ export function CallManager() {
       window.removeEventListener('call:toggle-mute', onToggleMute);
       window.removeEventListener('call:hangup', onHangupEvent);
       window.removeEventListener('call:screen-share-toggle', onScreenShareToggle as EventListener);
+      startScreenShareRef.current = null;
     };
   }, []);
 
@@ -622,17 +608,30 @@ export function CallManager() {
     reset();
   }, [cleanup, reset]);
 
-  if (status === 'idle') return null;
+  const handlePickerSelect = useCallback((source: ScreenSource) => {
+    setShowScreenPicker(false);
+    startScreenShareRef.current?.(source.id);
+  }, []);
 
-  if (status === 'ringing' && peerUsername) {
-    return (
-      <IncomingCallModal
-        peerUsername={peerUsername}
-        onAccept={handleAccept}
-        onReject={handleReject}
-      />
-    );
-  }
+  const handlePickerCancel = useCallback(() => {
+    setShowScreenPicker(false);
+  }, []);
 
-  return null;
+  return (
+    <>
+      {status === 'ringing' && peerUsername && (
+        <IncomingCallModal
+          peerUsername={peerUsername}
+          onAccept={handleAccept}
+          onReject={handleReject}
+        />
+      )}
+      {showScreenPicker && (
+        <ScreenPicker
+          onSelect={handlePickerSelect}
+          onCancel={handlePickerCancel}
+        />
+      )}
+    </>
+  );
 }

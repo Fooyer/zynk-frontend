@@ -202,8 +202,10 @@ export function SettingsPage() {
   const {
     inputDeviceId, outputDeviceId, inputVolume,
     noiseSuppression, echoCancellation, autoGainControl,
+    notifSound, notifPush, notifVolume,
     setInputDevice, setOutputDevice, setInputVolume,
     setNoiseSuppression, setEchoCancellation, setAutoGainControl,
+    setNotifSound, setNotifPush, setNotifVolume,
   } = useSettingsStore();
 
   const { inputs, outputs } = useMediaDevices();
@@ -345,6 +347,46 @@ export function SettingsPage() {
                 description="Normaliza automaticamente o volume do microfone"
                 checked={autoGainControl}
                 onChange={setAutoGainControl}
+              />
+            </div>
+          </section>
+
+          {/* Notificações */}
+          <section className="space-y-4">
+            <div className="flex items-center gap-2">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-accent-400">
+                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+              </svg>
+              <h2 className="text-base font-semibold text-surface-100">Notificações</h2>
+            </div>
+
+            <div className="bg-surface-800 rounded-xl p-5 space-y-5 border border-surface-700/50">
+              <Toggle
+                label="Som de notificação"
+                description="Toca um som ao receber mensagens em canais inativos"
+                checked={notifSound}
+                onChange={setNotifSound}
+              />
+
+              {notifSound && (
+                <SliderField
+                  label="Volume da notificação"
+                  value={Math.round(notifVolume * 100)}
+                  min={0}
+                  max={100}
+                  format={(v) => `${v}%`}
+                  onChange={(v) => setNotifVolume(v / 100)}
+                />
+              )}
+
+              <div className="h-px bg-surface-700" />
+
+              <Toggle
+                label="Notificações push"
+                description="Exibe notificações do sistema ao receber mensagens"
+                checked={notifPush}
+                onChange={setNotifPush}
               />
             </div>
           </section>

@@ -104,6 +104,13 @@ export interface UserStatusEvent {
 
 // ─── Electron ───────────────────────────────────
 
+export interface ScreenSource {
+  id: string;
+  name: string;
+  thumbnail: string;
+  isScreen: boolean;
+}
+
 declare global {
   interface Window {
     electronAPI?: {
@@ -111,6 +118,8 @@ declare global {
       windowMinimize: () => void;
       windowMaximize: () => void;
       windowClose: () => void;
+      getScreenSources: () => Promise<ScreenSource[]>;
+      selectScreenSource: (sourceId: string) => Promise<boolean>;
     };
   }
 }

@@ -1,10 +1,8 @@
-import { app, BrowserWindow, shell, session, ipcMain, desktopCapturer } from 'electron';
+import { app, BrowserWindow, shell, session, ipcMain, desktopCapturer, type DesktopCapturerSource } from 'electron';
 import path from 'path';
 
-// Desabilita aceleração de hardware se causar problemas
-// app.disableHardwareAcceleration();
-
 let mainWindow: BrowserWindow | null = null;
+let pendingScreenSource: DesktopCapturerSource | null = null;
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -13,7 +11,6 @@ function createWindow() {
     minWidth: 940,
     minHeight: 600,
     title: 'Chat App',
-    // Frame customizado para visual moderno
     frame: false,
     titleBarStyle: 'hidden',
     titleBarOverlay: {
@@ -24,24 +21,21 @@ function createWindow() {
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
-      nodeIntegration: false, // Segurança: não expõe Node no renderer
+      nodeIntegration: false,
     },
     backgroundColor: '#131524',
-    show: false, // Mostra só quando pronto (evita flash branco)
+    show: false,
   });
 
-  // Mostra window só quando conteúdo estiver pronto
   mainWindow.once('ready-to-show', () => {
     mainWindow?.show();
   });
 
-  // Abre links externos no browser do sistema
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url);
     return { action: 'deny' };
   });
 
-  // Dev: carrega o Vite dev server / Prod: carrega o build
   if (process.env.VITE_DEV_SERVER_URL) {
     mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL);
     mainWindow.webContents.openDevTools({ mode: 'detach' });
@@ -61,17 +55,67 @@ ipcMain.on('window:maximize', () => {
 });
 ipcMain.on('window:close', () => mainWindow?.close());
 
+// ─── Screen Sharing via IPC ────────────────────────────────────
+// Abordagem direta: renderer pede sources, escolhe, e pede o stream ID.
+// Sem setDisplayMediaRequestHandler. Usa desktopCapturer no main e retorna
+// o sourceId para o renderer criar o stream via getUserMedia com chromeMediaSource.
+
+ipcMain.handle('screen:get-sources', async () => {
+  try {
+    const sources = await desktopCapturer.getSources({
+      types: ['screen', 'window'],
+      thumbnailSize: { width: 320, height: 180 },
+      fetchWindowIcons: false,
+    });
+    return sources.map((s) => ({
+      id: s.id,
+      name: s.name,
+      thumbnail: s.thumbnail.toDataURL(),
+      isScreen: s.id.startsWith('screen:'),
+    }));
+  } catch (e) {
+    console.error('[screen:get-sources] Erro:', e);
+    return [];
+  }
+});
+
+// Renderer escolheu um source — busca o objeto real e guarda para o handler usar
+ipcMain.handle('screen:select-source', async (_event, sourceId: string) => {
+  try {
+    const sources = await desktopCapturer.getSources({ types: ['screen', 'window'] });
+    pendingScreenSource = sources.find((s) => s.id === sourceId) || null;
+    return pendingScreenSource !== null;
+  } catch {
+    pendingScreenSource = null;
+    return false;
+  }
+});
+
 app.whenReady().then(() => {
-  // Permite que o renderer use getDisplayMedia para compartilhar a tela (Windows)
+  // Handler para getDisplayMedia — pega a tela inteira automaticamente.
+  // O renderer é que decide qual source via IPC, este handler só precisa
+  // retornar um source válido para o Chromium aceitar a chamada.
   session.defaultSession.setDisplayMediaRequestHandler((_request, callback) => {
-    desktopCapturer.getSources({ types: ['screen', 'window'] }).then((sources) => {
-      if (sources.length === 0) { callback({}); return; }
+    // Se o renderer selecionou um source via picker, usa ele
+    if (pendingScreenSource) {
+      const source = pendingScreenSource;
+      pendingScreenSource = null;
+      callback({ video: source, audio: 'loopback' });
+      return;
+    }
+    // Fallback: pega a primeira tela
+    desktopCapturer.getSources({ types: ['screen'] }).then((sources) => {
+      if (!sources.length) {
+        callback({ video: sources[0] as any });
+        return;
+      }
       callback({ video: sources[0], audio: 'loopback' });
-    }).catch(() => callback({}));
+    }).catch(() => {
+      callback({ video: undefined as any });
+    });
   });
 
-
-  // CSP apenas em produção — em dev o Vite precisa de HMR/websocket/inline scripts
+  // CSP apenas em produção
   if (!process.env.VITE_DEV_SERVER_URL) {
     session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
       callback({
