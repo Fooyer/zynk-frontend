@@ -6,6 +6,7 @@ import { useFriendStore } from '../../stores/friendStore';
 import { useCallStore } from '../../stores/callStore';
 import { getInitials, getUserColor } from '../../utils/formatDate';
 import { remoteScreenStreamRef } from '../../services/callStream';
+import { getConnectedGamepads, setupGamepadListeners } from '../../services/gamepadService';
 import type { DmChannel } from '../../types';
 
 interface Props {
@@ -40,13 +41,39 @@ function CallPanel({ dm, callStatus }: { dm: DmChannel; callStatus: 'calling' | 
   const isMuted = useCallStore((s) => s.isMuted);
   const isScreenSharing = useCallStore((s) => s.isScreenSharing);
   const remoteHasScreen = useCallStore((s) => s.remoteHasScreen);
+  const isGamepadSharing = useCallStore((s) => s.isGamepadSharing);
+  const remoteHasGamepad = useCallStore((s) => s.remoteHasGamepad);
   const volume = useCallStore((s) => s.volume);
   const setVolume = useCallStore((s) => s.setVolume);
   const videoRef = useRef<HTMLVideoElement>(null);
   const expandedVideoRef = useRef<HTMLVideoElement>(null);
   const [screenExpanded, setScreenExpanded] = useState(false);
+  const [hasLocalGamepad, setHasLocalGamepad] = useState(false);
 
   const isCalling = callStatus === 'calling';
+
+  // Detecta gamepads via polling (eventos são pouco confiáveis no Electron)
+  useEffect(() => {
+    const cleanupListeners = setupGamepadListeners();
+
+    const check = () => {
+      const gps = navigator.getGamepads();
+      const found = gps ? Array.from(gps).some((g) => g !== null && g.connected) : false;
+      setHasLocalGamepad(found);
+    };
+
+    check();
+    const interval = setInterval(check, 2000);
+
+    window.addEventListener('gamepadconnected', check);
+    window.addEventListener('gamepaddisconnected', check);
+    return () => {
+      cleanupListeners();
+      clearInterval(interval);
+      window.removeEventListener('gamepadconnected', check);
+      window.removeEventListener('gamepaddisconnected', check);
+    };
+  }, []);
 
   // Tenta anexar o stream sempre que o video element ou o stream muda
   const attachStream = () => {
@@ -108,6 +135,10 @@ function CallPanel({ dm, callStatus }: { dm: DmChannel; callStatus: 'calling' | 
   const handleToggleMute = () => window.dispatchEvent(new CustomEvent('call:toggle-mute'));
   const handleHangup = () => window.dispatchEvent(new CustomEvent('call:hangup'));
   const handleScreenShare = () => window.dispatchEvent(new CustomEvent('call:screen-share-toggle'));
+  const handleGamepadToggle = () => window.dispatchEvent(new CustomEvent('call:gamepad-toggle'));
+
+  // Mostrar botão de gamepad quando tem gamepad local e está em chamada ativa
+  const showGamepadButton = hasLocalGamepad && !isCalling;
 
   return (
     <>
@@ -182,6 +213,42 @@ function CallPanel({ dm, callStatus }: { dm: DmChannel; callStatus: 'calling' | 
                     <line x1="12" y1="17" x2="12" y2="21" />
                   </svg>
                 </button>
+
+                {/* Gamepad */}
+                {showGamepadButton && (
+                  <button
+                    onClick={handleGamepadToggle}
+                    title={isGamepadSharing ? 'Parar controle remoto' : 'Compartilhar controle'}
+                    className={`p-1.5 rounded transition-colors ${
+                      isGamepadSharing
+                        ? 'bg-success text-white'
+                        : 'text-surface-400 hover:text-surface-100 hover:bg-surface-700'
+                    }`}
+                  >
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="2" y="6" width="20" height="12" rx="4" />
+                      <circle cx="8" cy="12" r="1" fill="currentColor" />
+                      <circle cx="16" cy="10" r="1" fill="currentColor" />
+                      <circle cx="18" cy="12" r="1" fill="currentColor" />
+                      <circle cx="16" cy="14" r="1" fill="currentColor" />
+                      <circle cx="14" cy="12" r="1" fill="currentColor" />
+                      <line x1="6" y1="10" x2="6" y2="14" />
+                      <line x1="4" y1="12" x2="8" y2="12" />
+                    </svg>
+                  </button>
+                )}
+
+                {/* Indicador de gamepad remoto */}
+                {remoteHasGamepad && (
+                  <div className="flex items-center gap-1 text-xs text-accent" title="Controle remoto ativo">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="2" y="6" width="20" height="12" rx="4" />
+                      <circle cx="8" cy="12" r="1" fill="currentColor" />
+                      <line x1="6" y1="10" x2="6" y2="14" />
+                      <line x1="4" y1="12" x2="8" y2="12" />
+                    </svg>
+                  </div>
+                )}
 
                 {/* Volume — até 200% */}
                 <div className="flex items-center gap-1.5">
@@ -344,6 +411,28 @@ function CallPanel({ dm, callStatus }: { dm: DmChannel; callStatus: 'calling' | 
                 <line x1="12" y1="17" x2="12" y2="21" />
               </svg>
             </button>
+
+            {/* Gamepad (expanded) */}
+            {showGamepadButton && (
+              <button
+                onClick={handleGamepadToggle}
+                title={isGamepadSharing ? 'Parar controle remoto' : 'Compartilhar controle'}
+                className={`p-3 rounded-full transition-colors ${
+                  isGamepadSharing ? 'bg-success text-white' : 'bg-white/10 text-white hover:bg-white/20'
+                }`}
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="2" y="6" width="20" height="12" rx="4" />
+                  <circle cx="8" cy="12" r="1" fill="currentColor" />
+                  <circle cx="16" cy="10" r="1" fill="currentColor" />
+                  <circle cx="18" cy="12" r="1" fill="currentColor" />
+                  <circle cx="16" cy="14" r="1" fill="currentColor" />
+                  <circle cx="14" cy="12" r="1" fill="currentColor" />
+                  <line x1="6" y1="10" x2="6" y2="14" />
+                  <line x1="4" y1="12" x2="8" y2="12" />
+                </svg>
+              </button>
+            )}
 
             {/* Minimizar */}
             <button

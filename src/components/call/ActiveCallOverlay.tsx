@@ -6,8 +6,12 @@ interface Props {
   peerUsername: string;
   status: CallStatus;
   isMuted: boolean;
+  isGamepadSharing?: boolean;
+  hasGamepad?: boolean;
+  remoteHasScreen?: boolean;
   onHangup: () => void;
   onToggleMute: () => void;
+  onToggleGamepad?: () => void;
 }
 
 function formatDuration(seconds: number) {
@@ -16,7 +20,11 @@ function formatDuration(seconds: number) {
   return `${m}:${s}`;
 }
 
-export function ActiveCallOverlay({ peerUsername, status, isMuted, onHangup, onToggleMute }: Props) {
+export function ActiveCallOverlay({
+  peerUsername, status, isMuted,
+  isGamepadSharing, hasGamepad, remoteHasScreen,
+  onHangup, onToggleMute, onToggleGamepad,
+}: Props) {
   const [seconds, setSeconds] = useState(0);
   const color = getUserColor(peerUsername);
 
@@ -25,6 +33,8 @@ export function ActiveCallOverlay({ peerUsername, status, isMuted, onHangup, onT
     const interval = setInterval(() => setSeconds(s => s + 1), 1000);
     return () => clearInterval(interval);
   }, [status]);
+
+  const showGamepadButton = hasGamepad && remoteHasScreen;
 
   return (
     <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[90]">
@@ -70,6 +80,28 @@ export function ActiveCallOverlay({ peerUsername, status, isMuted, onHangup, onT
             </svg>
           )}
         </button>
+
+        {/* Gamepad */}
+        {showGamepadButton && (
+          <button
+            onClick={onToggleGamepad}
+            title={isGamepadSharing ? 'Parar controle remoto' : 'Compartilhar controle'}
+            className={`w-9 h-9 rounded-full flex items-center justify-center transition-colors ${
+              isGamepadSharing ? 'bg-success text-white' : 'bg-surface-700 text-surface-300 hover:bg-surface-600'
+            }`}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="2" y="6" width="20" height="12" rx="4" />
+              <circle cx="8" cy="12" r="1" fill="currentColor" />
+              <circle cx="16" cy="10" r="1" fill="currentColor" />
+              <circle cx="18" cy="12" r="1" fill="currentColor" />
+              <circle cx="16" cy="14" r="1" fill="currentColor" />
+              <circle cx="14" cy="12" r="1" fill="currentColor" />
+              <line x1="6" y1="10" x2="6" y2="14" />
+              <line x1="4" y1="12" x2="8" y2="12" />
+            </svg>
+          </button>
+        )}
 
         {/* Hangup */}
         <button

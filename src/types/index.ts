@@ -120,6 +120,10 @@ declare global {
       windowClose: () => void;
       getScreenSources: () => Promise<ScreenSource[]>;
       selectScreenSource: (sourceId: string) => Promise<boolean>;
+      gamepadCreateVirtual: () => Promise<{ success: boolean; error?: string }>;
+      gamepadInput: (state: { index: number; timestamp: number; buttons: { pressed: boolean; value: number }[]; axes: number[] }) => void;
+      gamepadDestroyVirtual: () => Promise<void>;
+      gamepadIsAvailable: () => Promise<boolean>;
     };
   }
 }

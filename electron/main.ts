@@ -1,5 +1,13 @@
 import { app, BrowserWindow, shell, session, ipcMain, desktopCapturer, type DesktopCapturerSource } from 'electron';
 import path from 'path';
+import {
+  createVirtualGamepad,
+  updateVirtualGamepad,
+  destroyVirtualGamepad,
+  isViGEmAvailable,
+  cleanup as cleanupGamepad,
+  type GamepadInputState,
+} from './gamepadEmulator';
 
 let mainWindow: BrowserWindow | null = null;
 let pendingScreenSource: DesktopCapturerSource | null = null;
@@ -10,7 +18,8 @@ function createWindow() {
     height: 800,
     minWidth: 940,
     minHeight: 600,
-    title: 'Chat App',
+    title: 'Zynk',
+    icon: path.join(__dirname, '..', 'build', 'icon.png'),
     frame: false,
     titleBarStyle: 'hidden',
     titleBarOverlay: {
@@ -91,6 +100,14 @@ ipcMain.handle('screen:select-source', async (_event, sourceId: string) => {
   }
 });
 
+// ─── Gamepad Emulation via IPC ─────────────────────────────────
+ipcMain.handle('gamepad:create-virtual', () => createVirtualGamepad());
+ipcMain.handle('gamepad:destroy-virtual', () => { destroyVirtualGamepad(); });
+ipcMain.handle('gamepad:is-available', () => isViGEmAvailable());
+ipcMain.on('gamepad:input', (_event, state: GamepadInputState) => {
+  updateVirtualGamepad(state);
+});
+
 app.whenReady().then(() => {
   // Handler para getDisplayMedia — pega a tela inteira automaticamente.
   // O renderer é que decide qual source via IPC, este handler só precisa
@@ -138,6 +155,7 @@ app.whenReady().then(() => {
 });
 
 app.on('window-all-closed', () => {
+  cleanupGamepad();
   if (process.platform !== 'darwin') {
     app.quit();
   }

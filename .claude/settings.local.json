@@ -23,7 +23,11 @@
       "Bash(grep -r \"onScreenShare\\\\|screen\\\\|display\\\\|share\" /c/Projects/zynk-frontend/src --include=*.ts --include=*.tsx)",
       "Bash(find /c/Projects/zynk-frontend -name *processor* -o -name *audio*)",
       "Bash(grep -E \"\\\\.js$|\\\\.ts$|\\\\.tsx$\")",
-      "Bash(node -e \"const p = require\\(''./package.json''\\); console.log\\(''electron:'', p.devDependencies?.electron || p.dependencies?.electron\\)\")"
+      "Bash(node -e \"const p = require\\(''./package.json''\\); console.log\\(''electron:'', p.devDependencies?.electron || p.dependencies?.electron\\)\")",
+      "Bash(grep -r call: /c/Projects/zynk-backend/src --include=*.ts)",
+      "Bash(ls -la /c/Projects/zynk-backend/src/*/)",
+      "Bash(grep -l \"getInitials\\\\|getUserColor\\\\|formatDate\" /c/Projects/zynk-frontend/src/utils/*.ts)",
+      "Bash(npm ls:*)"
     ]
   }
 }
