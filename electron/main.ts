@@ -1,4 +1,4 @@
-import { app, BrowserWindow, shell, session, ipcMain, desktopCapturer, type DesktopCapturerSource } from 'electron';
+import { app, BrowserWindow, shell, session, ipcMain, desktopCapturer, Tray, Menu, nativeImage, type DesktopCapturerSource } from 'electron';
 import path from 'path';
 import {
   createVirtualGamepad,
@@ -10,6 +10,8 @@ import {
 } from './gamepadEmulator';
 
 let mainWindow: BrowserWindow | null = null;
+let tray: Tray | null = null;
+let isQuitting = false;
 let pendingScreenSource: DesktopCapturerSource | null = null;
 
 function createWindow() {
@@ -51,6 +53,13 @@ function createWindow() {
   } else {
     mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
   }
+
+  mainWindow.on('close', (event) => {
+    if (!isQuitting) {
+      event.preventDefault();
+      mainWindow?.hide();
+    }
+  });
 
   mainWindow.on('closed', () => {
     mainWindow = null;
@@ -152,10 +161,44 @@ app.whenReady().then(() => {
   }
 
   createWindow();
+
+  // ─── System Tray ──────────────────────────────────────────────
+  const iconPath = path.join(__dirname, '..', 'build', 'icon.png');
+  const trayIcon = nativeImage.createFromPath(iconPath).resize({ width: 16, height: 16 });
+  tray = new Tray(trayIcon);
+  tray.setToolTip('Zynk');
+
+  const trayMenu = Menu.buildFromTemplate([
+    {
+      label: 'Abrir Zynk',
+      click: () => {
+        mainWindow?.show();
+        mainWindow?.focus();
+      },
+    },
+    { type: 'separator' },
+    {
+      label: 'Sair',
+      click: () => {
+        isQuitting = true;
+        app.quit();
+      },
+    },
+  ]);
+
+  tray.setContextMenu(trayMenu);
+  tray.on('double-click', () => {
+    mainWindow?.show();
+    mainWindow?.focus();
+  });
+});
+
+app.on('before-quit', () => {
+  isQuitting = true;
+  cleanupGamepad();
 });
 
 app.on('window-all-closed', () => {
-  cleanupGamepad();
   if (process.platform !== 'darwin') {
     app.quit();
   }
