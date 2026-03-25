@@ -4,24 +4,24 @@ export default {
   theme: {
     extend: {
       colors: {
-        // Palette inspirada no Discord mas com identidade própria
+        // Palette dark com alto contraste e accent em teal
         surface: {
-          50: '#f0f1f5',
-          100: '#e1e3ea',
-          200: '#c3c7d5',
-          300: '#8b91a7',
-          400: '#5c6380',
-          500: '#3a3f55',
-          600: '#2d3148',
-          700: '#23273a',
-          800: '#1a1d2e',
-          900: '#131524',
-          950: '#0d0e1a',
+          50: '#e8eaed',
+          100: '#d1d5db',
+          200: '#b0b7c3',
+          300: '#9ca3b0',
+          400: '#6b7280',
+          500: '#4b5263',
+          600: '#2a2f3d',
+          700: '#1e2230',
+          800: '#151823',
+          900: '#0f1119',
+          950: '#090a10',
         },
         accent: {
-          400: '#7c8aff',
-          500: '#5b6aff',
-          600: '#4a57e0',
+          400: '#5eead4',
+          500: '#2dd4bf',
+          600: '#14b8a6',
         },
         success: '#43b581',
         warning: '#faa61a',
