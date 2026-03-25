@@ -3,7 +3,7 @@ import { useCallStore } from '../../stores/callStore';
 import { useChatStore } from '../../stores/chatStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { getSocket } from '../../services/socket';
-import { remoteScreenStreamRef, localScreenStreamRef } from '../../services/callStream';
+import { remoteScreenStreamRef, localScreenStreamRef, localAnalyserRef, remoteAnalyserRef } from '../../services/callStream';
 import {
   startGamepadPolling,
   stopGamepadPolling,
@@ -35,7 +35,17 @@ async function getProcessedStream(): Promise<MediaStream> {
   const rawStream = await navigator.mediaDevices.getUserMedia({ audio: deviceConstraints });
 
   // Nível 'off' — retorna stream cru sem processamento
-  if (settings.noiseSuppression === 'off') return rawStream;
+  if (settings.noiseSuppression === 'off') {
+    try {
+      const ctx = new AudioContext({ sampleRate: 48000 });
+      const src = ctx.createMediaStreamSource(rawStream);
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 256;
+      src.connect(analyser);
+      localAnalyserRef.current = analyser;
+    } catch { /* */ }
+    return rawStream;
+  }
 
   try {
     const audioCtx = new AudioContext({ sampleRate: 48000 });
@@ -105,6 +115,12 @@ async function getProcessedStream(): Promise<MediaStream> {
       lastNode.connect(makeupGain);
       lastNode = makeupGain;
     }
+
+    // Analyser para detecção de fala (speaking indicator)
+    const analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 256;
+    lastNode.connect(analyser);
+    localAnalyserRef.current = analyser;
 
     lastNode.connect(destination);
     return new MediaStream([...destination.stream.getAudioTracks()]);
@@ -248,6 +264,8 @@ export function CallManager() {
     remoteAudioCtxRef.current = null;
     remoteGainRef.current = null;
     remoteScreenStreamRef.current = null;
+    localAnalyserRef.current = null;
+    remoteAnalyserRef.current = null;
     window.dispatchEvent(new CustomEvent('call:screen-stream-changed'));
   }, []);
 
@@ -274,10 +292,14 @@ export function CallManager() {
           const remoteCtx = new AudioContext({ sampleRate: 48000 });
           remoteAudioCtxRef.current = remoteCtx;
           const source = remoteCtx.createMediaElementSource(remoteAudioRef.current!);
+          const analyser = remoteCtx.createAnalyser();
+          analyser.fftSize = 256;
+          remoteAnalyserRef.current = analyser;
           const gainNode = remoteCtx.createGain();
           gainNode.gain.value = useCallStore.getState().volume;
           remoteGainRef.current = gainNode;
-          source.connect(gainNode);
+          source.connect(analyser);
+          analyser.connect(gainNode);
           gainNode.connect(remoteCtx.destination);
           remoteCtx.resume().catch(() => {});
         } catch {

@@ -4,9 +4,10 @@ import { MessageInput } from '../chat/MessageInput';
 import { TypingIndicator } from '../chat/TypingIndicator';
 import { useFriendStore } from '../../stores/friendStore';
 import { useCallStore } from '../../stores/callStore';
+import { useAuthStore } from '../../stores/authStore';
 import { getInitials, getUserColor } from '../../utils/formatDate';
-import { remoteScreenStreamRef } from '../../services/callStream';
-import { getConnectedGamepads, setupGamepadListeners } from '../../services/gamepadService';
+import { remoteScreenStreamRef, localAnalyserRef, remoteAnalyserRef } from '../../services/callStream';
+import { setupGamepadListeners } from '../../services/gamepadService';
 import type { DmChannel } from '../../types';
 
 interface Props {
@@ -38,6 +39,7 @@ function HeaderIconButton({ title, onClick, children, danger, active }: {
 }
 
 function CallPanel({ dm, callStatus }: { dm: DmChannel; callStatus: 'calling' | 'active' }) {
+  const user = useAuthStore((s) => s.user);
   const isMuted = useCallStore((s) => s.isMuted);
   const isScreenSharing = useCallStore((s) => s.isScreenSharing);
   const remoteHasScreen = useCallStore((s) => s.remoteHasScreen);
@@ -49,22 +51,63 @@ function CallPanel({ dm, callStatus }: { dm: DmChannel; callStatus: 'calling' | 
   const expandedVideoRef = useRef<HTMLVideoElement>(null);
   const [screenExpanded, setScreenExpanded] = useState(false);
   const [hasLocalGamepad, setHasLocalGamepad] = useState(false);
+  const [callDuration, setCallDuration] = useState(0);
+  const [localSpeaking, setLocalSpeaking] = useState(false);
+  const [remoteSpeaking, setRemoteSpeaking] = useState(false);
+  const callStartRef = useRef(0);
 
   const isCalling = callStatus === 'calling';
 
-  // Detecta gamepads via polling (eventos são pouco confiáveis no Electron)
+  // Timer de duração da chamada
+  useEffect(() => {
+    if (isCalling) { setCallDuration(0); return; }
+    callStartRef.current = Date.now();
+    const interval = setInterval(() => {
+      setCallDuration(Math.floor((Date.now() - callStartRef.current) / 1000));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [isCalling]);
+
+  // Detecção de fala via AnalyserNode
+  useEffect(() => {
+    if (isCalling) return;
+    const data = new Uint8Array(128);
+    const interval = setInterval(() => {
+      if (localAnalyserRef.current && !isMuted) {
+        localAnalyserRef.current.getByteFrequencyData(data);
+        const avg = data.reduce((a, b) => a + b, 0) / data.length;
+        setLocalSpeaking(avg > 8);
+      } else {
+        setLocalSpeaking(false);
+      }
+      if (remoteAnalyserRef.current) {
+        remoteAnalyserRef.current.getByteFrequencyData(data);
+        const avg = data.reduce((a, b) => a + b, 0) / data.length;
+        setRemoteSpeaking(avg > 8);
+      }
+    }, 100);
+    return () => clearInterval(interval);
+  }, [isCalling, isMuted]);
+
+  const formatDuration = (secs: number) => {
+    const h = Math.floor(secs / 3600);
+    const m = Math.floor((secs % 3600) / 60);
+    const s = secs % 60;
+    return h > 0
+      ? `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+      : `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  };
+
+  // Detecta gamepads via polling
   useEffect(() => {
     const cleanupListeners = setupGamepadListeners();
-
     const check = () => {
       const gps = navigator.getGamepads();
       const found = gps ? Array.from(gps).some((g) => g !== null && g.connected) : false;
       setHasLocalGamepad(found);
     };
-
     check();
     const interval = setInterval(check, 2000);
-
     window.addEventListener('gamepadconnected', check);
     window.addEventListener('gamepaddisconnected', check);
     return () => {
@@ -75,56 +118,26 @@ function CallPanel({ dm, callStatus }: { dm: DmChannel; callStatus: 'calling' | 
     };
   }, []);
 
-  // Tenta anexar o stream sempre que o video element ou o stream muda
+  // ─── Screen stream management ───
   const attachStream = () => {
     const stream = remoteScreenStreamRef.current;
     if (!stream) return;
-    if (videoRef.current) {
-      videoRef.current.srcObject = stream;
-      videoRef.current.play().catch(() => {});
-    }
-    if (expandedVideoRef.current) {
-      expandedVideoRef.current.srcObject = stream;
-      expandedVideoRef.current.play().catch(() => {});
-    }
+    if (videoRef.current) { videoRef.current.srcObject = stream; videoRef.current.play().catch(() => {}); }
+    if (expandedVideoRef.current) { expandedVideoRef.current.srcObject = stream; expandedVideoRef.current.play().catch(() => {}); }
   };
 
-  // Quando o stream remoto muda (evento do CallManager)
   useEffect(() => {
     window.addEventListener('call:screen-stream-changed', attachStream);
     return () => window.removeEventListener('call:screen-stream-changed', attachStream);
   }, []);
-
-  // Quando remoteHasScreen vai para true: o video element acaba de montar
-  useEffect(() => {
-    if (remoteHasScreen) attachStream();
-  }, [remoteHasScreen]);
-
-  // Quando o painel monta com stream já ativo (usuário voltou para a DM)
-  useEffect(() => {
-    if (remoteScreenStreamRef.current) attachStream();
-  }, []);
-
-  // Attach stream quando troca entre expanded/inline
+  useEffect(() => { if (remoteHasScreen) attachStream(); }, [remoteHasScreen]);
+  useEffect(() => { if (remoteScreenStreamRef.current) attachStream(); }, []);
   useEffect(() => {
     if (!remoteScreenStreamRef.current) return;
-    if (screenExpanded && expandedVideoRef.current) {
-      expandedVideoRef.current.srcObject = remoteScreenStreamRef.current;
-      expandedVideoRef.current.play().catch(() => {});
-    }
-    if (!screenExpanded && videoRef.current) {
-      // Re-anexa ao video inline ao sair do fullscreen
-      videoRef.current.srcObject = remoteScreenStreamRef.current;
-      videoRef.current.play().catch(() => {});
-    }
+    if (screenExpanded && expandedVideoRef.current) { expandedVideoRef.current.srcObject = remoteScreenStreamRef.current; expandedVideoRef.current.play().catch(() => {}); }
+    if (!screenExpanded && videoRef.current) { videoRef.current.srcObject = remoteScreenStreamRef.current; videoRef.current.play().catch(() => {}); }
   }, [screenExpanded]);
-
-  // Fecha expanded quando o stream remoto para
-  useEffect(() => {
-    if (!remoteHasScreen) setScreenExpanded(false);
-  }, [remoteHasScreen]);
-
-  // Esc fecha expanded
+  useEffect(() => { if (!remoteHasScreen) setScreenExpanded(false); }, [remoteHasScreen]);
   useEffect(() => {
     if (!screenExpanded) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setScreenExpanded(false); };
@@ -136,186 +149,219 @@ function CallPanel({ dm, callStatus }: { dm: DmChannel; callStatus: 'calling' | 
   const handleHangup = () => window.dispatchEvent(new CustomEvent('call:hangup'));
   const handleScreenShare = () => window.dispatchEvent(new CustomEvent('call:screen-share-toggle'));
   const handleGamepadToggle = () => window.dispatchEvent(new CustomEvent('call:gamepad-toggle'));
-
-  // Mostrar botão de gamepad quando tem gamepad local e está em chamada ativa
   const showGamepadButton = hasLocalGamepad && !isCalling;
+
+  // ─── User card component ───
+  const UserCard = ({ username, avatarUrl, color, speaking, muted, label }: {
+    username: string; avatarUrl?: string | null; color: string;
+    speaking: boolean; muted?: boolean; label?: string;
+  }) => (
+    <div className="flex flex-col items-center gap-2 min-w-[100px]">
+      <div className={`relative rounded-full transition-all duration-200 ${
+        speaking
+          ? 'ring-[3px] ring-success shadow-[0_0_20px_rgba(67,181,129,0.35)]'
+          : 'ring-[3px] ring-surface-700'
+      }`}>
+        <div
+          className="w-[72px] h-[72px] rounded-full flex items-center justify-center text-white text-xl font-bold"
+          style={{ backgroundColor: color }}
+        >
+          {avatarUrl ? (
+            <img src={avatarUrl} alt="" className="w-full h-full rounded-full object-cover" />
+          ) : (
+            getInitials(username)
+          )}
+        </div>
+        {muted && (
+          <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-danger flex items-center justify-center border-2 border-surface-800">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round">
+              <line x1="1" y1="1" x2="23" y2="23" />
+              <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6" />
+            </svg>
+          </div>
+        )}
+      </div>
+      <div className="text-center">
+        <p className="text-sm font-medium text-surface-200 leading-tight">{username}</p>
+        {label && <p className="text-[11px] text-surface-500 mt-0.5">{label}</p>}
+      </div>
+    </div>
+  );
 
   return (
     <>
       <div className="bg-surface-800 border-b border-surface-700/50 flex-shrink-0">
-        {/* Barra principal */}
-        <div className="flex items-center gap-2.5 px-4 py-2.5">
-          {isCalling ? (
-            <>
-              <div className="w-2 h-2 rounded-full bg-warning animate-pulse flex-shrink-0" />
-              <span className="text-sm font-semibold text-warning">Ligando...</span>
-              <span className="text-sm text-surface-400 truncate">{dm.friend.username}</span>
-
-              <div className="ml-auto flex items-center gap-1">
-                <button
-                  onClick={handleHangup}
-                  title="Cancelar chamada"
-                  className="px-3 py-1 rounded bg-danger text-white text-xs font-medium hover:bg-red-700 transition-colors flex items-center gap-1.5"
-                >
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1-9.4 0-17-7.6-17-17 0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.3 0 .7-.2 1L6.6 10.8z" />
-                  </svg>
-                  Cancelar
-                </button>
+        {isCalling ? (
+          /* ─── Estado: Chamando ─── */
+          <div className="py-8 flex flex-col items-center gap-4">
+            <div className="relative">
+              <div className="absolute -inset-2 rounded-full animate-ping opacity-20" style={{ backgroundColor: getUserColor(dm.friend.username) }} />
+              <div
+                className="w-[72px] h-[72px] rounded-full flex items-center justify-center text-white text-xl font-bold relative"
+                style={{ backgroundColor: getUserColor(dm.friend.username) }}
+              >
+                {dm.friend.avatarUrl ? (
+                  <img src={dm.friend.avatarUrl} alt="" className="w-full h-full rounded-full object-cover" />
+                ) : (
+                  getInitials(dm.friend.username)
+                )}
               </div>
-            </>
-          ) : (
-            <>
-              <div className="w-2 h-2 rounded-full bg-success animate-pulse flex-shrink-0" />
-              <span className="text-sm font-semibold text-success">Em chamada</span>
-              <span className="text-sm text-surface-400 truncate">{dm.friend.username}</span>
+            </div>
+            <div className="text-center">
+              <p className="text-surface-100 font-semibold">{dm.friend.username}</p>
+              <p className="text-sm text-surface-400 mt-0.5">Chamando...</p>
+            </div>
+            <button
+              onClick={handleHangup}
+              className="mt-1 px-5 py-2 rounded-full bg-danger text-white text-sm font-medium hover:bg-red-700 transition-colors flex items-center gap-2"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1-9.4 0-17-7.6-17-17 0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.3 0 .7-.2 1L6.6 10.8z" />
+              </svg>
+              Cancelar
+            </button>
+          </div>
+        ) : (
+          /* ─── Estado: Em chamada (layout Discord-like) ─── */
+          <div className="py-5 px-4">
+            {/* Timer */}
+            <div className="flex items-center justify-center gap-2 mb-4">
+              <div className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
+              <span className="text-xs text-surface-400 font-mono tracking-wide">{formatDuration(callDuration)}</span>
+            </div>
 
-              <div className="ml-auto flex items-center gap-1">
-                {/* Mute */}
-                <button
-                  onClick={handleToggleMute}
-                  title={isMuted ? 'Ativar microfone' : 'Silenciar'}
-                  className={`p-1.5 rounded transition-colors ${
-                    isMuted ? 'bg-danger text-white' : 'text-surface-400 hover:text-surface-100 hover:bg-surface-700'
+            {/* Dois cards de usuário */}
+            <div className="flex items-start justify-center gap-10 mb-5">
+              <UserCard
+                username={user?.username ?? 'Você'}
+                avatarUrl={user?.avatarUrl}
+                color={getUserColor(user?.username ?? 'Você')}
+                speaking={localSpeaking}
+                muted={isMuted}
+                label={isMuted ? 'Mutado' : undefined}
+              />
+              <UserCard
+                username={dm.friend.username}
+                avatarUrl={dm.friend.avatarUrl ?? undefined}
+                color={getUserColor(dm.friend.username)}
+                speaking={remoteSpeaking}
+              />
+            </div>
+
+            {/* Barra de controles */}
+            <div className="flex items-center justify-center gap-2">
+              {/* Mute */}
+              <button onClick={handleToggleMute} title={isMuted ? 'Ativar microfone' : 'Silenciar'}
+                className={`p-2.5 rounded-full transition-colors ${
+                  isMuted ? 'bg-danger/20 text-danger hover:bg-danger/30' : 'bg-surface-700 text-surface-300 hover:bg-surface-600 hover:text-surface-100'
+                }`}
+              >
+                {isMuted ? (
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                    <line x1="1" y1="1" x2="23" y2="23" />
+                    <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6" />
+                    <path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23" />
+                    <line x1="12" y1="19" x2="12" y2="23" /><line x1="8" y1="23" x2="16" y2="23" />
+                  </svg>
+                ) : (
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+                    <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                    <line x1="12" y1="19" x2="12" y2="23" /><line x1="8" y1="23" x2="16" y2="23" />
+                  </svg>
+                )}
+              </button>
+
+              {/* Screen share */}
+              <button onClick={handleScreenShare} title={isScreenSharing ? 'Parar compartilhamento' : 'Compartilhar tela'}
+                className={`p-2.5 rounded-full transition-colors ${
+                  isScreenSharing ? 'bg-success/20 text-success hover:bg-success/30' : 'bg-surface-700 text-surface-300 hover:bg-surface-600 hover:text-surface-100'
+                }`}
+              >
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="2" y="3" width="20" height="14" rx="2" />
+                  <polyline points="8 21 12 17 16 21" />
+                  <line x1="12" y1="17" x2="12" y2="21" />
+                </svg>
+              </button>
+
+              {/* Gamepad */}
+              {showGamepadButton && (
+                <button onClick={handleGamepadToggle} title={isGamepadSharing ? 'Parar controle' : 'Compartilhar controle'}
+                  className={`p-2.5 rounded-full transition-colors ${
+                    isGamepadSharing ? 'bg-success/20 text-success hover:bg-success/30' : 'bg-surface-700 text-surface-300 hover:bg-surface-600 hover:text-surface-100'
                   }`}
                 >
-                  {isMuted ? (
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                      <line x1="1" y1="1" x2="23" y2="23" />
-                      <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6" />
-                      <path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23" />
-                      <line x1="12" y1="19" x2="12" y2="23" />
-                      <line x1="8" y1="23" x2="16" y2="23" />
-                    </svg>
-                  ) : (
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                      <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
-                      <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-                      <line x1="12" y1="19" x2="12" y2="23" />
-                      <line x1="8" y1="23" x2="16" y2="23" />
-                    </svg>
-                  )}
-                </button>
-
-                {/* Compartilhar tela */}
-                <button
-                  onClick={handleScreenShare}
-                  title={isScreenSharing ? 'Parar compartilhamento' : 'Compartilhar tela'}
-                  className={`p-1.5 rounded transition-colors ${
-                    isScreenSharing
-                      ? 'bg-success text-white'
-                      : 'text-surface-400 hover:text-surface-100 hover:bg-surface-700'
-                  }`}
-                >
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="2" y="3" width="20" height="14" rx="2" />
-                    <polyline points="8 21 12 17 16 21" />
-                    <line x1="12" y1="17" x2="12" y2="21" />
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="2" y="6" width="20" height="12" rx="4" />
+                    <circle cx="8" cy="12" r="1" fill="currentColor" />
+                    <circle cx="16" cy="10" r="1" fill="currentColor" />
+                    <circle cx="18" cy="12" r="1" fill="currentColor" />
+                    <circle cx="16" cy="14" r="1" fill="currentColor" />
+                    <circle cx="14" cy="12" r="1" fill="currentColor" />
+                    <line x1="6" y1="10" x2="6" y2="14" />
+                    <line x1="4" y1="12" x2="8" y2="12" />
                   </svg>
                 </button>
+              )}
 
-                {/* Gamepad */}
-                {showGamepadButton && (
-                  <button
-                    onClick={handleGamepadToggle}
-                    title={isGamepadSharing ? 'Parar controle remoto' : 'Compartilhar controle'}
-                    className={`p-1.5 rounded transition-colors ${
-                      isGamepadSharing
-                        ? 'bg-success text-white'
-                        : 'text-surface-400 hover:text-surface-100 hover:bg-surface-700'
-                    }`}
-                  >
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <rect x="2" y="6" width="20" height="12" rx="4" />
-                      <circle cx="8" cy="12" r="1" fill="currentColor" />
-                      <circle cx="16" cy="10" r="1" fill="currentColor" />
-                      <circle cx="18" cy="12" r="1" fill="currentColor" />
-                      <circle cx="16" cy="14" r="1" fill="currentColor" />
-                      <circle cx="14" cy="12" r="1" fill="currentColor" />
-                      <line x1="6" y1="10" x2="6" y2="14" />
-                      <line x1="4" y1="12" x2="8" y2="12" />
-                    </svg>
-                  </button>
-                )}
-
-                {/* Indicador de gamepad remoto */}
-                {remoteHasGamepad && (
-                  <div className="flex items-center gap-1 text-xs text-accent" title="Controle remoto ativo">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <rect x="2" y="6" width="20" height="12" rx="4" />
-                      <circle cx="8" cy="12" r="1" fill="currentColor" />
-                      <line x1="6" y1="10" x2="6" y2="14" />
-                      <line x1="4" y1="12" x2="8" y2="12" />
-                    </svg>
-                  </div>
-                )}
-
-                {/* Volume — até 200% */}
-                <div className="flex items-center gap-1.5">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="text-surface-400 flex-shrink-0">
-                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
-                    {volume > 0 && <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />}
-                    {volume > 1 && <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />}
-                  </svg>
-                  <input
-                    type="range"
-                    min="0"
-                    max="200"
-                    value={Math.round(volume * 100)}
-                    onChange={(e) => setVolume(Number(e.target.value) / 100)}
-                    title={`Volume: ${Math.round(volume * 100)}%`}
-                    className="w-24 h-1 accent-success cursor-pointer"
-                  />
-                  <span className="text-[10px] text-surface-500 w-8 text-right tabular-nums">
-                    {Math.round(volume * 100)}%
-                  </span>
-                </div>
-
-                {/* Encerrar */}
-                <button
-                  onClick={handleHangup}
-                  title="Encerrar chamada"
-                  className="p-1.5 rounded bg-danger text-white hover:bg-red-700 transition-colors ml-1"
-                >
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1-9.4 0-17-7.6-17-17 0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.3 0 .7-.2 1L6.6 10.8z" />
-                  </svg>
-                </button>
+              {/* Volume */}
+              <div className="flex items-center gap-1.5 bg-surface-700 rounded-full px-3 py-1.5">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="text-surface-400 flex-shrink-0">
+                  <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                  {volume > 0 && <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />}
+                  {volume > 1 && <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />}
+                </svg>
+                <input type="range" min="0" max="200" value={Math.round(volume * 100)}
+                  onChange={(e) => setVolume(Number(e.target.value) / 100)}
+                  title={`Volume: ${Math.round(volume * 100)}%`}
+                  className="w-20 h-1 accent-success cursor-pointer"
+                />
+                <span className="text-[10px] text-surface-500 w-7 text-right tabular-nums">{Math.round(volume * 100)}%</span>
               </div>
-            </>
-          )}
-        </div>
+
+              {/* Hangup */}
+              <button onClick={handleHangup} title="Encerrar chamada"
+                className="p-2.5 rounded-full bg-danger text-white hover:bg-red-700 transition-colors"
+              >
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1-9.4 0-17-7.6-17-17 0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.3 0 .7-.2 1L6.6 10.8z" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Indicador de gamepad remoto */}
+            {remoteHasGamepad && (
+              <div className="flex items-center justify-center gap-1.5 mt-3 text-xs text-accent-400">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="2" y="6" width="20" height="12" rx="4" />
+                  <circle cx="8" cy="12" r="1" fill="currentColor" />
+                  <line x1="6" y1="10" x2="6" y2="14" /><line x1="4" y1="12" x2="8" y2="12" />
+                </svg>
+                {dm.friend.username} controlando
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Tela compartilhada remotamente — inline */}
         {!isCalling && remoteHasScreen && !screenExpanded && (
           <div className="bg-black border-t border-surface-700/30 max-h-[60vh] flex items-center justify-center relative group">
-            <video
-              ref={videoRef}
-              autoPlay
-              muted
-              className="w-full max-h-[60vh] object-contain cursor-pointer"
-              onDoubleClick={() => setScreenExpanded(true)}
-            />
-            {/* Controles do vídeo — aparecem no hover */}
+            <video ref={videoRef} autoPlay muted className="w-full max-h-[60vh] object-contain cursor-pointer" onDoubleClick={() => setScreenExpanded(true)} />
             <div className="absolute top-2 right-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-              {/* Expandir */}
-              <button
-                onClick={() => setScreenExpanded(true)}
-                title="Expandir tela"
+              <button onClick={() => setScreenExpanded(true)} title="Expandir tela"
                 className="p-1.5 rounded bg-black/60 text-white hover:bg-black/80 backdrop-blur-sm transition-colors"
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="15 3 21 3 21 9" />
-                  <polyline points="9 21 3 21 3 15" />
-                  <line x1="21" y1="3" x2="14" y2="10" />
-                  <line x1="3" y1="21" x2="10" y2="14" />
+                  <polyline points="15 3 21 3 21 9" /><polyline points="9 21 3 21 3 15" />
+                  <line x1="21" y1="3" x2="14" y2="10" /><line x1="3" y1="21" x2="10" y2="14" />
                 </svg>
               </button>
             </div>
           </div>
         )}
 
-        {/* Indicador de compartilhamento local (sem preview) */}
+        {/* Indicador de compartilhamento local */}
         {!isCalling && isScreenSharing && !remoteHasScreen && (
           <div className="px-4 py-2 border-t border-surface-700/30 flex items-center gap-2 text-xs text-success">
             <div className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
@@ -324,33 +370,24 @@ function CallPanel({ dm, callStatus }: { dm: DmChannel; callStatus: 'calling' | 
         )}
       </div>
 
-      {/* Tela expandida — overlay fullscreen (top-9 = abaixo da title bar nativa de 36px) */}
+      {/* Tela expandida — fullscreen overlay */}
       {screenExpanded && remoteHasScreen && (
         <div className="fixed top-9 inset-x-0 bottom-0 z-[9998] bg-black flex flex-col">
-          {/* Header do modo expandido */}
           <div className="absolute top-0 inset-x-0 z-10 flex items-center justify-between px-4 py-3 bg-gradient-to-b from-black/80 to-transparent opacity-0 hover:opacity-100 transition-opacity">
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 rounded-full bg-success animate-pulse" />
               <span className="text-sm font-medium text-white">{dm.friend.username} — Tela compartilhada</span>
             </div>
             <div className="flex items-center gap-2">
-              {/* Minimizar */}
-              <button
-                onClick={() => setScreenExpanded(false)}
-                title="Minimizar (Esc)"
+              <button onClick={() => setScreenExpanded(false)} title="Minimizar (Esc)"
                 className="p-2 rounded-lg bg-white/10 text-white hover:bg-white/20 backdrop-blur-sm transition-colors"
               >
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="4 14 10 14 10 20" />
-                  <polyline points="20 10 14 10 14 4" />
-                  <line x1="14" y1="10" x2="21" y2="3" />
-                  <line x1="3" y1="21" x2="10" y2="14" />
+                  <polyline points="4 14 10 14 10 20" /><polyline points="20 10 14 10 14 4" />
+                  <line x1="14" y1="10" x2="21" y2="3" /><line x1="3" y1="21" x2="10" y2="14" />
                 </svg>
               </button>
-              {/* Encerrar chamada */}
-              <button
-                onClick={() => { setScreenExpanded(false); handleHangup(); }}
-                title="Encerrar chamada"
+              <button onClick={() => { setScreenExpanded(false); handleHangup(); }} title="Encerrar chamada"
                 className="p-2 rounded-lg bg-danger text-white hover:bg-red-700 transition-colors"
               >
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
@@ -360,98 +397,56 @@ function CallPanel({ dm, callStatus }: { dm: DmChannel; callStatus: 'calling' | 
             </div>
           </div>
 
-          {/* Vídeo fullscreen */}
-          <video
-            ref={expandedVideoRef}
-            autoPlay
-            muted
-            className="w-full h-full object-contain"
-            onDoubleClick={() => setScreenExpanded(false)}
-          />
+          <video ref={expandedVideoRef} autoPlay muted className="w-full h-full object-contain" onDoubleClick={() => setScreenExpanded(false)} />
 
-          {/* Barra inferior com controles — aparece no hover */}
           <div className="absolute bottom-0 inset-x-0 z-10 flex items-center justify-center gap-3 px-4 py-4 bg-gradient-to-t from-black/80 to-transparent opacity-0 hover:opacity-100 transition-opacity">
-            {/* Mute */}
-            <button
-              onClick={handleToggleMute}
-              title={isMuted ? 'Ativar microfone' : 'Silenciar'}
-              className={`p-3 rounded-full transition-colors ${
-                isMuted ? 'bg-danger text-white' : 'bg-white/10 text-white hover:bg-white/20'
-              }`}
+            <button onClick={handleToggleMute} title={isMuted ? 'Ativar microfone' : 'Silenciar'}
+              className={`p-3 rounded-full transition-colors ${isMuted ? 'bg-danger text-white' : 'bg-white/10 text-white hover:bg-white/20'}`}
             >
               {isMuted ? (
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
                   <line x1="1" y1="1" x2="23" y2="23" />
                   <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6" />
                   <path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23" />
-                  <line x1="12" y1="19" x2="12" y2="23" />
-                  <line x1="8" y1="23" x2="16" y2="23" />
+                  <line x1="12" y1="19" x2="12" y2="23" /><line x1="8" y1="23" x2="16" y2="23" />
                 </svg>
               ) : (
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
                   <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
                   <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-                  <line x1="12" y1="19" x2="12" y2="23" />
-                  <line x1="8" y1="23" x2="16" y2="23" />
+                  <line x1="12" y1="19" x2="12" y2="23" /><line x1="8" y1="23" x2="16" y2="23" />
                 </svg>
               )}
             </button>
-
-            {/* Compartilhar tela */}
-            <button
-              onClick={handleScreenShare}
-              title={isScreenSharing ? 'Parar compartilhamento' : 'Compartilhar tela'}
-              className={`p-3 rounded-full transition-colors ${
-                isScreenSharing ? 'bg-success text-white' : 'bg-white/10 text-white hover:bg-white/20'
-              }`}
+            <button onClick={handleScreenShare} title={isScreenSharing ? 'Parar compartilhamento' : 'Compartilhar tela'}
+              className={`p-3 rounded-full transition-colors ${isScreenSharing ? 'bg-success text-white' : 'bg-white/10 text-white hover:bg-white/20'}`}
             >
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="2" y="3" width="20" height="14" rx="2" />
-                <polyline points="8 21 12 17 16 21" />
-                <line x1="12" y1="17" x2="12" y2="21" />
+                <rect x="2" y="3" width="20" height="14" rx="2" /><polyline points="8 21 12 17 16 21" /><line x1="12" y1="17" x2="12" y2="21" />
               </svg>
             </button>
-
-            {/* Gamepad (expanded) */}
             {showGamepadButton && (
-              <button
-                onClick={handleGamepadToggle}
-                title={isGamepadSharing ? 'Parar controle remoto' : 'Compartilhar controle'}
-                className={`p-3 rounded-full transition-colors ${
-                  isGamepadSharing ? 'bg-success text-white' : 'bg-white/10 text-white hover:bg-white/20'
-                }`}
+              <button onClick={handleGamepadToggle} title={isGamepadSharing ? 'Parar controle' : 'Compartilhar controle'}
+                className={`p-3 rounded-full transition-colors ${isGamepadSharing ? 'bg-success text-white' : 'bg-white/10 text-white hover:bg-white/20'}`}
               >
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <rect x="2" y="6" width="20" height="12" rx="4" />
                   <circle cx="8" cy="12" r="1" fill="currentColor" />
-                  <circle cx="16" cy="10" r="1" fill="currentColor" />
-                  <circle cx="18" cy="12" r="1" fill="currentColor" />
-                  <circle cx="16" cy="14" r="1" fill="currentColor" />
-                  <circle cx="14" cy="12" r="1" fill="currentColor" />
-                  <line x1="6" y1="10" x2="6" y2="14" />
-                  <line x1="4" y1="12" x2="8" y2="12" />
+                  <circle cx="16" cy="10" r="1" fill="currentColor" /><circle cx="18" cy="12" r="1" fill="currentColor" />
+                  <circle cx="16" cy="14" r="1" fill="currentColor" /><circle cx="14" cy="12" r="1" fill="currentColor" />
+                  <line x1="6" y1="10" x2="6" y2="14" /><line x1="4" y1="12" x2="8" y2="12" />
                 </svg>
               </button>
             )}
-
-            {/* Minimizar */}
-            <button
-              onClick={() => setScreenExpanded(false)}
-              title="Minimizar"
+            <button onClick={() => setScreenExpanded(false)} title="Minimizar"
               className="p-3 rounded-full bg-white/10 text-white hover:bg-white/20 transition-colors"
             >
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="4 14 10 14 10 20" />
-                <polyline points="20 10 14 10 14 4" />
-                <line x1="14" y1="10" x2="21" y2="3" />
-                <line x1="3" y1="21" x2="10" y2="14" />
+                <polyline points="4 14 10 14 10 20" /><polyline points="20 10 14 10 14 4" />
+                <line x1="14" y1="10" x2="21" y2="3" /><line x1="3" y1="21" x2="10" y2="14" />
               </svg>
             </button>
-
-            {/* Encerrar */}
-            <button
-              onClick={() => { setScreenExpanded(false); handleHangup(); }}
-              title="Encerrar chamada"
+            <button onClick={() => { setScreenExpanded(false); handleHangup(); }} title="Encerrar chamada"
               className="p-3 rounded-full bg-danger text-white hover:bg-red-700 transition-colors"
             >
               <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">

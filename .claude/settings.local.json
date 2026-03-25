@@ -27,7 +27,13 @@
       "Bash(grep -r call: /c/Projects/zynk-backend/src --include=*.ts)",
       "Bash(ls -la /c/Projects/zynk-backend/src/*/)",
       "Bash(grep -l \"getInitials\\\\|getUserColor\\\\|formatDate\" /c/Projects/zynk-frontend/src/utils/*.ts)",
-      "Bash(npm ls:*)"
+      "Bash(npm ls:*)",
+      "Bash(find c:/Projects/zynk-frontend -maxdepth 1 -type f -name .* ! -name .git*)",
+      "Bash(npx --yes png-to-ico build/icon.png)",
+      "Bash(node -e \"const {createCanvas, loadImage} = require\\(''canvas''\\); console.log\\(''canvas available''\\)\")",
+      "Bash(npx --yes identify build/icon.png)",
+      "Bash(node -e \"const sharp = require\\(''sharp''\\); sharp\\(''build/icon.png''\\).metadata\\(\\).then\\(m => console.log\\(m\\)\\)\")",
+      "Bash(node -e \"const p = require\\(''./package.json''\\); console.log\\(JSON.stringify\\(p.scripts, null, 2\\)\\)\")"
     ]
   }
 }

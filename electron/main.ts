@@ -4,7 +4,7 @@ import {
   createVirtualGamepad,
   updateVirtualGamepad,
   destroyVirtualGamepad,
-  isViGEmAvailable,
+  isAvailable as isGamepadAvailable,
   cleanup as cleanupGamepad,
   type GamepadInputState,
 } from './gamepadEmulator';
@@ -14,6 +14,13 @@ let tray: Tray | null = null;
 let isQuitting = false;
 let pendingScreenSource: DesktopCapturerSource | null = null;
 
+function getIconPath(): string {
+  if (app.isPackaged) {
+    return path.join(process.resourcesPath, 'icon.png');
+  }
+  return path.join(__dirname, '..', 'build', 'icon.png');
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1280,
@@ -21,7 +28,7 @@ function createWindow() {
     minWidth: 940,
     minHeight: 600,
     title: 'Zynk',
-    icon: path.join(__dirname, '..', 'build', 'icon.png'),
+    icon: getIconPath(),
     frame: false,
     titleBarStyle: 'hidden',
     titleBarOverlay: {
@@ -112,7 +119,7 @@ ipcMain.handle('screen:select-source', async (_event, sourceId: string) => {
 // ─── Gamepad Emulation via IPC ─────────────────────────────────
 ipcMain.handle('gamepad:create-virtual', () => createVirtualGamepad());
 ipcMain.handle('gamepad:destroy-virtual', () => { destroyVirtualGamepad(); });
-ipcMain.handle('gamepad:is-available', () => isViGEmAvailable());
+ipcMain.handle('gamepad:is-available', () => isGamepadAvailable());
 ipcMain.on('gamepad:input', (_event, state: GamepadInputState) => {
   updateVirtualGamepad(state);
 });
@@ -163,8 +170,7 @@ app.whenReady().then(() => {
   createWindow();
 
   // ─── System Tray ──────────────────────────────────────────────
-  const iconPath = path.join(__dirname, '..', 'build', 'icon.png');
-  const trayIcon = nativeImage.createFromPath(iconPath).resize({ width: 16, height: 16 });
+  const trayIcon = nativeImage.createFromPath(getIconPath()).resize({ width: 16, height: 16 });
   tray = new Tray(trayIcon);
   tray.setToolTip('Zynk');
 
