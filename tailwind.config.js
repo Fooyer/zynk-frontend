@@ -4,7 +4,7 @@ export default {
   theme: {
     extend: {
       colors: {
-        // Palette dark com alto contraste e accent em teal
+        // Palette dark com alto contraste e accent azul (logo)
         surface: {
           50: '#e8eaed',
           100: '#d1d5db',
@@ -19,9 +19,9 @@ export default {
           950: '#090a10',
         },
         accent: {
-          400: '#5eead4',
-          500: '#2dd4bf',
-          600: '#14b8a6',
+          400: '#33c4e8',
+          500: '#00b4d8',
+          600: '#0096b7',
         },
         success: '#43b581',
         warning: '#faa61a',
