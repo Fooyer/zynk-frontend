@@ -30,6 +30,24 @@ export function NavBar() {
       {/* Divider */}
       <div className="w-8 h-px bg-surface-700 my-1" />
 
+      {/* Groups */}
+      <button
+        onClick={() => setView('groups')}
+        title="Grupos"
+        className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all duration-200 ${
+          view === 'groups'
+            ? 'bg-accent-600 rounded-[16px] text-white'
+            : 'bg-surface-700 text-surface-300 hover:bg-accent-600 hover:text-white hover:rounded-[16px]'
+        }`}
+      >
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+          <circle cx="9" cy="7" r="4" />
+          <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+          <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+        </svg>
+      </button>
+
       {/* Server (canais) */}
       <button
         onClick={() => setView('server')}

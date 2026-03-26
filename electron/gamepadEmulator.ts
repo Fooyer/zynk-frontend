@@ -39,6 +39,10 @@ let vigemClient: any = null;
 let vigemController: any = null;
 let vigemInited = false;
 
+// Multi-gamepad: até 4 controles virtuais para game sessions
+const vigemControllers: Map<number, any> = new Map();
+const MAX_CONTROLLERS = 4;
+
 function initViGEm(): boolean {
   if (vigemInited) return !!vigemClient;
   vigemInited = true;
@@ -288,9 +292,90 @@ export function isAvailable(): boolean {
   return initViGEm() || process.platform === 'win32';
 }
 
+// ═══════════════════════════════════════════════════════════
+// Multi-Gamepad API (para Game Sessions com vários jogadores)
+// ═══════════════════════════════════════════════════════════
+
+/**
+ * Cria um controle virtual no slot especificado (0-3).
+ * Usado em game sessions onde cada participante mapeia para um slot.
+ */
+export async function createVirtualGamepadSlot(slot: number): Promise<{ success: boolean; error?: string }> {
+  if (slot < 0 || slot >= MAX_CONTROLLERS) {
+    return { success: false, error: `Slot invalido: ${slot}. Use 0-${MAX_CONTROLLERS - 1}` };
+  }
+
+  if (vigemControllers.has(slot)) return { success: true };
+
+  if (!initViGEm()) {
+    return { success: false, error: 'ViGEmBus indisponivel para multi-gamepad' };
+  }
+
+  try {
+    const controller = vigemClient.createX360Controller();
+    const err = controller.connect();
+    if (err) return { success: false, error: 'Erro ao conectar controle no slot ' + slot };
+    vigemControllers.set(slot, controller);
+    console.log(`[GamepadEmulator] Controle virtual criado no slot ${slot}`);
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: (e as Error).message };
+  }
+}
+
+/** Atualiza o estado de um controle em um slot especifico. */
+export function updateVirtualGamepadSlot(slot: number, state: GamepadInputState): void {
+  const controller = vigemControllers.get(slot);
+  if (!controller) return;
+
+  try {
+    const btn = state.buttons;
+    const axes = state.axes;
+    controller.button.A.setValue(btn[0]?.pressed ?? false);
+    controller.button.B.setValue(btn[1]?.pressed ?? false);
+    controller.button.X.setValue(btn[2]?.pressed ?? false);
+    controller.button.Y.setValue(btn[3]?.pressed ?? false);
+    controller.button.LEFT_SHOULDER.setValue(btn[4]?.pressed ?? false);
+    controller.button.RIGHT_SHOULDER.setValue(btn[5]?.pressed ?? false);
+    controller.button.BACK.setValue(btn[8]?.pressed ?? false);
+    controller.button.START.setValue(btn[9]?.pressed ?? false);
+    controller.button.LEFT_THUMB.setValue(btn[10]?.pressed ?? false);
+    controller.button.RIGHT_THUMB.setValue(btn[11]?.pressed ?? false);
+    controller.button.DPAD_UP.setValue(btn[12]?.pressed ?? false);
+    controller.button.DPAD_DOWN.setValue(btn[13]?.pressed ?? false);
+    controller.button.DPAD_LEFT.setValue(btn[14]?.pressed ?? false);
+    controller.button.DPAD_RIGHT.setValue(btn[15]?.pressed ?? false);
+    controller.axis.leftTrigger.setValue(Math.round((btn[6]?.value ?? 0) * 255));
+    controller.axis.rightTrigger.setValue(Math.round((btn[7]?.value ?? 0) * 255));
+    controller.axis.leftX.setValue(Math.round((axes[0] ?? 0) * 32767));
+    controller.axis.leftY.setValue(Math.round((axes[1] ?? 0) * -32767));
+    controller.axis.rightX.setValue(Math.round((axes[2] ?? 0) * 32767));
+    controller.axis.rightY.setValue(Math.round((axes[3] ?? 0) * -32767));
+    controller.update();
+  } catch { /* ignora erros */ }
+}
+
+/** Remove um controle virtual de um slot. */
+export function destroyVirtualGamepadSlot(slot: number): void {
+  const controller = vigemControllers.get(slot);
+  if (controller) {
+    try { controller.disconnect(); } catch { /* */ }
+    vigemControllers.delete(slot);
+    console.log(`[GamepadEmulator] Controle virtual removido do slot ${slot}`);
+  }
+}
+
+/** Remove todos os controles de todos os slots. */
+export function destroyAllSlots(): void {
+  for (const [slot] of vigemControllers) {
+    destroyVirtualGamepadSlot(slot);
+  }
+}
+
 /** Limpa tudo ao fechar o app. */
 export function cleanup(): void {
   destroyVirtualGamepad();
+  destroyAllSlots();
   if (vigemClient) {
     try { vigemClient.disconnect(); } catch { /* */ }
     vigemClient = null;

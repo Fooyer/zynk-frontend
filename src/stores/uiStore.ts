@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-export type AppView = 'home' | 'server' | 'settings';
+export type AppView = 'home' | 'server' | 'settings' | 'groups';
 
 interface UiState {
   view: AppView;

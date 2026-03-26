@@ -13,7 +13,8 @@ export interface Channel {
   id: number;
   name: string;
   description: string | null;
-  type: 'public' | 'private' | 'dm';
+  type: 'public' | 'private' | 'dm' | 'group';
+  groupId?: number | null;
   createdAt: string;
 }
 
@@ -102,6 +103,78 @@ export interface UserStatusEvent {
   status: User['status'] | 'in_call';
 }
 
+// ─── Groups ────────────────────────────────────
+
+export interface Group {
+  id: number;
+  name: string;
+  avatarUrl: string | null;
+  ownerId: number;
+  maxMembers: number;
+  channelId: number | null;
+  owner: Pick<User, 'id' | 'username' | 'avatarUrl'>;
+  members: GroupMemberEntry[];
+  createdAt: string;
+}
+
+export interface GroupMemberEntry {
+  id: number;
+  role: 'owner' | 'admin' | 'member';
+  joinedAt: string;
+  user: Pick<User, 'id' | 'username' | 'avatarUrl' | 'status'>;
+}
+
+// ─── Game Sessions ─────────────────────────────
+
+export interface GameSession {
+  id: number;
+  groupId: number;
+  hostId: number;
+  status: 'waiting' | 'active' | 'ended';
+  title: string | null;
+  maxPlayers: number;
+  host: Pick<User, 'id' | 'username' | 'avatarUrl'>;
+  participants: GameSessionParticipant[];
+  createdAt: string;
+}
+
+export interface GameSessionParticipant {
+  id: number;
+  userId: number;
+  role: 'host' | 'player' | 'spectator';
+  user: Pick<User, 'id' | 'username' | 'avatarUrl'>;
+  joinedAt: string;
+}
+
+// ─── Code Sessions ─────────────────────────────
+
+export interface CodeSession {
+  id: number;
+  groupId: number;
+  hostId: number;
+  title: string;
+  status: 'active' | 'ended';
+  host: Pick<User, 'id' | 'username' | 'avatarUrl'>;
+  participants: CodeSessionParticipant[];
+  files: CodeSessionFileEntry[];
+  createdAt: string;
+}
+
+export interface CodeSessionParticipant {
+  id: number;
+  userId: number;
+  user: Pick<User, 'id' | 'username' | 'avatarUrl'>;
+  joinedAt: string;
+}
+
+export interface CodeSessionFileEntry {
+  id: number;
+  filename: string;
+  language: string;
+  content: string | null;
+  updatedAt: string;
+}
+
 // ─── Electron ───────────────────────────────────
 
 export interface ScreenSource {
@@ -124,6 +197,24 @@ declare global {
       gamepadInput: (state: { index: number; timestamp: number; buttons: { pressed: boolean; value: number }[]; axes: number[] }) => void;
       gamepadDestroyVirtual: () => Promise<void>;
       gamepadIsAvailable: () => Promise<boolean>;
+      // Multi-gamepad (game sessions)
+      gamepadCreateSlot: (slot: number) => Promise<{ success: boolean; error?: string }>;
+      gamepadDestroySlot: (slot: number) => Promise<void>;
+      gamepadDestroyAllSlots: () => Promise<void>;
+      gamepadInputSlot: (slot: number, state: { index: number; timestamp: number; buttons: { pressed: boolean; value: number }[]; axes: number[] }) => void;
+      // Filesystem (code sessions)
+      fsSelectFolder: () => Promise<string | null>;
+      fsReadDir: (dirPath: string) => Promise<Array<{ name: string; isDirectory: boolean; path: string }>>;
+      fsReadFile: (filePath: string) => Promise<string | null>;
+      fsSaveFile: (filePath: string, content: string) => Promise<boolean>;
+      // Code tunnel (VS Code + file watcher)
+      tunnelOpenVSCode: (folderPath: string) => Promise<{ success: boolean; error?: string }>;
+      tunnelWatchFolder: (folderPath: string) => Promise<{ success: boolean; error?: string }>;
+      tunnelStopWatching: () => Promise<void>;
+      tunnelWriteRemoteFile: (folderPath: string, relativePath: string, content: string) => Promise<boolean>;
+      tunnelDeleteRemoteFile: (folderPath: string, relativePath: string) => Promise<boolean>;
+      tunnelOnFileChanged: (callback: (data: { relativePath: string; action: 'change' | 'create' | 'delete'; content: string | null }) => void) => void;
+      tunnelOffFileChanged: () => void;
     };
   }
 }

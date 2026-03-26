@@ -10,10 +10,16 @@
     "electron:dev": "vite build && electron ."
   },
   "dependencies": {
+    "@monaco-editor/react": "^4.7.0",
     "axios": "^1.6.7",
+    "monaco-editor": "^0.55.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "socket.io-client": "^4.7.4",
+    "vite-plugin-monaco-editor": "^1.1.0",
+    "y-monaco": "^0.1.6",
+    "y-webrtc": "^10.3.0",
+    "yjs": "^13.6.30",
     "zustand": "^4.5.0"
   },
   "devDependencies": {

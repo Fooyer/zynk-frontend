@@ -14,6 +14,7 @@ import { LoginForm } from './components/auth/LoginForm';
 import { RegisterForm } from './components/auth/RegisterForm';
 import { CallManager } from './components/call/CallManager';
 import { SettingsPage } from './components/settings/SettingsPage';
+import { GroupLayout } from './components/groups/GroupLayout';
 
 
 function TitleBar() {
@@ -97,7 +98,7 @@ function AppLayout() {
       <TitleBar />
       <div className="flex-1 flex overflow-hidden">
         <NavBar />
-        {view === 'settings' ? <SettingsPage /> : view === 'home' ? <HomeLayout /> : <ServerLayout />}
+        {view === 'settings' ? <SettingsPage /> : view === 'groups' ? <GroupLayout /> : view === 'home' ? <HomeLayout /> : <ServerLayout />}
       </div>
       <CallManager />
     </div>

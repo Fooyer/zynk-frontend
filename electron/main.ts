@@ -1,11 +1,17 @@
-import { app, BrowserWindow, shell, session, ipcMain, desktopCapturer, Tray, Menu, nativeImage, type DesktopCapturerSource } from 'electron';
+import { app, BrowserWindow, shell, session, ipcMain, desktopCapturer, Tray, Menu, nativeImage, dialog, type DesktopCapturerSource } from 'electron';
 import path from 'path';
+import fs from 'fs';
+import { execFile } from 'child_process';
 import {
   createVirtualGamepad,
   updateVirtualGamepad,
   destroyVirtualGamepad,
   isAvailable as isGamepadAvailable,
   cleanup as cleanupGamepad,
+  createVirtualGamepadSlot,
+  updateVirtualGamepadSlot,
+  destroyVirtualGamepadSlot,
+  destroyAllSlots,
   type GamepadInputState,
 } from './gamepadEmulator';
 
@@ -124,6 +130,195 @@ ipcMain.on('gamepad:input', (_event, state: GamepadInputState) => {
   updateVirtualGamepad(state);
 });
 
+// Multi-gamepad (game sessions)
+ipcMain.handle('gamepad:create-slot', (_event, slot: number) => createVirtualGamepadSlot(slot));
+ipcMain.handle('gamepad:destroy-slot', (_event, slot: number) => { destroyVirtualGamepadSlot(slot); });
+ipcMain.handle('gamepad:destroy-all-slots', () => { destroyAllSlots(); });
+ipcMain.on('gamepad:input-slot', (_event, data: { slot: number; state: GamepadInputState }) => {
+  updateVirtualGamepadSlot(data.slot, data.state);
+});
+
+// ─── Filesystem (Code Sessions) ──────────────────────────────
+ipcMain.handle('fs:select-folder', async () => {
+  if (!mainWindow) return null;
+  const result = await dialog.showOpenDialog(mainWindow, {
+    properties: ['openDirectory'],
+    title: 'Selecionar pasta do projeto',
+  });
+  if (result.canceled || !result.filePaths.length) return null;
+  return result.filePaths[0];
+});
+
+ipcMain.handle('fs:read-dir', async (_event, dirPath: string) => {
+  try {
+    const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+    const ignored = new Set(['node_modules', '.git', '.next', 'dist', 'build', '__pycache__', '.venv', 'target']);
+    return entries
+      .filter((e) => !ignored.has(e.name) && !e.name.startsWith('.'))
+      .map((e) => ({
+        name: e.name,
+        isDirectory: e.isDirectory(),
+        path: path.join(dirPath, e.name),
+      }))
+      .sort((a, b) => {
+        if (a.isDirectory === b.isDirectory) return a.name.localeCompare(b.name);
+        return a.isDirectory ? -1 : 1;
+      });
+  } catch {
+    return [];
+  }
+});
+
+ipcMain.handle('fs:read-file', async (_event, filePath: string) => {
+  try {
+    return fs.readFileSync(filePath, 'utf-8');
+  } catch {
+    return null;
+  }
+});
+
+ipcMain.handle('fs:save-file', async (_event, filePath: string, content: string) => {
+  try {
+    fs.writeFileSync(filePath, content, 'utf-8');
+    return true;
+  } catch {
+    return false;
+  }
+});
+
+// ─── Code Tunnel (VS Code + File Watcher) ───────────────────
+const IGNORED_DIRS = new Set(['node_modules', '.git', '.next', 'dist', 'build', '__pycache__', '.venv', 'target', '.idea', '.vscode']);
+const IGNORED_EXTS = new Set(['.exe', '.dll', '.so', '.dylib', '.o', '.obj', '.class', '.jar', '.zip', '.tar', '.gz', '.png', '.jpg', '.jpeg', '.gif', '.ico', '.woff', '.woff2', '.ttf', '.eot', '.mp3', '.mp4', '.avi', '.mov']);
+
+let activeWatcher: fs.FSWatcher | null = null;
+let watchedRoot: string | null = null;
+const recentWrites = new Set<string>(); // Paths we wrote ourselves (avoid echo loop)
+
+function shouldIgnorePath(relativePath: string): boolean {
+  const parts = relativePath.split(/[\\/]/);
+  for (const part of parts) {
+    if (IGNORED_DIRS.has(part) || part.startsWith('.')) return true;
+  }
+  const ext = path.extname(relativePath).toLowerCase();
+  if (IGNORED_EXTS.has(ext)) return true;
+  return false;
+}
+
+// Open VS Code on a folder
+ipcMain.handle('tunnel:open-vscode', async (_event, folderPath: string) => {
+  return new Promise<{ success: boolean; error?: string }>((resolve) => {
+    execFile('code', [folderPath], { shell: true }, (err) => {
+      if (err) {
+        console.error('[tunnel:open-vscode] Error:', err.message);
+        resolve({ success: false, error: err.message });
+      } else {
+        resolve({ success: true });
+      }
+    });
+  });
+});
+
+// Start watching a folder for file changes
+ipcMain.handle('tunnel:watch-folder', async (_event, folderPath: string) => {
+  // Stop previous watcher
+  if (activeWatcher) {
+    activeWatcher.close();
+    activeWatcher = null;
+  }
+  watchedRoot = folderPath;
+
+  try {
+    activeWatcher = fs.watch(folderPath, { recursive: true }, (eventType, filename) => {
+      if (!filename || !mainWindow || !watchedRoot) return;
+
+      const relativePath = filename.replace(/\\/g, '/');
+      if (shouldIgnorePath(relativePath)) return;
+
+      const fullPath = path.join(watchedRoot, filename);
+
+      // Skip if we wrote this file ourselves (from a remote sync)
+      if (recentWrites.has(fullPath)) return;
+
+      // Debounce: small delay to let the write finish
+      setTimeout(() => {
+        try {
+          if (!fs.existsSync(fullPath)) {
+            // File deleted
+            mainWindow?.webContents.send('tunnel:file-changed', {
+              relativePath,
+              action: 'delete' as const,
+              content: null,
+            });
+            return;
+          }
+
+          const stat = fs.statSync(fullPath);
+          if (stat.isDirectory()) return;
+          // Skip files > 1MB
+          if (stat.size > 1024 * 1024) return;
+
+          const content = fs.readFileSync(fullPath, 'utf-8');
+          mainWindow?.webContents.send('tunnel:file-changed', {
+            relativePath,
+            action: eventType === 'rename' ? 'create' : 'change',
+            content,
+          });
+        } catch {
+          // File may have been deleted between check and read
+        }
+      }, 100);
+    });
+
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+});
+
+// Stop watching
+ipcMain.handle('tunnel:stop-watching', async () => {
+  if (activeWatcher) {
+    activeWatcher.close();
+    activeWatcher = null;
+  }
+  watchedRoot = null;
+  recentWrites.clear();
+});
+
+// Write a file received from a remote participant (marks it to avoid echo)
+ipcMain.handle('tunnel:write-remote-file', async (_event, folderPath: string, relativePath: string, content: string) => {
+  try {
+    const fullPath = path.join(folderPath, relativePath);
+    const dir = path.dirname(fullPath);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+
+    // Mark as "our write" so the watcher ignores it
+    recentWrites.add(fullPath);
+    fs.writeFileSync(fullPath, content, 'utf-8');
+    // Clear the mark after a short delay
+    setTimeout(() => recentWrites.delete(fullPath), 500);
+
+    return true;
+  } catch {
+    return false;
+  }
+});
+
+// Delete a file received from a remote participant
+ipcMain.handle('tunnel:delete-remote-file', async (_event, folderPath: string, relativePath: string) => {
+  try {
+    const fullPath = path.join(folderPath, relativePath);
+    recentWrites.add(fullPath);
+    if (fs.existsSync(fullPath)) fs.unlinkSync(fullPath);
+    setTimeout(() => recentWrites.delete(fullPath), 500);
+    return true;
+  } catch {
+    return false;
+  }
+});
+
 app.whenReady().then(() => {
   // Handler para getDisplayMedia — pega a tela inteira automaticamente.
   // O renderer é que decide qual source via IPC, este handler só precisa
@@ -159,7 +354,7 @@ app.whenReady().then(() => {
             " script-src 'self';" +
             " style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;" +
             " font-src 'self' https://fonts.gstatic.com;" +
-            " connect-src 'self' https://zynk.fooyer.space ws://zynk.fooyer.space wss://zynk.fooyer.space;" +
+            " connect-src 'self' https://zynk.fooyer.space ws://zynk.fooyer.space wss://zynk.fooyer.space wss://signaling.yjs.dev;" +
             " img-src 'self' data:;"
           ],
         },
