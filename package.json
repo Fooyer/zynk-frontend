@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build && electron-builder",
+    "build:linux": "tsc && vite build && electron-builder --linux",
+    "build:win": "tsc && vite build && electron-builder --win",
     "preview": "vite preview",
     "electron:dev": "vite build && electron ."
   },
