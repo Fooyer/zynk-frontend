@@ -15,6 +15,15 @@ import {
   type GamepadInputState,
 } from './gamepadEmulator';
 
+// On Linux/Wayland the PipeWire screen capturer tries DMA-BUF with EGL and
+// fails with EGL_BAD_DISPLAY, producing a black stream.
+// ozone-platform-hint=auto makes Electron detect X11 vs Wayland and set up
+// EGL properly; WebRtcPipeWireCapturer enables the PipeWire capture path.
+if (process.platform === 'linux') {
+  app.commandLine.appendSwitch('ozone-platform-hint', 'auto');
+  app.commandLine.appendSwitch('enable-features', 'WebRtcPipeWireCapturer');
+}
+
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let isQuitting = false;
