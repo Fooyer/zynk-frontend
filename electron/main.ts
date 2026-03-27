@@ -191,7 +191,6 @@ const IGNORED_DIRS = new Set(['node_modules', '.git', '.next', 'dist', 'build', 
 const IGNORED_EXTS = new Set(['.exe', '.dll', '.so', '.dylib', '.o', '.obj', '.class', '.jar', '.zip', '.tar', '.gz', '.png', '.jpg', '.jpeg', '.gif', '.ico', '.woff', '.woff2', '.ttf', '.eot', '.mp3', '.mp4', '.avi', '.mov']);
 
 let activeWatcher: fs.FSWatcher | null = null;
-let watchedRoot: string | null = null;
 const recentWrites = new Set<string>(); // Paths we wrote ourselves (avoid echo loop)
 
 function shouldIgnorePath(relativePath: string): boolean {
@@ -206,44 +205,47 @@ function shouldIgnorePath(relativePath: string): boolean {
 
 // Open VS Code on a folder
 ipcMain.handle('tunnel:open-vscode', async (_event, folderPath: string) => {
-  return new Promise<{ success: boolean; error?: string }>((resolve) => {
-    execFile('code', [folderPath], { shell: true }, (err) => {
-      if (err) {
-        console.error('[tunnel:open-vscode] Error:', err.message);
-        resolve({ success: false, error: err.message });
-      } else {
-        resolve({ success: true });
-      }
+  // On Linux, VS Code may be installed as Flatpak or Snap and not expose `code` in PATH
+  const candidates =
+    process.platform === 'win32' || process.platform === 'darwin'
+      ? ['code']
+      : ['code', 'flatpak run com.visualstudio.code', 'snap run code'];
+
+  const tryNext = (index: number): Promise<{ success: boolean; error?: string }> => {
+    if (index >= candidates.length) {
+      return Promise.resolve({ success: false, error: 'VS Code não encontrado. Instale o VS Code e verifique se está no PATH.' });
+    }
+    const [bin, ...args] = candidates[index].split(' ');
+    return new Promise((resolve) => {
+      execFile(bin, [...args, folderPath], { shell: true }, (err) => {
+        if (err) resolve(tryNext(index + 1));
+        else resolve({ success: true });
+      });
     });
-  });
+  };
+
+  const result = await tryNext(0);
+  if (!result.success) console.error('[tunnel:open-vscode] Error:', result.error);
+  return result;
 });
 
-// Start watching a folder for file changes
-ipcMain.handle('tunnel:watch-folder', async (_event, folderPath: string) => {
-  // Stop previous watcher
-  if (activeWatcher) {
-    activeWatcher.close();
-    activeWatcher = null;
-  }
-  watchedRoot = folderPath;
+// ─── Manual recursive watcher (fs.watch { recursive } not supported on Linux) ─
+const dirWatchers = new Map<string, fs.FSWatcher>();
 
+function watchDir(dir: string, root: string) {
+  if (dirWatchers.has(dir)) return;
   try {
-    activeWatcher = fs.watch(folderPath, { recursive: true }, (eventType, filename) => {
-      if (!filename || !mainWindow || !watchedRoot) return;
+    const watcher = fs.watch(dir, (eventType, filename) => {
+      if (!filename || !mainWindow) return;
 
-      const relativePath = filename.replace(/\\/g, '/');
+      const fullPath = path.join(dir, filename);
+      const relativePath = path.relative(root, fullPath).replace(/\\/g, '/');
       if (shouldIgnorePath(relativePath)) return;
-
-      const fullPath = path.join(watchedRoot, filename);
-
-      // Skip if we wrote this file ourselves (from a remote sync)
       if (recentWrites.has(fullPath)) return;
 
-      // Debounce: small delay to let the write finish
       setTimeout(() => {
         try {
           if (!fs.existsSync(fullPath)) {
-            // File deleted
             mainWindow?.webContents.send('tunnel:file-changed', {
               relativePath,
               action: 'delete' as const,
@@ -253,8 +255,11 @@ ipcMain.handle('tunnel:watch-folder', async (_event, folderPath: string) => {
           }
 
           const stat = fs.statSync(fullPath);
-          if (stat.isDirectory()) return;
-          // Skip files > 1MB
+          if (stat.isDirectory()) {
+            // New subdirectory created — start watching it too
+            watchDir(fullPath, root);
+            return;
+          }
           if (stat.size > 1024 * 1024) return;
 
           const content = fs.readFileSync(fullPath, 'utf-8');
@@ -268,7 +273,37 @@ ipcMain.handle('tunnel:watch-folder', async (_event, folderPath: string) => {
         }
       }, 100);
     });
+    dirWatchers.set(dir, watcher);
+  } catch {
+    // Directory may not be accessible
+  }
+}
 
+function walkAndWatch(dir: string, root: string) {
+  watchDir(dir, root);
+  try {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      if (IGNORED_DIRS.has(entry.name) || entry.name.startsWith('.')) continue;
+      walkAndWatch(path.join(dir, entry.name), root);
+    }
+  } catch {
+    // Skip unreadable directories
+  }
+}
+
+function stopAllDirWatchers() {
+  for (const w of dirWatchers.values()) w.close();
+  dirWatchers.clear();
+}
+
+// Start watching a folder for file changes
+ipcMain.handle('tunnel:watch-folder', async (_event, folderPath: string) => {
+  stopAllDirWatchers();
+  if (activeWatcher) { activeWatcher.close(); activeWatcher = null; }
+
+  try {
+    walkAndWatch(folderPath, folderPath);
     return { success: true };
   } catch (err: any) {
     return { success: false, error: err.message };
@@ -281,7 +316,7 @@ ipcMain.handle('tunnel:stop-watching', async () => {
     activeWatcher.close();
     activeWatcher = null;
   }
-  watchedRoot = null;
+  stopAllDirWatchers();
   recentWrites.clear();
 });
 
