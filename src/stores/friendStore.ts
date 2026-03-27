@@ -19,6 +19,7 @@ interface FriendState {
   openDm: (targetUserId: number) => Promise<number>;
   closeDm: (channelId: number) => void;
   setActiveDm: (channelId: number | null) => void;
+  updateFriendStatus: (userId: number, status: string) => void;
   sendRequest: (username: string) => Promise<void>;
   accept: (id: number) => Promise<void>;
   reject: (id: number) => Promise<void>;
@@ -94,6 +95,17 @@ export const useFriendStore = create<FriendState>((set, get) => ({
     set((s) => ({
       dmChannels: s.dmChannels.filter((d) => d.channelId !== channelId),
       activeDmChannelId: s.activeDmChannelId === channelId ? null : s.activeDmChannelId,
+    }));
+  },
+
+  updateFriendStatus: (userId, status) => {
+    set((s) => ({
+      friends: s.friends.map((f) =>
+        Number(f.friend.id) === Number(userId) ? { ...f, friend: { ...f.friend, status: status as any } } : f,
+      ),
+      dmChannels: s.dmChannels.map((d) =>
+        Number(d.friend.id) === Number(userId) ? { ...d, friend: { ...d.friend, status: status as any } } : d,
+      ),
     }));
   },
 
