@@ -12,6 +12,8 @@ interface ChannelState {
 
   loadChannels: () => Promise<void>;
   setActiveChannel: (channelId: number) => Promise<void>;
+  reloadMembers: () => Promise<void>;
+  updateMemberStatus: (userId: number, status: string) => void;
   createChannel: (name: string, description?: string) => Promise<Channel>;
   joinChannel: (channelId: number) => Promise<void>;
   loadDiscoverChannels: () => Promise<void>;
@@ -50,6 +52,25 @@ export const useChannelStore = create<ChannelState>((set, get) => ({
     } catch {
       set({ members: [] });
     }
+  },
+
+  reloadMembers: async () => {
+    const channelId = get().activeChannelId;
+    if (!channelId) return;
+    try {
+      const { data } = await channelsAPI.members(channelId);
+      set({ members: data });
+    } catch {
+      // silencioso
+    }
+  },
+
+  updateMemberStatus: (userId, status) => {
+    set((s) => ({
+      members: s.members.map((m) =>
+        Number(m.user.id) === Number(userId) ? { ...m, user: { ...m.user, status: status as any } } : m,
+      ),
+    }));
   },
 
   createChannel: async (name, description) => {

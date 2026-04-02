@@ -10,7 +10,10 @@ export function useSocket() {
   const addMessage = useChatStore((s) => s.addMessage);
   const setTyping = useChatStore((s) => s.setTyping);
   const loadChannels = useChannelStore((s) => s.loadChannels);
+  const reloadMembers = useChannelStore((s) => s.reloadMembers);
+  const updateMemberStatus = useChannelStore((s) => s.updateMemberStatus);
   const loadDmChannels = useFriendStore((s) => s.loadDmChannels);
+  const updateFriendStatus = useFriendStore((s) => s.updateFriendStatus);
   const hasSetup = useRef(false);
 
   useEffect(() => {
@@ -32,6 +35,7 @@ export function useSocket() {
 
     socket.on('channel:user_joined', () => {
       loadChannels();
+      reloadMembers();
     });
 
     // Novo DM aberto pelo outro usuário — recarrega lista de DMs
@@ -39,8 +43,9 @@ export function useSocket() {
       loadDmChannels();
     });
 
-    socket.on('user:status', (_event: UserStatusEvent) => {
-      // Futuramente: atualizar status na store de membros / amigos
+    socket.on('user:status', (event: UserStatusEvent) => {
+      updateFriendStatus(event.userId, event.status);
+      updateMemberStatus(event.userId, event.status);
     });
 
     socket.on('error', (err: { message: string }) => {
@@ -53,6 +58,26 @@ export function useSocket() {
       console.log(`[Socket] Reconectado após ${attempt} tentativa(s)`),
     );
 
+    // ── Away detection ─────────────────────────────────────────
+    // Marca como "away" após 5 min sem foco na janela
+    let awayTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const emitStatus = (status: 'online' | 'away') => {
+      if (socket.connected) socket.emit('user:status_update', { status });
+    };
+
+    const onBlur = () => {
+      awayTimer = setTimeout(() => emitStatus('away'), 5 * 60 * 1000);
+    };
+
+    const onFocus = () => {
+      if (awayTimer) { clearTimeout(awayTimer); awayTimer = null; }
+      emitStatus('online');
+    };
+
+    window.addEventListener('blur', onBlur);
+    window.addEventListener('focus', onFocus);
+
     return () => {
       socket.off('message:new');
       socket.off('message:typing');
@@ -63,7 +88,10 @@ export function useSocket() {
       socket.off('connect');
       socket.off('disconnect');
       socket.off('reconnect');
+      window.removeEventListener('blur', onBlur);
+      window.removeEventListener('focus', onFocus);
+      if (awayTimer) clearTimeout(awayTimer);
       hasSetup.current = false;
     };
-  }, [addMessage, setTyping, loadChannels, loadDmChannels]);
+  }, [addMessage, setTyping, loadChannels, reloadMembers, updateMemberStatus, loadDmChannels, updateFriendStatus]);
 }
