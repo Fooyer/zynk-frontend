@@ -105,6 +105,8 @@ export interface UserStatusEvent {
 
 // ─── Groups ────────────────────────────────────
 
+export type GroupFeature = 'code_tunnel' | 'voice' | 'kanban' | 'notes';
+
 export interface Group {
   id: number;
   name: string;
@@ -112,6 +114,7 @@ export interface Group {
   ownerId: number;
   maxMembers: number;
   channelId: number | null;
+  features: GroupFeature[];
   owner: Pick<User, 'id' | 'username' | 'avatarUrl'>;
   members: GroupMemberEntry[];
   createdAt: string;
@@ -122,6 +125,43 @@ export interface GroupMemberEntry {
   role: 'owner' | 'admin' | 'member';
   joinedAt: string;
   user: Pick<User, 'id' | 'username' | 'avatarUrl' | 'status'>;
+}
+
+// ─── Group Features ────────────────────────────
+
+export interface GroupNote {
+  id: number;
+  groupId: number;
+  content: string | null;
+  updatedBy: number | null;
+  editor: Pick<User, 'id' | 'username' | 'avatarUrl'> | null;
+  updatedAt: string;
+}
+
+export interface KanbanCard {
+  id: number;
+  groupId: number;
+  title: string;
+  description: string | null;
+  status: 'todo' | 'doing' | 'done';
+  creator: Pick<User, 'id' | 'username' | 'avatarUrl'>;
+  assignee: Pick<User, 'id' | 'username' | 'avatarUrl'> | null;
+  createdAt: string;
+}
+
+export interface VoiceParticipant {
+  userId: number;
+  username: string;
+  avatarUrl: string | null;
+}
+
+export interface VoiceChannel {
+  id: number;
+  groupId: number;
+  name: string;
+  creator: Pick<User, 'id' | 'username' | 'avatarUrl'>;
+  participants: VoiceParticipant[];
+  createdAt: string;
 }
 
 // ─── Game Sessions ─────────────────────────────

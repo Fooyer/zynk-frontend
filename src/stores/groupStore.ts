@@ -9,12 +9,14 @@ interface GroupState {
   isLoading: boolean;
 
   loadGroups: () => Promise<void>;
-  createGroup: (name: string, maxMembers?: number) => Promise<Group>;
+  createGroup: (name: string, maxMembers?: number, features?: string[]) => Promise<Group>;
+  deleteGroup: (groupId: number) => Promise<void>;
   inviteMember: (groupId: number, userId: number) => Promise<void>;
   leaveGroup: (groupId: number) => Promise<void>;
   setActiveGroup: (groupId: number | null) => void;
   loadMembers: (groupId: number) => Promise<void>;
   getActiveGroup: () => Group | null;
+  removeGroupFromState: (groupId: number) => void;
 }
 
 export const useGroupStore = create<GroupState>((set, get) => ({
@@ -33,15 +35,22 @@ export const useGroupStore = create<GroupState>((set, get) => ({
     }
   },
 
-  createGroup: async (name, maxMembers) => {
-    const { data } = await groupsAPI.create({ name, maxMembers });
+  createGroup: async (name, maxMembers, features) => {
+    const { data } = await groupsAPI.create({ name, maxMembers, features });
     set((s) => ({ groups: [...s.groups, data] }));
     return data;
   },
 
+  deleteGroup: async (groupId) => {
+    await groupsAPI.delete(groupId);
+    set((s) => ({
+      groups: s.groups.filter((g) => g.id !== groupId),
+      activeGroupId: s.activeGroupId === groupId ? null : s.activeGroupId,
+    }));
+  },
+
   inviteMember: async (groupId, userId) => {
     await groupsAPI.invite(groupId, userId);
-    // Recarrega membros
     await get().loadMembers(groupId);
   },
 
@@ -66,5 +75,12 @@ export const useGroupStore = create<GroupState>((set, get) => ({
   getActiveGroup: () => {
     const { groups, activeGroupId } = get();
     return groups.find((g) => g.id === activeGroupId) || null;
+  },
+
+  removeGroupFromState: (groupId) => {
+    set((s) => ({
+      groups: s.groups.filter((g) => g.id !== groupId),
+      activeGroupId: s.activeGroupId === groupId ? null : s.activeGroupId,
+    }));
   },
 }));

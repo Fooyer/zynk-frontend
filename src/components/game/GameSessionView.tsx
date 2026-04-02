@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { useGameSessionStore } from '../../stores/gameSessionStore';
 import { useAuthStore } from '../../stores/authStore';
 import { getSocket } from '../../services/socket';
@@ -8,9 +8,14 @@ interface Props {
   onBack: () => void;
 }
 
-const ICE_SERVERS = [
+const ICE_SERVERS: RTCIceServer[] = [
   { urls: 'stun:stun.l.google.com:19302' },
   { urls: 'stun:stun1.l.google.com:19302' },
+  {
+    urls: 'turn:relay1.expressturn.com:443',
+    username: 'public',
+    credential: 'public',
+  },
 ];
 
 export function GameSessionView({ onBack }: Props) {
@@ -18,11 +23,72 @@ export function GameSessionView({ onBack }: Props) {
   const user = useAuthStore((s) => s.user);
   const videoRef = useRef<HTMLVideoElement>(null);
   const peerConnections = useRef<Map<number, RTCPeerConnection>>(new Map());
+  const pendingCandidates = useRef<Map<number, RTCIceCandidateInit[]>>(new Map());
+  const remoteDescSet = useRef<Set<number>>(new Set());
   const [isScreenSharing, setIsScreenSharing] = useState(false);
   const [isGamepadActive, setIsGamepadActive] = useState(false);
   const [connectedPeers, setConnectedPeers] = useState<Set<number>>(new Set());
 
   const isHost = activeSession && user && Number(activeSession.hostId) === Number(user.id);
+
+  const addIceSafe = useCallback(async (pc: RTCPeerConnection, candidate: RTCIceCandidateInit) => {
+    try {
+      await pc.addIceCandidate(new RTCIceCandidate(candidate));
+    } catch (e) {
+      console.warn('[WebRTC] Erro ao adicionar ICE candidate:', e);
+    }
+  }, []);
+
+  const flushCandidates = useCallback(async (pc: RTCPeerConnection, from: number) => {
+    const buffered = pendingCandidates.current.get(from) || [];
+    for (const c of buffered) {
+      await addIceSafe(pc, c);
+    }
+    pendingCandidates.current.delete(from);
+    remoteDescSet.current.add(from);
+  }, [addIceSafe]);
+
+  const createPeerConnection = useCallback((targetUserId: number): RTCPeerConnection => {
+    // Fechar conexão anterior se existir
+    const existing = peerConnections.current.get(targetUserId);
+    if (existing) {
+      existing.close();
+    }
+
+    const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+
+    pc.onicecandidate = (event) => {
+      if (event.candidate) {
+        getSocket().emit('game:ice-candidate', {
+          targetUserId,
+          candidate: {
+            candidate: event.candidate.candidate,
+            sdpMid: event.candidate.sdpMid,
+            sdpMLineIndex: event.candidate.sdpMLineIndex,
+          },
+          sessionId: activeSession?.id,
+        });
+      }
+    };
+
+    pc.oniceconnectionstatechange = () => {
+      console.log(`[WebRTC] ICE state (peer ${targetUserId}):`, pc.iceConnectionState);
+      if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
+        setConnectedPeers((prev) => new Set(prev).add(targetUserId));
+      }
+      if (pc.iceConnectionState === 'failed') {
+        console.error(`[WebRTC] ICE failed para peer ${targetUserId}, tentando restart`);
+        pc.restartIce();
+      }
+    };
+
+    pc.onconnectionstatechange = () => {
+      console.log(`[WebRTC] Connection state (peer ${targetUserId}):`, pc.connectionState);
+    };
+
+    peerConnections.current.set(targetUserId, pc);
+    return pc;
+  }, [activeSession?.id]);
 
   useEffect(() => {
     const socket = getSocket();
@@ -30,45 +96,81 @@ export function GameSessionView({ onBack }: Props) {
     if (isHost) {
       // Host: escuta jogadores se conectando
       socket.on('game:answer', async ({ from, answer }: { from: number; answer: RTCSessionDescriptionInit }) => {
+        console.log('[WebRTC] Host recebeu answer de:', from);
         const pc = peerConnections.current.get(from);
         if (pc) {
-          await pc.setRemoteDescription(answer);
-          setConnectedPeers((prev) => new Set(prev).add(from));
+          try {
+            await pc.setRemoteDescription(new RTCSessionDescription(answer));
+            await flushCandidates(pc, from);
+          } catch (e) {
+            console.error('[WebRTC] Erro ao processar answer:', e);
+          }
         }
       });
 
       socket.on('game:ice-candidate', async ({ from, candidate }: { from: number; candidate: RTCIceCandidateInit }) => {
         const pc = peerConnections.current.get(from);
         if (pc && candidate) {
-          await pc.addIceCandidate(candidate);
+          if (remoteDescSet.current.has(from)) {
+            await addIceSafe(pc, candidate);
+          } else {
+            const buf = pendingCandidates.current.get(from) || [];
+            buf.push(candidate);
+            pendingCandidates.current.set(from, buf);
+          }
         }
       });
     } else {
       // Player: escuta offer do host
       socket.on('game:offer', async ({ from, offer }: { from: number; offer: RTCSessionDescriptionInit }) => {
+        console.log('[WebRTC] Player recebeu offer de:', from);
         const pc = createPeerConnection(from);
 
         pc.ontrack = (event) => {
-          if (videoRef.current && event.streams[0]) {
-            videoRef.current.srcObject = event.streams[0];
-          }
+          console.log('[WebRTC] ontrack fired, streams:', event.streams.length, 'track:', event.track.kind, 'readyState:', event.track.readyState);
+          if (!videoRef.current) return;
+
+          const stream = event.streams[0] || new MediaStream([event.track]);
+          videoRef.current.srcObject = stream;
+
+          // Forçar play com retry
+          const tryPlay = () => {
+            videoRef.current?.play().catch((err) => {
+              console.warn('[WebRTC] play() falhou, retrying:', err);
+              setTimeout(tryPlay, 500);
+            });
+          };
+          tryPlay();
         };
 
-        await pc.setRemoteDescription(offer);
-        const answer = await pc.createAnswer();
-        await pc.setLocalDescription(answer);
+        try {
+          await pc.setRemoteDescription(new RTCSessionDescription(offer));
+          await flushCandidates(pc, from);
 
-        socket.emit('game:answer', {
-          targetUserId: from,
-          answer,
-          sessionId: activeSession?.id,
-        });
+          const answer = await pc.createAnswer();
+          await pc.setLocalDescription(answer);
+
+          console.log('[WebRTC] Player enviando answer para:', from);
+          socket.emit('game:answer', {
+            targetUserId: from,
+            answer: { type: answer.type, sdp: answer.sdp },
+            sessionId: activeSession?.id,
+          });
+        } catch (e) {
+          console.error('[WebRTC] Erro ao processar offer:', e);
+        }
       });
 
       socket.on('game:ice-candidate', async ({ from, candidate }: { from: number; candidate: RTCIceCandidateInit }) => {
         const pc = peerConnections.current.get(from);
         if (pc && candidate) {
-          await pc.addIceCandidate(candidate);
+          if (remoteDescSet.current.has(from)) {
+            await addIceSafe(pc, candidate);
+          } else {
+            const buf = pendingCandidates.current.get(from) || [];
+            buf.push(candidate);
+            pendingCandidates.current.set(from, buf);
+          }
         }
       });
     }
@@ -77,28 +179,12 @@ export function GameSessionView({ onBack }: Props) {
       socket.off('game:offer');
       socket.off('game:answer');
       socket.off('game:ice-candidate');
-      // Cleanup peer connections
       peerConnections.current.forEach((pc) => pc.close());
       peerConnections.current.clear();
+      pendingCandidates.current.clear();
+      remoteDescSet.current.clear();
     };
-  }, [isHost, activeSession?.id]);
-
-  function createPeerConnection(targetUserId: number): RTCPeerConnection {
-    const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
-
-    pc.onicecandidate = (event) => {
-      if (event.candidate) {
-        getSocket().emit('game:ice-candidate', {
-          targetUserId,
-          candidate: event.candidate,
-          sessionId: activeSession?.id,
-        });
-      }
-    };
-
-    peerConnections.current.set(targetUserId, pc);
-    return pc;
-  }
+  }, [isHost, activeSession?.id, createPeerConnection, flushCandidates, addIceSafe]);
 
   const startScreenShare = async () => {
     if (!isHost || !activeSession) return;
@@ -107,22 +193,21 @@ export function GameSessionView({ onBack }: Props) {
       let stream: MediaStream;
 
       if (window.electronAPI) {
+        // Selecionar source e usar getDisplayMedia (API moderna)
         const sources = await window.electronAPI.getScreenSources();
         if (sources.length > 0) {
           await window.electronAPI.selectScreenSource(sources[0].id);
-          stream = await (navigator.mediaDevices as any).getUserMedia({
+          // getDisplayMedia aciona o setDisplayMediaRequestHandler no main process
+          stream = await navigator.mediaDevices.getDisplayMedia({
+            video: true,
             audio: false,
-            video: {
-              mandatory: {
-                chromeMediaSource: 'desktop',
-                chromeMediaSourceId: sources[0].id,
-              },
-            },
           });
         } else return;
       } else {
         stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
       }
+
+      console.log('[WebRTC] Stream capturado, tracks:', stream.getTracks().map(t => `${t.kind}:${t.readyState}`));
 
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
@@ -138,9 +223,10 @@ export function GameSessionView({ onBack }: Props) {
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
 
+        console.log('[WebRTC] Host enviando offer para:', p.userId);
         getSocket().emit('game:offer', {
           targetUserId: p.userId,
-          offer,
+          offer: { type: offer.type, sdp: offer.sdp },
           sessionId: activeSession.id,
         });
       }
@@ -202,6 +288,7 @@ export function GameSessionView({ onBack }: Props) {
           ref={videoRef}
           autoPlay
           playsInline
+          muted
           className="w-full h-full object-contain bg-black"
         />
 

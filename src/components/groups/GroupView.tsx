@@ -1,68 +1,107 @@
 import { useEffect, useState } from 'react';
 import { useGroupStore } from '../../stores/groupStore';
-import { useGameSessionStore } from '../../stores/gameSessionStore';
 import { useCodeSessionStore } from '../../stores/codeSessionStore';
 import { useChatStore } from '../../stores/chatStore';
 import { useAuthStore } from '../../stores/authStore';
 import { getSocket } from '../../services/socket';
 import { MessageList } from '../chat/MessageList';
 import { MessageInput } from '../chat/MessageInput';
-import { GroupMemberList } from './GroupMemberList';
 import { InviteFriendModal } from './InviteFriendModal';
-import { GameSessionPanel } from '../game/GameSessionPanel';
+import { VoiceCallBar } from './VoiceCallBar';
 import { CodeSessionPanel } from '../code/CodeSessionPanel';
+import { NotesPanel } from './NotesPanel';
+import { KanbanPanel } from './KanbanPanel';
+import type { useVoiceRoom } from '../../hooks/useVoiceRoom';
 
-export function GroupView() {
+type Tab = 'chat' | 'code' | 'kanban' | 'notes';
+
+const TAB_LABELS: Record<Tab, string> = {
+  chat: 'Chat',
+  code: 'Código',
+  kanban: 'Tasks',
+  notes: 'Notas',
+};
+
+interface Props {
+  voice: ReturnType<typeof useVoiceRoom>;
+}
+
+export function GroupView({ voice }: Props) {
   const activeGroupId = useGroupStore((s) => s.activeGroupId);
   const groups = useGroupStore((s) => s.groups);
   const user = useAuthStore((s) => s.user);
   const loadMessages = useChatStore((s) => s.loadMessages);
-  const loadActiveGame = useGameSessionStore((s) => s.loadActiveSession);
   const loadActiveCode = useCodeSessionStore((s) => s.loadActiveSession);
+  const deleteGroup = useGroupStore((s) => s.deleteGroup);
+  const leaveGroup = useGroupStore((s) => s.leaveGroup);
+  const removeGroupFromState = useGroupStore((s) => s.removeGroupFromState);
+
   const [showInvite, setShowInvite] = useState(false);
-  const [activeTab, setActiveTab] = useState<'chat' | 'game' | 'code'>('chat');
+  const [activeTab, setActiveTab] = useState<Tab>('chat');
+  const [isLeaving, setIsLeaving] = useState(false);
 
   const group = groups.find((g) => g.id === activeGroupId);
+  const features = group?.features ?? [];
+  const hasCodeTunnel = features.includes('code_tunnel');
+  const hasKanban = features.includes('kanban');
+  const hasNotes = features.includes('notes');
+  const isOwner = Number(group?.ownerId) === Number(user?.id);
 
   const activeCodeSession = useCodeSessionStore((s) => s.activeSession);
   const setTunnelInfo = useCodeSessionStore((s) => s.setTunnelInfo);
 
-  // Join socket room + load data
+  const visibleTabs = ([
+    { id: 'chat' as Tab, visible: true },
+    { id: 'code' as Tab, visible: hasCodeTunnel },
+    { id: 'kanban' as Tab, visible: hasKanban },
+    { id: 'notes' as Tab, visible: hasNotes },
+  ] as const).filter((t) => t.visible);
+
+  useEffect(() => {
+    if (!visibleTabs.find((t) => t.id === activeTab)) setActiveTab('chat');
+  }, [group?.id]);
+
   useEffect(() => {
     if (group?.channelId) {
       getSocket().emit('group:join-room', { channelId: group.channelId });
       loadMessages(group.channelId);
     }
-    if (activeGroupId) {
-      loadActiveGame(activeGroupId);
-      loadActiveCode(activeGroupId);
-    }
-  }, [activeGroupId, group?.channelId, loadMessages, loadActiveGame, loadActiveCode]);
+    if (activeGroupId) loadActiveCode(activeGroupId);
+  }, [activeGroupId, group?.channelId, loadMessages, loadActiveCode]);
 
-  // Listen for tunnel status events at the group level (always mounted)
   useEffect(() => {
     const socket = getSocket();
-
-    const handleTunnelStarted = (data: { sessionId: number; folderName: string; userId: number; username: string }) => {
-      if (activeCodeSession && data.sessionId === activeCodeSession.id) {
+    const onTunnelStarted = (data: { sessionId: number; folderName: string; userId: number; username: string }) => {
+      if (activeCodeSession && data.sessionId === activeCodeSession.id)
         setTunnelInfo({ folderName: data.folderName, userId: data.userId, username: data.username });
-      }
     };
-
-    const handleTunnelStopped = (data: { sessionId: number }) => {
-      if (activeCodeSession && data.sessionId === activeCodeSession.id) {
-        setTunnelInfo(null);
-      }
+    const onTunnelStopped = (data: { sessionId: number }) => {
+      if (activeCodeSession && data.sessionId === activeCodeSession.id) setTunnelInfo(null);
     };
-
-    socket.on('code:tunnel-started', handleTunnelStarted);
-    socket.on('code:tunnel-stopped', handleTunnelStopped);
-
+    const onGroupDeleted = (data: { groupId: number }) => {
+      if (data.groupId === activeGroupId) removeGroupFromState(data.groupId);
+    };
+    socket.on('code:tunnel-started', onTunnelStarted);
+    socket.on('code:tunnel-stopped', onTunnelStopped);
+    socket.on('group:deleted', onGroupDeleted);
     return () => {
-      socket.off('code:tunnel-started', handleTunnelStarted);
-      socket.off('code:tunnel-stopped', handleTunnelStopped);
+      socket.off('code:tunnel-started', onTunnelStarted);
+      socket.off('code:tunnel-stopped', onTunnelStopped);
+      socket.off('group:deleted', onGroupDeleted);
     };
-  }, [activeCodeSession?.id, setTunnelInfo]);
+  }, [activeCodeSession?.id, setTunnelInfo, activeGroupId, removeGroupFromState]);
+
+  const handleLeaveOrDelete = async () => {
+    if (!group) return;
+    if (!confirm(`Tem certeza que deseja ${isOwner ? 'excluir' : 'sair de'} "${group.name}"?`)) return;
+    setIsLeaving(true);
+    try {
+      if (isOwner) await deleteGroup(group.id);
+      else await leaveGroup(group.id);
+    } finally {
+      setIsLeaving(false);
+    }
+  };
 
   if (!group) {
     return (
@@ -74,77 +113,113 @@ export function GroupView() {
             <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
             <path d="M16 3.13a4 4 0 0 1 0 7.75" />
           </svg>
-          <p className="text-surface-400 text-sm">Selecione um grupo para comecar</p>
+          <p className="text-surface-400 text-sm">Selecione um grupo para começar</p>
         </div>
       </div>
     );
   }
 
   return (
-    <>
-      <div className="flex-1 flex flex-col bg-surface-900 min-w-0">
-        {/* Header */}
-        <div className="h-12 flex items-center px-4 border-b border-surface-700/50 gap-3 flex-shrink-0">
-          <h2 className="text-base font-bold text-surface-100 truncate">{group.name}</h2>
-          <span className="text-xs text-surface-400">{group.members?.length || 0} membros</span>
+    <div className="flex-1 flex flex-col bg-surface-900 min-w-0 overflow-hidden">
+      {/* Header */}
+      <div className="h-12 flex items-center px-4 border-b border-surface-700/50 gap-3 flex-shrink-0">
+        <h2 className="text-base font-bold text-surface-100 truncate">{group.name}</h2>
 
-          <div className="ml-auto flex items-center gap-1">
-            {/* Tab buttons */}
-            {(['chat', 'game', 'code'] as const).map((tab) => (
-              <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
-                  activeTab === tab
-                    ? 'bg-accent-600 text-white'
-                    : 'text-surface-400 hover:text-surface-100 hover:bg-surface-700'
-                }`}
-              >
-                {tab === 'chat' ? 'Chat' : tab === 'game' ? 'Jogar' : 'Codigo'}
-              </button>
-            ))}
+        {/* Active voice indicator in header */}
+        {voice.activeVc && (
+          <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-green-900/30 border border-green-800/40">
+            <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+            <span className="text-[11px] text-green-300 font-medium">{voice.activeVc.name}</span>
+          </div>
+        )}
 
-            <div className="w-px h-6 bg-surface-700 mx-1" />
-
+        <div className="ml-auto flex items-center gap-1">
+          {visibleTabs.map((tab) => (
             <button
-              onClick={() => setShowInvite(true)}
-              className="p-1.5 text-surface-400 hover:text-surface-100 rounded transition-colors"
-              title="Convidar amigo"
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                activeTab === tab.id
+                  ? 'bg-accent-600 text-white'
+                  : 'text-surface-400 hover:text-surface-100 hover:bg-surface-700'
+              }`}
             >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-                <circle cx="8.5" cy="7" r="4" />
-                <line x1="20" y1="8" x2="20" y2="14" />
-                <line x1="23" y1="11" x2="17" y2="11" />
-              </svg>
+              {TAB_LABELS[tab.id]}
             </button>
-          </div>
+          ))}
+
+          <div className="w-px h-6 bg-surface-700 mx-1" />
+
+          <button
+            onClick={() => setShowInvite(true)}
+            className="p-1.5 text-surface-400 hover:text-surface-100 rounded transition-colors"
+            title="Convidar amigo"
+          >
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+              <circle cx="8.5" cy="7" r="4" />
+              <line x1="20" y1="8" x2="20" y2="14" />
+              <line x1="23" y1="11" x2="17" y2="11" />
+            </svg>
+          </button>
+
+          <button
+            onClick={handleLeaveOrDelete}
+            disabled={isLeaving}
+            className={`p-1.5 rounded transition-colors disabled:opacity-50 ${
+              isOwner ? 'text-surface-500 hover:text-red-400' : 'text-surface-400 hover:text-surface-100'
+            }`}
+            title={isOwner ? 'Excluir grupo' : 'Sair do grupo'}
+          >
+            {isOwner ? (
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="3 6 5 6 21 6" />
+                <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                <path d="M10 11v6" /><path d="M14 11v6" />
+                <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+              </svg>
+            ) : (
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                <polyline points="16 17 21 12 16 7" />
+                <line x1="21" y1="12" x2="9" y2="12" />
+              </svg>
+            )}
+          </button>
         </div>
-
-        {/* Content */}
-        {activeTab === 'chat' && group.channelId && (
-          <div className="flex-1 flex flex-col overflow-hidden">
-            <MessageList channelId={group.channelId} />
-            <MessageInput channelId={group.channelId} />
-          </div>
-        )}
-
-        {activeTab === 'game' && (
-          <GameSessionPanel groupId={group.id} channelId={group.channelId} />
-        )}
-
-        {activeTab === 'code' && (
-          <CodeSessionPanel groupId={group.id} channelId={group.channelId} />
-        )}
       </div>
 
-      <GroupMemberList />
+      {/* Content */}
+      {activeTab === 'chat' && group.channelId && (
+        <div className="flex-1 flex flex-col overflow-hidden min-h-0">
+          <MessageList channelId={group.channelId} />
+          {voice.activeVc && (
+            <VoiceCallBar
+              activeVc={voice.activeVc}
+              isMuted={voice.isMuted}
+              onToggleMute={voice.toggleMute}
+              onLeave={voice.leave}
+            />
+          )}
+          <MessageInput channelId={group.channelId} />
+        </div>
+      )}
+
+      {activeTab === 'code' && hasCodeTunnel && (
+        <CodeSessionPanel groupId={group.id} channelId={group.channelId} />
+      )}
+      {activeTab === 'kanban' && hasKanban && (
+        <KanbanPanel groupId={group.id} channelId={group.channelId} />
+      )}
+      {activeTab === 'notes' && hasNotes && (
+        <NotesPanel groupId={group.id} channelId={group.channelId} />
+      )}
 
       <InviteFriendModal
         isOpen={showInvite}
         onClose={() => setShowInvite(false)}
         groupId={group.id}
       />
-    </>
+    </div>
   );
 }
