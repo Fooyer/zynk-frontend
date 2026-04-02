@@ -24,9 +24,12 @@ const TAB_LABELS: Record<Tab, string> = {
 
 interface Props {
   voice: ReturnType<typeof useVoiceRoom>;
+  channelId: number | null;
+  onToggleCollapse: () => void;
+  collapsed: boolean;
 }
 
-export function GroupView({ voice }: Props) {
+export function GroupView({ voice, channelId, onToggleCollapse, collapsed }: Props) {
   const activeGroupId = useGroupStore((s) => s.activeGroupId);
   const groups = useGroupStore((s) => s.groups);
   const user = useAuthStore((s) => s.user);
@@ -62,12 +65,12 @@ export function GroupView({ voice }: Props) {
   }, [group?.id]);
 
   useEffect(() => {
-    if (group?.channelId) {
-      getSocket().emit('group:join-room', { channelId: group.channelId });
-      loadMessages(group.channelId);
+    if (channelId) {
+      getSocket().emit('group:join-room', { channelId });
+      loadMessages(channelId);
     }
     if (activeGroupId) loadActiveCode(activeGroupId);
-  }, [activeGroupId, group?.channelId, loadMessages, loadActiveCode]);
+  }, [activeGroupId, channelId, loadMessages, loadActiveCode]);
 
   useEffect(() => {
     const socket = getSocket();
@@ -123,6 +126,19 @@ export function GroupView({ voice }: Props) {
     <div className="flex-1 flex flex-col bg-surface-900 min-w-0 overflow-hidden">
       {/* Header */}
       <div className="h-12 flex items-center px-4 border-b border-surface-700/50 gap-3 flex-shrink-0">
+        <button
+          onClick={onToggleCollapse}
+          className="p-1.5 text-surface-500 hover:text-surface-200 rounded transition-colors flex-shrink-0"
+          title={collapsed ? 'Expandir grupos' : 'Recolher grupos'}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            {collapsed ? (
+              <><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="18" x2="21" y2="18" /></>
+            ) : (
+              <><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="18" x2="21" y2="18" /></>
+            )}
+          </svg>
+        </button>
         <h2 className="text-base font-bold text-surface-100 truncate">{group.name}</h2>
 
         {/* Active voice indicator in header */}
@@ -190,9 +206,9 @@ export function GroupView({ voice }: Props) {
       </div>
 
       {/* Content */}
-      {activeTab === 'chat' && group.channelId && (
+      {activeTab === 'chat' && channelId && (
         <div className="flex-1 flex flex-col overflow-hidden min-h-0">
-          <MessageList channelId={group.channelId} />
+          <MessageList channelId={channelId} />
           {voice.activeVc && (
             <VoiceCallBar
               activeVc={voice.activeVc}
@@ -201,7 +217,7 @@ export function GroupView({ voice }: Props) {
               onLeave={voice.leave}
             />
           )}
-          <MessageInput channelId={group.channelId} />
+          <MessageInput channelId={channelId} />
         </div>
       )}
 

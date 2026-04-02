@@ -146,8 +146,8 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
     setIsMuted((m) => !m);
   };
 
-  const createChannel = async (name: string) => {
-    const { data } = await groupsAPI.createVoiceChannel(groupId, name);
+  const createChannel = async (name: string, description?: string) => {
+    const { data } = await groupsAPI.createVoiceChannel(groupId, name, description);
     setVoiceChannels((prev) => [...prev, { ...data, participants: [] }]);
   };
 

@@ -159,8 +159,17 @@ export interface VoiceChannel {
   id: number;
   groupId: number;
   name: string;
+  description: string | null;
   creator: Pick<User, 'id' | 'username' | 'avatarUrl'>;
   participants: VoiceParticipant[];
+  createdAt: string;
+}
+
+export interface PrivateChannel {
+  id: number;
+  name: string;
+  groupId: number;
+  ownerId: number;
   createdAt: string;
 }
 

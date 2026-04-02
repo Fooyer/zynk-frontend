@@ -99,8 +99,15 @@ export const groupsAPI = {
   deleteCard: (id: number, cardId: number) => api.delete(`/groups/${id}/kanban/${cardId}`),
   // Voice channels
   getVoiceChannels: (id: number) => api.get(`/groups/${id}/voice-channels`),
-  createVoiceChannel: (id: number, name: string) => api.post(`/groups/${id}/voice-channels`, { name }),
+  createVoiceChannel: (id: number, name: string, description?: string) =>
+    api.post(`/groups/${id}/voice-channels`, { name, description }),
   deleteVoiceChannel: (id: number, vcId: number) => api.delete(`/groups/${id}/voice-channels/${vcId}`),
+  // Private channels
+  getPrivateChannels: (id: number) => api.get(`/groups/${id}/private-channels`),
+  createPrivateChannel: (id: number, name: string, memberIds: number[]) =>
+    api.post(`/groups/${id}/private-channels`, { name, memberIds }),
+  deletePrivateChannel: (id: number, channelId: number) =>
+    api.delete(`/groups/${id}/private-channels/${channelId}`),
 };
 
 // ─── Game Sessions ─────────────────────────────
