@@ -1,8 +1,7 @@
 import { create } from 'zustand';
-import { authAPI } from '../services/api';
+import { authAPI, usersAPI } from '../services/api';
 import { connectSocket, disconnectSocket } from '../services/socket';
 import type { User } from '../types';
-import { useChannelStore } from './channelStore';
 import { useChatStore } from './chatStore';
 import { useFriendStore } from './friendStore';
 import { useUiStore } from './uiStore';
@@ -17,6 +16,7 @@ interface AuthState {
   register: (username: string, email: string, password: string) => Promise<void>;
   logout: () => void;
   loadUser: () => Promise<void>;
+  updateUsername: (username: string) => Promise<void>;
   clearError: () => void;
 }
 
@@ -56,7 +56,6 @@ export const useAuthStore = create<AuthState>((set) => ({
     localStorage.removeItem('token');
     disconnectSocket();
     // Limpa todos os stores para não vazar dados entre contas
-    useChannelStore.setState({ channels: [], activeChannelId: null, members: [], discoverChannels: [] });
     useChatStore.setState({ messagesByChannel: {}, cursors: {}, hasMore: {}, typingUsers: {} });
     useFriendStore.setState({ friends: [], requests: [], sent: [], dmChannels: [], activeDmChannelId: null, error: null });
     useUiStore.setState({ view: 'home' });
@@ -76,6 +75,19 @@ export const useAuthStore = create<AuthState>((set) => ({
       localStorage.removeItem('token');
       set({ user: null, token: null, isLoading: false });
     }
+  },
+
+  updateUsername: async (username) => {
+    const { data } = await usersAPI.updateMe({ username });
+    localStorage.setItem('token', data.accessToken);
+    // O token novo carrega o username atualizado (usado pelo gateway de socket),
+    // então reconecta pra refletir a mudança em tempo real (voz, presença, etc).
+    disconnectSocket();
+    set((s) => ({
+      token: data.accessToken,
+      user: s.user ? { ...s.user, username: data.user.username } : (data.user as User),
+    }));
+    connectSocket();
   },
 
   clearError: () => set({ error: null }),

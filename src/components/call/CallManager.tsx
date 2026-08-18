@@ -4,11 +4,7 @@ import { useChatStore } from '../../stores/chatStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { getSocket } from '../../services/socket';
 import { remoteScreenStreamRef, localScreenStreamRef, localAnalyserRef, remoteAnalyserRef } from '../../services/callStream';
-import {
-  startGamepadPolling,
-  stopGamepadPolling,
-  deserializeGamepadState,
-} from '../../services/gamepadService';
+import { captureScreen } from '../../services/screenCapture';
 import { IncomingCallModal } from './IncomingCallModal';
 import { ScreenPicker } from './ScreenPicker';
 import type { ScreenSource } from '../../types';
@@ -140,26 +136,6 @@ async function applyScreenVideoParams(sender: RTCRtpSender) {
   } catch { /* pode falhar antes da negociação completar */ }
 }
 
-/**
- * Captura a tela usando getDisplayMedia.
- * Se sourceId é fornecido, avisa o main process antes para que o
- * setDisplayMediaRequestHandler use o source escolhido pelo usuário.
- */
-async function captureScreen(sourceId?: string): Promise<MediaStream> {
-  try {
-    // Se tem sourceId, avisa o main process qual source usar.
-    // O await garante que o main process já guardou o source ANTES
-    // de getDisplayMedia disparar o handler.
-    if (sourceId && window.electronAPI?.selectScreenSource) {
-      await window.electronAPI.selectScreenSource(sourceId);
-    }
-    return await navigator.mediaDevices.getDisplayMedia({ video: true });
-  } catch (e) {
-    console.error('[captureScreen] getDisplayMedia falhou:', e);
-    throw e;
-  }
-}
-
 export function CallManager() {
   const {
     status, peerId, peerUsername, pendingOffer, volume,
@@ -178,8 +154,6 @@ export function CallManager() {
   const screenAudioSenderRef = useRef<RTCRtpSender | null>(null);
   const initialRemoteAudioTrackRef = useRef<MediaStreamTrack | null>(null);
   const isConnectedRef = useRef(false);
-  const gamepadChannelRef = useRef<RTCDataChannel | null>(null);
-  const remoteGamepadChannelRef = useRef<RTCDataChannel | null>(null);
 
   useEffect(() => {
     if (remoteGainRef.current) {
@@ -240,14 +214,6 @@ export function CallManager() {
   }, [status]);
 
   const cleanup = useCallback(() => {
-    // Gamepad cleanup
-    stopGamepadPolling();
-    gamepadChannelRef.current?.close();
-    gamepadChannelRef.current = null;
-    remoteGamepadChannelRef.current?.close();
-    remoteGamepadChannelRef.current = null;
-    window.electronAPI?.gamepadDestroyVirtual?.().catch(() => {});
-
     localStreamRef.current?.getTracks().forEach((t) => t.stop());
     localStreamRef.current = null;
     localScreenStreamRef.current?.getTracks().forEach((t) => t.stop());
@@ -334,33 +300,6 @@ export function CallManager() {
             remoteScreenStreamRef.current = null;
             useCallStore.getState().setRemoteHasScreen(false);
             window.dispatchEvent(new CustomEvent('call:screen-stream-changed'));
-          };
-        }
-      };
-
-      // ── Gamepad DataChannel ──
-      // Cria o canal no lado do caller; o callee recebe via ondatachannel
-      const gpChannel = pc.createDataChannel('gamepad', {
-        ordered: false,
-        maxRetransmits: 0,
-      });
-      gpChannel.binaryType = 'arraybuffer';
-      gamepadChannelRef.current = gpChannel;
-
-      // Recebe DataChannel criado pelo peer remoto
-      pc.ondatachannel = (event) => {
-        if (event.channel.label === 'gamepad') {
-          const ch = event.channel;
-          ch.binaryType = 'arraybuffer';
-          remoteGamepadChannelRef.current = ch;
-          ch.onmessage = (msg) => {
-            if (msg.data instanceof ArrayBuffer) {
-              const state = deserializeGamepadState(msg.data);
-              window.electronAPI?.gamepadInput?.(state);
-            }
-          };
-          ch.onclose = () => {
-            remoteGamepadChannelRef.current = null;
           };
         }
       };
@@ -545,45 +484,6 @@ export function CallManager() {
       await renegotiate(targetPeerId);
     };
 
-    // ── Gamepad sharing ──
-    const onGamepadStart = async () => {
-      // Peer remoto começou a enviar gamepad — criar controle virtual
-      const result = await window.electronAPI?.gamepadCreateVirtual?.();
-      if (result && !result.success) {
-        console.warn('[gamepad] Falha ao criar controle virtual:', result.error);
-      }
-      useCallStore.getState().setRemoteHasGamepad(true);
-    };
-
-    const onGamepadStop = () => {
-      window.electronAPI?.gamepadDestroyVirtual?.().catch(() => {});
-      useCallStore.getState().setRemoteHasGamepad(false);
-    };
-
-    const onGamepadToggle = () => {
-      const { isGamepadSharing, peerId } = useCallStore.getState();
-      if (!peerId) return;
-
-      if (isGamepadSharing) {
-        // Parar de enviar gamepad
-        stopGamepadPolling();
-        useCallStore.getState().setGamepadSharing(false);
-        getSocket()?.emit('call:gamepad-stop', { targetUserId: peerId });
-        return;
-      }
-
-      // Começar a enviar gamepad
-      const channel = gamepadChannelRef.current;
-      if (!channel || channel.readyState !== 'open') {
-        console.warn('[gamepad] DataChannel não está aberto');
-        return;
-      }
-
-      startGamepadPolling(channel);
-      useCallStore.getState().setGamepadSharing(true);
-      getSocket()?.emit('call:gamepad-start', { targetUserId: peerId });
-    };
-
     // ── Screen share toggle ──
     const onScreenShareToggle = async () => {
       const { isScreenSharing, peerId } = useCallStore.getState();
@@ -644,12 +544,9 @@ export function CallManager() {
     socket.on('call:reoffer', onReoffer);
     socket.on('call:reanswer', onReanswer);
     socket.on('call:screen-stop', onScreenStop);
-    socket.on('call:gamepad-start', onGamepadStart);
-    socket.on('call:gamepad-stop', onGamepadStop);
     window.addEventListener('call:toggle-mute', onToggleMute);
     window.addEventListener('call:hangup', onHangupEvent);
     window.addEventListener('call:screen-share-toggle', onScreenShareToggle as EventListener);
-    window.addEventListener('call:gamepad-toggle', onGamepadToggle as EventListener);
 
     return () => {
       socket.off('call:incoming', onIncoming);
@@ -660,12 +557,9 @@ export function CallManager() {
       socket.off('call:reoffer', onReoffer);
       socket.off('call:reanswer', onReanswer);
       socket.off('call:screen-stop', onScreenStop);
-      socket.off('call:gamepad-start', onGamepadStart);
-      socket.off('call:gamepad-stop', onGamepadStop);
       window.removeEventListener('call:toggle-mute', onToggleMute);
       window.removeEventListener('call:hangup', onHangupEvent);
       window.removeEventListener('call:screen-share-toggle', onScreenShareToggle as EventListener);
-      window.removeEventListener('call:gamepad-toggle', onGamepadToggle as EventListener);
       startScreenShareRef.current = null;
     };
   }, []);

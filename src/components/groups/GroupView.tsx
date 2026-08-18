@@ -7,11 +7,9 @@ import { getSocket } from '../../services/socket';
 import { MessageList } from '../chat/MessageList';
 import { MessageInput } from '../chat/MessageInput';
 import { InviteFriendModal } from './InviteFriendModal';
-import { VoiceCallBar } from './VoiceCallBar';
 import { CodeSessionPanel } from '../code/CodeSessionPanel';
 import { NotesPanel } from './NotesPanel';
 import { KanbanPanel } from './KanbanPanel';
-import type { useVoiceRoom } from '../../hooks/useVoiceRoom';
 
 type Tab = 'chat' | 'code' | 'kanban' | 'notes';
 
@@ -23,13 +21,12 @@ const TAB_LABELS: Record<Tab, string> = {
 };
 
 interface Props {
-  voice: ReturnType<typeof useVoiceRoom>;
   channelId: number | null;
   onToggleCollapse: () => void;
   collapsed: boolean;
 }
 
-export function GroupView({ voice, channelId, onToggleCollapse, collapsed }: Props) {
+export function GroupView({ channelId, onToggleCollapse, collapsed }: Props) {
   const activeGroupId = useGroupStore((s) => s.activeGroupId);
   const groups = useGroupStore((s) => s.groups);
   const user = useAuthStore((s) => s.user);
@@ -129,7 +126,7 @@ export function GroupView({ voice, channelId, onToggleCollapse, collapsed }: Pro
         <button
           onClick={onToggleCollapse}
           className="p-1.5 text-surface-500 hover:text-surface-200 rounded transition-colors flex-shrink-0"
-          title={collapsed ? 'Expandir grupos' : 'Recolher grupos'}
+          title={collapsed ? 'Expandir canais' : 'Recolher canais'}
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             {collapsed ? (
@@ -140,14 +137,6 @@ export function GroupView({ voice, channelId, onToggleCollapse, collapsed }: Pro
           </svg>
         </button>
         <h2 className="text-base font-bold text-surface-100 truncate">{group.name}</h2>
-
-        {/* Active voice indicator in header */}
-        {voice.activeVc && (
-          <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-green-900/30 border border-green-800/40">
-            <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-            <span className="text-[11px] text-green-300 font-medium">{voice.activeVc.name}</span>
-          </div>
-        )}
 
         <div className="ml-auto flex items-center gap-1">
           {visibleTabs.map((tab) => (
@@ -205,18 +194,11 @@ export function GroupView({ voice, channelId, onToggleCollapse, collapsed }: Pro
         </div>
       </div>
 
-      {/* Content */}
+      {/* Content — chat é só texto agora; a call de voz vive na barra fixa
+          (VoiceStatusBar), separada, como qualquer app com call de verdade. */}
       {activeTab === 'chat' && channelId && (
         <div className="flex-1 flex flex-col overflow-hidden min-h-0">
           <MessageList channelId={channelId} />
-          {voice.activeVc && (
-            <VoiceCallBar
-              activeVc={voice.activeVc}
-              isMuted={voice.isMuted}
-              onToggleMute={voice.toggleMute}
-              onLeave={voice.leave}
-            />
-          )}
           <MessageInput channelId={channelId} />
         </div>
       )}

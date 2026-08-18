@@ -27,12 +27,12 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #2a2f3d;
+  background: #313745;
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #4b5263;
+  background: #6b7280;
 }
 
 /* ─── Drag region for Electron title bar ──── */

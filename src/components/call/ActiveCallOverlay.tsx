@@ -1,18 +1,6 @@
 import { useEffect, useState } from 'react';
+import { useCallStore } from '../../stores/callStore';
 import { getInitials, getUserColor } from '../../utils/formatDate';
-import type { CallStatus } from '../../stores/callStore';
-
-interface Props {
-  peerUsername: string;
-  status: CallStatus;
-  isMuted: boolean;
-  isGamepadSharing?: boolean;
-  hasGamepad?: boolean;
-  remoteHasScreen?: boolean;
-  onHangup: () => void;
-  onToggleMute: () => void;
-  onToggleGamepad?: () => void;
-}
 
 function formatDuration(seconds: number) {
   const m = Math.floor(seconds / 60).toString().padStart(2, '0');
@@ -20,25 +8,34 @@ function formatDuration(seconds: number) {
   return `${m}:${s}`;
 }
 
-export function ActiveCallOverlay({
-  peerUsername, status, isMuted,
-  isGamepadSharing, hasGamepad, remoteHasScreen,
-  onHangup, onToggleMute, onToggleGamepad,
-}: Props) {
+/**
+ * Barra flutuante persistente da chamada 1:1 — visível em qualquer tela do
+ * app enquanto há uma chamada ativa e a conversa correspondente não está
+ * aberta (nesse caso os controles inline do DMChatArea já bastam).
+ */
+export function ActiveCallOverlay() {
+  const status = useCallStore((s) => s.status);
+  const peerUsername = useCallStore((s) => s.peerUsername);
+  const isMuted = useCallStore((s) => s.isMuted);
+  const isScreenSharing = useCallStore((s) => s.isScreenSharing);
   const [seconds, setSeconds] = useState(0);
-  const color = getUserColor(peerUsername);
 
   useEffect(() => {
-    if (status !== 'active') return;
-    const interval = setInterval(() => setSeconds(s => s + 1), 1000);
+    if (status !== 'active') { setSeconds(0); return; }
+    const interval = setInterval(() => setSeconds((s) => s + 1), 1000);
     return () => clearInterval(interval);
   }, [status]);
 
-  const showGamepadButton = hasGamepad && remoteHasScreen;
+  if (!peerUsername) return null;
+  const color = getUserColor(peerUsername);
+
+  const onToggleMute = () => window.dispatchEvent(new CustomEvent('call:toggle-mute'));
+  const onScreenShare = () => window.dispatchEvent(new CustomEvent('call:screen-share-toggle'));
+  const onHangup = () => window.dispatchEvent(new CustomEvent('call:hangup'));
 
   return (
     <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[90]">
-      <div className="bg-surface-800 border border-surface-700 rounded-2xl px-5 py-4 flex items-center gap-4 shadow-2xl min-w-[300px]">
+      <div className="bg-surface-800 border border-surface-700 rounded-2xl px-5 py-4 flex items-center gap-4 shadow-2xl min-w-[320px]">
         {/* Avatar */}
         <div
           className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0"
@@ -50,7 +47,7 @@ export function ActiveCallOverlay({
         {/* Info */}
         <div className="flex-1 min-w-0">
           <p className="text-surface-100 font-semibold text-sm truncate">{peerUsername}</p>
-          <p className={`text-xs ${status === 'active' ? 'text-success' : 'text-surface-400'}`}>
+          <p className={`text-xs ${status === 'active' ? 'text-success' : 'text-surface-300'}`}>
             {status === 'calling' ? 'Chamando...' : status === 'ringing' ? 'Conectando...' : formatDuration(seconds)}
           </p>
         </div>
@@ -60,7 +57,7 @@ export function ActiveCallOverlay({
           onClick={onToggleMute}
           title={isMuted ? 'Ativar microfone' : 'Silenciar'}
           className={`w-9 h-9 rounded-full flex items-center justify-center transition-colors ${
-            isMuted ? 'bg-danger text-white' : 'bg-surface-700 text-surface-300 hover:bg-surface-600'
+            isMuted ? 'bg-danger text-white' : 'bg-surface-700 text-surface-200 hover:bg-surface-600'
           }`}
         >
           {isMuted ? (
@@ -81,33 +78,26 @@ export function ActiveCallOverlay({
           )}
         </button>
 
-        {/* Gamepad */}
-        {showGamepadButton && (
-          <button
-            onClick={onToggleGamepad}
-            title={isGamepadSharing ? 'Parar controle remoto' : 'Compartilhar controle'}
-            className={`w-9 h-9 rounded-full flex items-center justify-center transition-colors ${
-              isGamepadSharing ? 'bg-success text-white' : 'bg-surface-700 text-surface-300 hover:bg-surface-600'
-            }`}
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="2" y="6" width="20" height="12" rx="4" />
-              <circle cx="8" cy="12" r="1" fill="currentColor" />
-              <circle cx="16" cy="10" r="1" fill="currentColor" />
-              <circle cx="18" cy="12" r="1" fill="currentColor" />
-              <circle cx="16" cy="14" r="1" fill="currentColor" />
-              <circle cx="14" cy="12" r="1" fill="currentColor" />
-              <line x1="6" y1="10" x2="6" y2="14" />
-              <line x1="4" y1="12" x2="8" y2="12" />
-            </svg>
-          </button>
-        )}
+        {/* Compartilhar tela */}
+        <button
+          onClick={onScreenShare}
+          title={isScreenSharing ? 'Parar compartilhamento' : 'Compartilhar tela'}
+          className={`w-9 h-9 rounded-full flex items-center justify-center transition-colors ${
+            isScreenSharing ? 'bg-success text-white' : 'bg-surface-700 text-surface-200 hover:bg-surface-600'
+          }`}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="2" y="3" width="20" height="14" rx="2" />
+            <polyline points="8 21 12 17 16 21" />
+            <line x1="12" y1="17" x2="12" y2="21" />
+          </svg>
+        </button>
 
         {/* Hangup */}
         <button
           onClick={onHangup}
           title="Encerrar chamada"
-          className="w-9 h-9 rounded-full bg-danger flex items-center justify-center hover:bg-red-700 transition-colors"
+          className="w-9 h-9 rounded-full bg-danger flex items-center justify-center hover:bg-danger-600 transition-colors"
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="white">
             <path d="M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1-9.4 0-17-7.6-17-17 0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.3 0 .7-.2 1L6.6 10.8z"/>

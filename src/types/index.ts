@@ -9,15 +9,6 @@ export interface User {
   createdAt: string;
 }
 
-export interface Channel {
-  id: number;
-  name: string;
-  description: string | null;
-  type: 'public' | 'private' | 'dm' | 'group';
-  groupId?: number | null;
-  createdAt: string;
-}
-
 export interface ReplyTo {
   id: number;
   content: string;
@@ -36,13 +27,6 @@ export interface Message {
   createdAt: string;
   sender: Pick<User, 'id' | 'username' | 'avatarUrl'>;
   isSystem?: boolean;
-}
-
-export interface ChannelMember {
-  id: number;
-  role: 'owner' | 'admin' | 'member';
-  joinedAt: string;
-  user: Pick<User, 'id' | 'username' | 'avatarUrl' | 'status'>;
 }
 
 // ─── DMs ────────────────────────────────────────
@@ -159,16 +143,17 @@ export interface VoiceChannel {
   id: number;
   groupId: number;
   name: string;
-  description: string | null;
   creator: Pick<User, 'id' | 'username' | 'avatarUrl'>;
   participants: VoiceParticipant[];
+  position: number;
   createdAt: string;
 }
 
-export interface PrivateChannel {
+export interface GroupTextChannel {
   id: number;
   name: string;
   groupId: number;
+  position: number;
   ownerId: number;
   createdAt: string;
 }
@@ -242,9 +227,6 @@ declare global {
       windowClose: () => void;
       getScreenSources: () => Promise<ScreenSource[]>;
       selectScreenSource: (sourceId: string) => Promise<boolean>;
-      gamepadCreateVirtual: () => Promise<{ success: boolean; error?: string }>;
-      gamepadInput: (state: { index: number; timestamp: number; buttons: { pressed: boolean; value: number }[]; axes: number[] }) => void;
-      gamepadDestroyVirtual: () => Promise<void>;
       gamepadIsAvailable: () => Promise<boolean>;
       // Multi-gamepad (game sessions)
       gamepadCreateSlot: (slot: number) => Promise<{ success: boolean; error?: string }>;

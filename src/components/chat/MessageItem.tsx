@@ -2,7 +2,7 @@ import { memo, useState } from 'react';
 import { formatMessageDate, getInitials, getUserColor } from '../../utils/formatDate';
 import type { Message } from '../../types';
 
-const API_URL = 'https://zynk.fooyer.space';
+const API_URL = 'https://zynk.fooyer.com';
 
 interface Props {
   message: Message;

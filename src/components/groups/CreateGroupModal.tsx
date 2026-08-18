@@ -133,7 +133,7 @@ export function CreateGroupModal({ isOpen, onClose }: Props) {
             <input
               type="range"
               min={2}
-              max={10}
+              max={32}
               value={maxMembers}
               onChange={(e) => setMaxMembers(Number(e.target.value))}
               className="w-full accent-accent-500"

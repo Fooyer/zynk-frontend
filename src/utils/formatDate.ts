@@ -40,8 +40,10 @@ export function getInitials(username: string): string {
  * Gera cor consistente a partir do username (para avatars).
  */
 export function getUserColor(username: string): string {
+  // Todas as cores mantêm >=4.5:1 de contraste contra os fundos surface-800/900,
+  // já que são usadas como texto (nome de usuário) sobre o fundo escuro do app.
   const colors = [
-    '#5b6aff', '#43b581', '#faa61a', '#f04747',
+    '#6c7bff', '#43b581', '#faa61a', '#f04747',
     '#7c8aff', '#e879f9', '#22d3ee', '#fb923c',
   ];
   let hash = 0;

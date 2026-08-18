@@ -1,6 +1,6 @@
 import axios from "axios";
 
-const API_URL = "https://zynk.fooyer.space";
+const API_URL = "https://zynk.fooyer.com";
 
 const api = axios.create({
   baseURL: API_URL,
@@ -35,15 +35,15 @@ export const authAPI = {
   me: () => api.get("/users/me"),
 };
 
-// ─── Channels ───────────────────────────────────
+// ─── Users ────────────────────────────────────────
+
+export const usersAPI = {
+  updateMe: (data: { username: string }) => api.patch("/users/me", data),
+};
+
+// ─── Channels (DMs) ───────────────────────────────
 
 export const channelsAPI = {
-  list: () => api.get("/channels"),
-  discover: () => api.get("/channels/discover"),
-  create: (data: { name: string; description?: string; type?: string }) =>
-    api.post("/channels", data),
-  join: (channelId: number) => api.post(`/channels/${channelId}/join`),
-  members: (channelId: number) => api.get(`/channels/${channelId}/members`),
   getDmChannels: () => api.get("/channels/dms"),
   openDM: (targetUserId: number) => api.post("/channels/dm", { targetUserId }),
   closeDM: (channelId: number) => api.delete(`/channels/dms/${channelId}`),
@@ -99,15 +99,18 @@ export const groupsAPI = {
   deleteCard: (id: number, cardId: number) => api.delete(`/groups/${id}/kanban/${cardId}`),
   // Voice channels
   getVoiceChannels: (id: number) => api.get(`/groups/${id}/voice-channels`),
-  createVoiceChannel: (id: number, name: string, description?: string) =>
-    api.post(`/groups/${id}/voice-channels`, { name, description }),
+  createVoiceChannel: (id: number, name: string) =>
+    api.post(`/groups/${id}/voice-channels`, { name }),
   deleteVoiceChannel: (id: number, vcId: number) => api.delete(`/groups/${id}/voice-channels/${vcId}`),
-  // Private channels
-  getPrivateChannels: (id: number) => api.get(`/groups/${id}/private-channels`),
-  createPrivateChannel: (id: number, name: string, memberIds: number[]) =>
-    api.post(`/groups/${id}/private-channels`, { name, memberIds }),
-  deletePrivateChannel: (id: number, channelId: number) =>
-    api.delete(`/groups/${id}/private-channels/${channelId}`),
+  // Text channels
+  getTextChannels: (id: number) => api.get(`/groups/${id}/text-channels`),
+  createTextChannel: (id: number, name: string) =>
+    api.post(`/groups/${id}/text-channels`, { name }),
+  deleteTextChannel: (id: number, channelId: number) =>
+    api.delete(`/groups/${id}/text-channels/${channelId}`),
+  // Ordem dos canais (drag-and-drop)
+  reorderChannels: (id: number, items: { id: number; type: 'text' | 'voice' }[]) =>
+    api.put(`/groups/${id}/channel-order`, { items }),
 };
 
 // ─── Game Sessions ─────────────────────────────

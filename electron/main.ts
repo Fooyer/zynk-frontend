@@ -3,9 +3,6 @@ import path from 'path';
 import fs from 'fs';
 import { execFile } from 'child_process';
 import {
-  createVirtualGamepad,
-  updateVirtualGamepad,
-  destroyVirtualGamepad,
   isAvailable as isGamepadAvailable,
   cleanup as cleanupGamepad,
   createVirtualGamepadSlot,
@@ -132,12 +129,7 @@ ipcMain.handle('screen:select-source', async (_event, sourceId: string) => {
 });
 
 // ─── Gamepad Emulation via IPC ─────────────────────────────────
-ipcMain.handle('gamepad:create-virtual', () => createVirtualGamepad());
-ipcMain.handle('gamepad:destroy-virtual', () => { destroyVirtualGamepad(); });
 ipcMain.handle('gamepad:is-available', () => isGamepadAvailable());
-ipcMain.on('gamepad:input', (_event, state: GamepadInputState) => {
-  updateVirtualGamepad(state);
-});
 
 // Multi-gamepad (game sessions)
 ipcMain.handle('gamepad:create-slot', (_event, slot: number) => createVirtualGamepadSlot(slot));
@@ -398,7 +390,7 @@ app.whenReady().then(() => {
             " script-src 'self';" +
             " style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;" +
             " font-src 'self' https://fonts.gstatic.com;" +
-            " connect-src 'self' https://zynk.fooyer.space ws://zynk.fooyer.space wss://zynk.fooyer.space wss://signaling.yjs.dev;" +
+            " connect-src 'self' https://zynk.fooyer.com ws://zynk.fooyer.com wss://zynk.fooyer.com wss://signaling.yjs.dev;" +
             " img-src 'self' data:;"
           ],
         },

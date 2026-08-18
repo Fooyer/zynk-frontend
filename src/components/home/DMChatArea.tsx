@@ -7,7 +7,6 @@ import { useCallStore } from '../../stores/callStore';
 import { useAuthStore } from '../../stores/authStore';
 import { getInitials, getUserColor } from '../../utils/formatDate';
 import { remoteScreenStreamRef, localAnalyserRef, remoteAnalyserRef } from '../../services/callStream';
-import { setupGamepadListeners } from '../../services/gamepadService';
 import type { DmChannel } from '../../types';
 
 interface Props {
@@ -43,14 +42,11 @@ function CallPanel({ dm, callStatus }: { dm: DmChannel; callStatus: 'calling' | 
   const isMuted = useCallStore((s) => s.isMuted);
   const isScreenSharing = useCallStore((s) => s.isScreenSharing);
   const remoteHasScreen = useCallStore((s) => s.remoteHasScreen);
-  const isGamepadSharing = useCallStore((s) => s.isGamepadSharing);
-  const remoteHasGamepad = useCallStore((s) => s.remoteHasGamepad);
   const volume = useCallStore((s) => s.volume);
   const setVolume = useCallStore((s) => s.setVolume);
   const videoRef = useRef<HTMLVideoElement>(null);
   const expandedVideoRef = useRef<HTMLVideoElement>(null);
   const [screenExpanded, setScreenExpanded] = useState(false);
-  const [hasLocalGamepad, setHasLocalGamepad] = useState(false);
   const [callDuration, setCallDuration] = useState(0);
   const [localSpeaking, setLocalSpeaking] = useState(false);
   const [remoteSpeaking, setRemoteSpeaking] = useState(false);
@@ -98,26 +94,6 @@ function CallPanel({ dm, callStatus }: { dm: DmChannel; callStatus: 'calling' | 
       : `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
   };
 
-  // Detecta gamepads via polling
-  useEffect(() => {
-    const cleanupListeners = setupGamepadListeners();
-    const check = () => {
-      const gps = navigator.getGamepads();
-      const found = gps ? Array.from(gps).some((g) => g !== null && g.connected) : false;
-      setHasLocalGamepad(found);
-    };
-    check();
-    const interval = setInterval(check, 2000);
-    window.addEventListener('gamepadconnected', check);
-    window.addEventListener('gamepaddisconnected', check);
-    return () => {
-      cleanupListeners();
-      clearInterval(interval);
-      window.removeEventListener('gamepadconnected', check);
-      window.removeEventListener('gamepaddisconnected', check);
-    };
-  }, []);
-
   // ─── Screen stream management ───
   const attachStream = () => {
     const stream = remoteScreenStreamRef.current;
@@ -148,8 +124,6 @@ function CallPanel({ dm, callStatus }: { dm: DmChannel; callStatus: 'calling' | 
   const handleToggleMute = () => window.dispatchEvent(new CustomEvent('call:toggle-mute'));
   const handleHangup = () => window.dispatchEvent(new CustomEvent('call:hangup'));
   const handleScreenShare = () => window.dispatchEvent(new CustomEvent('call:screen-share-toggle'));
-  const handleGamepadToggle = () => window.dispatchEvent(new CustomEvent('call:gamepad-toggle'));
-  const showGamepadButton = hasLocalGamepad && !isCalling;
 
   // ─── User card component ───
   const UserCard = ({ username, avatarUrl, color, speaking, muted, label }: {
@@ -285,26 +259,6 @@ function CallPanel({ dm, callStatus }: { dm: DmChannel; callStatus: 'calling' | 
                 </svg>
               </button>
 
-              {/* Gamepad */}
-              {showGamepadButton && (
-                <button onClick={handleGamepadToggle} title={isGamepadSharing ? 'Parar controle' : 'Compartilhar controle'}
-                  className={`p-2.5 rounded-full transition-colors ${
-                    isGamepadSharing ? 'bg-success/20 text-success hover:bg-success/30' : 'bg-surface-700 text-surface-300 hover:bg-surface-600 hover:text-surface-100'
-                  }`}
-                >
-                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="2" y="6" width="20" height="12" rx="4" />
-                    <circle cx="8" cy="12" r="1" fill="currentColor" />
-                    <circle cx="16" cy="10" r="1" fill="currentColor" />
-                    <circle cx="18" cy="12" r="1" fill="currentColor" />
-                    <circle cx="16" cy="14" r="1" fill="currentColor" />
-                    <circle cx="14" cy="12" r="1" fill="currentColor" />
-                    <line x1="6" y1="10" x2="6" y2="14" />
-                    <line x1="4" y1="12" x2="8" y2="12" />
-                  </svg>
-                </button>
-              )}
-
               {/* Volume */}
               <div className="flex items-center gap-1.5 bg-surface-700 rounded-full px-3 py-1.5">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="text-surface-400 flex-shrink-0">
@@ -329,18 +283,6 @@ function CallPanel({ dm, callStatus }: { dm: DmChannel; callStatus: 'calling' | 
                 </svg>
               </button>
             </div>
-
-            {/* Indicador de gamepad remoto */}
-            {remoteHasGamepad && (
-              <div className="flex items-center justify-center gap-1.5 mt-3 text-xs text-accent-400">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="2" y="6" width="20" height="12" rx="4" />
-                  <circle cx="8" cy="12" r="1" fill="currentColor" />
-                  <line x1="6" y1="10" x2="6" y2="14" /><line x1="4" y1="12" x2="8" y2="12" />
-                </svg>
-                {dm.friend.username} controlando
-              </div>
-            )}
           </div>
         )}
 
@@ -425,19 +367,6 @@ function CallPanel({ dm, callStatus }: { dm: DmChannel; callStatus: 'calling' | 
                 <rect x="2" y="3" width="20" height="14" rx="2" /><polyline points="8 21 12 17 16 21" /><line x1="12" y1="17" x2="12" y2="21" />
               </svg>
             </button>
-            {showGamepadButton && (
-              <button onClick={handleGamepadToggle} title={isGamepadSharing ? 'Parar controle' : 'Compartilhar controle'}
-                className={`p-3 rounded-full transition-colors ${isGamepadSharing ? 'bg-success text-white' : 'bg-white/10 text-white hover:bg-white/20'}`}
-              >
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="2" y="6" width="20" height="12" rx="4" />
-                  <circle cx="8" cy="12" r="1" fill="currentColor" />
-                  <circle cx="16" cy="10" r="1" fill="currentColor" /><circle cx="18" cy="12" r="1" fill="currentColor" />
-                  <circle cx="16" cy="14" r="1" fill="currentColor" /><circle cx="14" cy="12" r="1" fill="currentColor" />
-                  <line x1="6" y1="10" x2="6" y2="14" /><line x1="4" y1="12" x2="8" y2="12" />
-                </svg>
-              </button>
-            )}
             <button onClick={() => setScreenExpanded(false)} title="Minimizar"
               className="p-3 rounded-full bg-white/10 text-white hover:bg-white/20 transition-colors"
             >

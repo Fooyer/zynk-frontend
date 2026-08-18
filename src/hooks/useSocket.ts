@@ -2,16 +2,12 @@ import { useEffect, useRef } from 'react';
 import { getSocket } from '../services/socket';
 import { notifyMessage, requestNotificationPermission } from '../services/notification';
 import { useChatStore } from '../stores/chatStore';
-import { useChannelStore } from '../stores/channelStore';
 import { useFriendStore } from '../stores/friendStore';
 import type { Message, TypingEvent, UserStatusEvent } from '../types';
 
 export function useSocket() {
   const addMessage = useChatStore((s) => s.addMessage);
   const setTyping = useChatStore((s) => s.setTyping);
-  const loadChannels = useChannelStore((s) => s.loadChannels);
-  const reloadMembers = useChannelStore((s) => s.reloadMembers);
-  const updateMemberStatus = useChannelStore((s) => s.updateMemberStatus);
   const loadDmChannels = useFriendStore((s) => s.loadDmChannels);
   const updateFriendStatus = useFriendStore((s) => s.updateFriendStatus);
   const hasSetup = useRef(false);
@@ -33,11 +29,6 @@ export function useSocket() {
       setTyping(event);
     });
 
-    socket.on('channel:user_joined', () => {
-      loadChannels();
-      reloadMembers();
-    });
-
     // Novo DM aberto pelo outro usuário — recarrega lista de DMs
     socket.on('dm:new', () => {
       loadDmChannels();
@@ -45,7 +36,6 @@ export function useSocket() {
 
     socket.on('user:status', (event: UserStatusEvent) => {
       updateFriendStatus(event.userId, event.status);
-      updateMemberStatus(event.userId, event.status);
     });
 
     socket.on('error', (err: { message: string }) => {
@@ -81,7 +71,6 @@ export function useSocket() {
     return () => {
       socket.off('message:new');
       socket.off('message:typing');
-      socket.off('channel:user_joined');
       socket.off('dm:new');
       socket.off('user:status');
       socket.off('error');
@@ -93,5 +82,5 @@ export function useSocket() {
       if (awayTimer) clearTimeout(awayTimer);
       hasSetup.current = false;
     };
-  }, [addMessage, setTyping, loadChannels, reloadMembers, updateMemberStatus, loadDmChannels, updateFriendStatus]);
+  }, [addMessage, setTyping, loadDmChannels, updateFriendStatus]);
 }

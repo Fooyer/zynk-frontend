@@ -4,30 +4,35 @@ export default {
   theme: {
     extend: {
       colors: {
-        // Palette dark com alto contraste e accent azul (logo)
+        // Palette dark com alto contraste — cada tom de texto atinge >=4.5:1
+        // (WCAG AA) contra os fundos surface-800/900/950 em que é usado.
         surface: {
-          50: '#e8eaed',
-          100: '#d1d5db',
-          200: '#b0b7c3',
-          300: '#9ca3b0',
-          400: '#6b7280',
-          500: '#4b5263',
-          600: '#2a2f3d',
-          700: '#1e2230',
-          800: '#151823',
-          900: '#0f1119',
-          950: '#090a10',
+          50: '#f5f6f8',
+          100: '#e7e9ed',
+          200: '#d5d8de',
+          300: '#b8bcc6',
+          400: '#9aa0ad',
+          500: '#828998',
+          600: '#6b7280',
+          700: '#313745',
+          800: '#1a1d29',
+          900: '#101219',
+          950: '#0a0b10',
         },
         accent: {
           400: '#33c4e8',
           500: '#00b4d8',
-          600: '#0096b7',
+          // 600 é usado só como fundo sólido de botão (texto/ícone branco em cima),
+          // por isso é mais escuro que 500 apesar de ficar "atrás" na escala visual.
+          600: '#00819c',
         },
-        success: '#43b581',
+        // DEFAULT continua vívido para uso como texto/ícone/dot sobre fundo escuro;
+        // 600 é a variante escura para fundo sólido de botão com texto branco.
+        success: { DEFAULT: '#43b581', 600: '#1c7d53' },
         warning: '#faa61a',
-        danger: '#f04747',
+        danger: { DEFAULT: '#f04747', 600: '#cc3333' },
         online: '#43b581',
-        offline: '#747f8d',
+        offline: '#9aa0ad',
         away: '#faa61a',
       },
       fontFamily: {

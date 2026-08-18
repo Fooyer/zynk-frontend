@@ -1,6 +1,5 @@
 import { useSettingsStore } from '../stores/settingsStore';
 import { useAuthStore } from '../stores/authStore';
-import { useChannelStore } from '../stores/channelStore';
 import { useFriendStore } from '../stores/friendStore';
 import { useUiStore } from '../stores/uiStore';
 import type { Message } from '../types';
@@ -56,10 +55,8 @@ function sendPush(title: string, body: string) {
 
 function isChannelActive(channelId: number): boolean {
   const { view } = useUiStore.getState();
-  const { activeChannelId } = useChannelStore.getState();
   const { activeDmChannelId } = useFriendStore.getState();
 
-  if (view === 'server' && activeChannelId === channelId) return true;
   if (view === 'home' && activeDmChannelId === channelId) return true;
   return false;
 }
@@ -68,10 +65,6 @@ function getChannelName(channelId: number): string | null {
   // Tenta DM
   const dm = useFriendStore.getState().dmChannels.find((d) => d.channelId === channelId);
   if (dm) return dm.friend.username;
-
-  // Tenta canal de servidor
-  const ch = useChannelStore.getState().channels.find((c) => c.id === channelId);
-  if (ch) return `#${ch.name}`;
 
   return null;
 }

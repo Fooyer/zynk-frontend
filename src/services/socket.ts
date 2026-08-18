@@ -1,6 +1,6 @@
 import { io, Socket } from "socket.io-client";
 
-const SOCKET_URL = "https://zynk.fooyer.space/chat";
+const SOCKET_URL = "https://zynk.fooyer.com/chat";
 
 let socket: Socket | null = null;
 

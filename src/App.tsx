@@ -1,20 +1,20 @@
 import { useEffect, useState } from 'react';
 import { useAuthStore } from './stores/authStore';
-import { useChannelStore } from './stores/channelStore';
-import { useChatStore } from './stores/chatStore';
 import { useFriendStore } from './stores/friendStore';
+import { useGroupStore } from './stores/groupStore';
 import { useUiStore } from './stores/uiStore';
+import { useCallStore } from './stores/callStore';
 import { useSocket } from './hooks/useSocket';
+import { useVoiceRoom } from './hooks/useVoiceRoom';
+import { ActiveCallOverlay } from './components/call/ActiveCallOverlay';
 import { NavBar } from './components/layout/NavBar';
-import { Sidebar } from './components/layout/Sidebar';
-import { ChatArea } from './components/layout/ChatArea';
-import { MemberList } from './components/layout/MemberList';
 import { HomeLayout } from './components/home/HomeLayout';
 import { LoginForm } from './components/auth/LoginForm';
 import { RegisterForm } from './components/auth/RegisterForm';
 import { CallManager } from './components/call/CallManager';
 import { SettingsPage } from './components/settings/SettingsPage';
 import { GroupLayout } from './components/groups/GroupLayout';
+import { VoiceStatusBar } from './components/groups/VoiceStatusBar';
 
 
 function TitleBar() {
@@ -59,48 +59,45 @@ function TitleBar() {
   );
 }
 
-function ServerLayout() {
-  const loadChannels = useChannelStore((s) => s.loadChannels);
-  const activeChannelId = useChannelStore((s) => s.activeChannelId);
-  const loadMessages = useChatStore((s) => s.loadMessages);
-
-  useEffect(() => {
-    loadChannels();
-  }, [loadChannels]);
-
-  useEffect(() => {
-    if (activeChannelId) loadMessages(activeChannelId);
-  }, [activeChannelId, loadMessages]);
-
-  return (
-    <>
-      <Sidebar />
-      <ChatArea />
-      <MemberList />
-    </>
-  );
-}
-
 function AppLayout() {
   const view = useUiStore((s) => s.view);
   const loadFriends = useFriendStore((s) => s.loadAll);
   const loadDmChannels = useFriendStore((s) => s.loadDmChannels);
+  const loadGroups = useGroupStore((s) => s.loadGroups);
+  const groups = useGroupStore((s) => s.groups);
+  const activeGroupId = useGroupStore((s) => s.activeGroupId);
+  const callStatus = useCallStore((s) => s.status);
+  const activeDmChannelId = useFriendStore((s) => s.activeDmChannelId);
+  const callChannelId = useCallStore((s) => s.channelId);
 
   useSocket();
+
+  // Montado aqui (não dentro de GroupLayout) pra sobreviver à navegação —
+  // trocar de tela não deve derrubar uma chamada de voz em andamento.
+  const activeGroup = groups.find((g) => g.id === activeGroupId) ?? null;
+  const voice = useVoiceRoom(activeGroupId ?? 0, activeGroup?.channelId ?? null);
 
   useEffect(() => {
     loadFriends();
     loadDmChannels();
-  }, [loadFriends, loadDmChannels]);
+    loadGroups();
+  }, [loadFriends, loadDmChannels, loadGroups]);
+
+  // A barra flutuante só aparece quando a chamada está ativa e o usuário
+  // não está olhando para a própria conversa (que já tem os controles inline).
+  const showFloatingCall =
+    callStatus !== 'idle' && !(view === 'home' && activeDmChannelId === callChannelId);
 
   return (
     <div className="h-screen flex flex-col overflow-hidden">
       <TitleBar />
       <div className="flex-1 flex overflow-hidden">
         <NavBar />
-        {view === 'settings' ? <SettingsPage /> : view === 'groups' ? <GroupLayout /> : view === 'home' ? <HomeLayout /> : <ServerLayout />}
+        {view === 'settings' ? <SettingsPage /> : view === 'group' ? <GroupLayout voice={voice} /> : <HomeLayout />}
       </div>
       <CallManager />
+      {showFloatingCall && <ActiveCallOverlay />}
+      <VoiceStatusBar voice={voice} />
     </div>
   );
 }
