@@ -3,6 +3,7 @@ import { groupsAPI } from '../services/api';
 import { getSocket } from '../services/socket';
 import { useAuthStore } from '../stores/authStore';
 import { captureScreen } from '../services/screenCapture';
+import { alertDialog } from '../stores/dialogStore';
 import type { VoiceChannel, VoiceParticipant } from '../types';
 
 const ICE_SERVERS = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
@@ -244,7 +245,7 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
       setActiveVcId(vc.id);
       setConnectedVc(vc);
     } catch {
-      alert('Não foi possível acessar o microfone');
+      alertDialog('Não foi possível acessar o microfone. Verifique as permissões do sistema.', { title: 'Erro de microfone' });
     } finally {
       setIsConnecting(false);
     }

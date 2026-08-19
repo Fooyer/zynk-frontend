@@ -7,14 +7,17 @@ interface Props {
 
 export function RegisterForm({ onSwitch }: Props) {
   const [username, setUsername] = useState('');
+  const [tag, setTag] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const { register, isLoading, error, clearError } = useAuthStore();
 
+  const isTagValid = /^[a-zA-Z0-9]{3,5}$/.test(tag);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!username.trim() || !email.trim() || !password.trim()) return;
-    await register(username.trim(), email.trim(), password);
+    if (!username.trim() || !isTagValid || !email.trim() || !password.trim()) return;
+    await register(username.trim(), tag.trim(), email.trim(), password);
   };
 
   return (
@@ -34,14 +37,28 @@ export function RegisterForm({ onSwitch }: Props) {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-surface-300 mb-1.5">Usuário</label>
-            <input
-              type="text"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              className="w-full px-4 py-3 bg-surface-900 border border-surface-600 rounded-lg text-surface-100 placeholder-surface-500 focus:outline-none focus:border-accent-500 focus:ring-1 focus:ring-accent-500 transition-all"
-              placeholder="Escolha um username"
-              autoFocus
-            />
+            <div className="flex items-stretch gap-1.5">
+              <input
+                type="text"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                className="flex-1 min-w-0 px-4 py-3 bg-surface-900 border border-surface-600 rounded-lg text-surface-100 placeholder-surface-500 focus:outline-none focus:border-accent-500 focus:ring-1 focus:ring-accent-500 transition-all"
+                placeholder="Escolha um nome"
+                autoFocus
+              />
+              <div className="flex items-center flex-shrink-0 pl-1 text-surface-500 font-medium">#</div>
+              <input
+                type="text"
+                value={tag}
+                onChange={(e) => setTag(e.target.value.slice(0, 5))}
+                maxLength={5}
+                className="w-20 flex-shrink-0 px-3 py-3 bg-surface-900 border border-surface-600 rounded-lg text-surface-100 placeholder-surface-500 focus:outline-none focus:border-accent-500 focus:ring-1 focus:ring-accent-500 transition-all uppercase"
+                placeholder="TAG"
+              />
+            </div>
+            <p className="text-xs text-surface-500 mt-1.5">
+              A tag identifica sua conta caso outra pessoa use o mesmo nome — 3 a 5 letras/números.
+            </p>
           </div>
 
           <div>

@@ -4,9 +4,19 @@ import { getInitials, getUserColor } from '../../utils/formatDate';
 
 type Tab = 'online' | 'all' | 'requests' | 'add';
 
+/** Extrai { username, tag } de "Nome#TAG" digitado pelo usuário. */
+function parseHandle(handle: string): { username: string; tag: string } | null {
+  const idx = handle.lastIndexOf('#');
+  if (idx === -1) return null;
+  const username = handle.slice(0, idx).trim();
+  const tag = handle.slice(idx + 1).trim();
+  if (!username || !/^[a-zA-Z0-9]{3,5}$/.test(tag)) return null;
+  return { username, tag };
+}
+
 export function FriendsPage() {
   const [tab, setTab] = useState<Tab>('online');
-  const [username, setUsername] = useState('');
+  const [handle, setHandle] = useState('');
   const [sendSuccess, setSendSuccess] = useState(false);
 
   const { friends, requests, isLoading, error, loadAll, sendRequest, accept, reject, remove, openDm, clearError } =
@@ -18,12 +28,14 @@ export function FriendsPage() {
 
   const onlineFriends = friends.filter((f) => f.friend.status === 'online' || f.friend.status === 'in_call');
 
+  const parsedHandle = parseHandle(handle);
+
   const handleSendRequest = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!username.trim()) return;
+    if (!parsedHandle) return;
     try {
-      await sendRequest(username.trim());
-      setUsername('');
+      await sendRequest(parsedHandle.username, parsedHandle.tag);
+      setHandle('');
       setSendSuccess(true);
     } catch {
       // error in store
@@ -94,25 +106,25 @@ export function FriendsPage() {
             </div>
             <h3 className="text-lg font-semibold text-surface-100 mb-1">Adicionar amigo</h3>
             <p className="text-sm text-surface-400 mb-6">
-              Digite o username exato para enviar uma solicitação.
+              Digite o nome completo com a tag para enviar uma solicitação.
             </p>
             <form onSubmit={handleSendRequest} className="space-y-3 text-left">
               <div className="flex gap-2">
                 <input
                   type="text"
-                  value={username}
+                  value={handle}
                   onChange={(e) => {
-                    setUsername(e.target.value);
+                    setHandle(e.target.value);
                     setSendSuccess(false);
                     clearError();
                   }}
-                  placeholder="Username do amigo"
+                  placeholder="Usuário#TAG"
                   autoFocus
                   className="flex-1 bg-surface-800 border border-surface-600 rounded-lg px-3 py-2 text-sm text-surface-100 placeholder:text-surface-500 focus:outline-none focus:border-accent-500 transition-colors"
                 />
                 <button
                   type="submit"
-                  disabled={!username.trim()}
+                  disabled={!parsedHandle}
                   className="px-4 py-2 bg-accent-600 hover:bg-accent-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors"
                 >
                   Enviar

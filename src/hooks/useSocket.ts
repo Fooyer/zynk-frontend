@@ -7,6 +7,8 @@ import type { Message, TypingEvent, UserStatusEvent } from '../types';
 
 export function useSocket() {
   const addMessage = useChatStore((s) => s.addMessage);
+  const updateMessage = useChatStore((s) => s.updateMessage);
+  const removeMessage = useChatStore((s) => s.removeMessage);
   const setTyping = useChatStore((s) => s.setTyping);
   const loadDmChannels = useFriendStore((s) => s.loadDmChannels);
   const updateFriendStatus = useFriendStore((s) => s.updateFriendStatus);
@@ -27,6 +29,14 @@ export function useSocket() {
 
     socket.on('message:typing', (event: TypingEvent) => {
       setTyping(event);
+    });
+
+    socket.on('message:updated', (message: Message) => {
+      updateMessage(message);
+    });
+
+    socket.on('message:deleted', (data: { channelId: number; messageId: number }) => {
+      removeMessage(data.channelId, data.messageId);
     });
 
     // Novo DM aberto pelo outro usuário — recarrega lista de DMs
@@ -71,6 +81,8 @@ export function useSocket() {
     return () => {
       socket.off('message:new');
       socket.off('message:typing');
+      socket.off('message:updated');
+      socket.off('message:deleted');
       socket.off('dm:new');
       socket.off('user:status');
       socket.off('error');
@@ -82,5 +94,5 @@ export function useSocket() {
       if (awayTimer) clearTimeout(awayTimer);
       hasSetup.current = false;
     };
-  }, [addMessage, setTyping, loadDmChannels, updateFriendStatus]);
+  }, [addMessage, updateMessage, removeMessage, setTyping, loadDmChannels, updateFriendStatus]);
 }

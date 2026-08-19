@@ -14,6 +14,8 @@ import { RegisterForm } from './components/auth/RegisterForm';
 import { CallManager } from './components/call/CallManager';
 import { SettingsPage } from './components/settings/SettingsPage';
 import { GroupLayout } from './components/groups/GroupLayout';
+import { DialogHost } from './components/common/DialogHost';
+import { ContextMenuHost } from './components/common/ContextMenuHost';
 
 
 function TitleBar() {
@@ -96,6 +98,8 @@ function AppLayout() {
       </div>
       <CallManager />
       {showFloatingCall && <ActiveCallOverlay />}
+      <DialogHost />
+      <ContextMenuHost />
     </div>
   );
 }

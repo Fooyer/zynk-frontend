@@ -269,7 +269,10 @@ function CallPanel({ dm, callStatus }: { dm: DmChannel; callStatus: 'calling' | 
                 <input type="range" min="0" max="200" value={Math.round(volume * 100)}
                   onChange={(e) => setVolume(Number(e.target.value) / 100)}
                   title={`Volume: ${Math.round(volume * 100)}%`}
-                  className="w-20 h-1 accent-success cursor-pointer"
+                  className="w-20 cursor-pointer"
+                  style={{
+                    background: `linear-gradient(to right, #43b581 ${(volume / 2) * 100}%, #1a1d29 ${(volume / 2) * 100}%)`,
+                  }}
                 />
                 <span className="text-[10px] text-surface-500 w-7 text-right tabular-nums">{Math.round(volume * 100)}%</span>
               </div>

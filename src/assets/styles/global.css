@@ -52,3 +52,69 @@ body {
     transition: color 0.1s ease, background-color 0.1s ease;
   }
 }
+
+/* ─── Range sliders — trilha fina + thumb pequeno, visual leve em vez do
+   controle nativo grosso/3D do navegador. A cor de preenchimento vem via
+   background inline (gradiente calculado no componente); aqui só o reset
+   de forma. ──────────────────────────────── */
+
+input[type='range'] {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  border-radius: 9999px;
+  background: #313745;
+  outline: none;
+}
+
+input[type='range']::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 9999px;
+  background: transparent;
+}
+
+input[type='range']::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #fff;
+  margin-top: -4px;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  transition: transform 0.12s ease;
+}
+
+input[type='range']:hover::-webkit-slider-thumb {
+  transform: scale(1.2);
+}
+
+input[type='range']:active::-webkit-slider-thumb {
+  transform: scale(1.05);
+}
+
+input[type='range']::-moz-range-track {
+  height: 4px;
+  border-radius: 9999px;
+  background: transparent;
+}
+
+input[type='range']::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border: none;
+  border-radius: 50%;
+  background: #fff;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  transition: transform 0.12s ease;
+}
+
+input[type='range']:hover::-moz-range-thumb {
+  transform: scale(1.2);
+}
+
+input[type='range']:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}

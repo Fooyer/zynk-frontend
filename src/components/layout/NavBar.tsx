@@ -1,8 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { useUiStore } from '../../stores/uiStore';
 import { useFriendStore } from '../../stores/friendStore';
 import { useGroupStore } from '../../stores/groupStore';
 import { useAuthStore } from '../../stores/authStore';
+import { confirmDialog } from '../../stores/dialogStore';
+import { useContextMenuStore } from '../../stores/contextMenuStore';
 import { CreateGroupModal } from '../groups/CreateGroupModal';
 import { RenameGroupModal } from '../groups/RenameGroupModal';
 import { InviteFriendModal } from '../groups/InviteFriendModal';
@@ -92,12 +94,6 @@ function NavIconButton({
   );
 }
 
-interface GroupContextMenu {
-  x: number;
-  y: number;
-  group: Group;
-}
-
 interface NavBarProps {
   voice: ReturnType<typeof useVoiceRoom>;
 }
@@ -116,45 +112,90 @@ export function NavBar({ voice }: NavBarProps) {
 
   const [showCreateGroup, setShowCreateGroup] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
-  const [contextMenu, setContextMenu] = useState<GroupContextMenu | null>(null);
   const [renameTarget, setRenameTarget] = useState<Group | null>(null);
   const [inviteGroupId, setInviteGroupId] = useState<number | null>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!contextMenu) return;
-    const handleClick = () => setContextMenu(null);
-    const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setContextMenu(null); };
-    document.addEventListener('click', handleClick);
-    document.addEventListener('keydown', handleKey);
-    return () => {
-      document.removeEventListener('click', handleClick);
-      document.removeEventListener('keydown', handleKey);
-    };
-  }, [contextMenu]);
 
   const handleSelectGroup = (groupId: number) => {
     setActiveGroup(groupId);
     setView('group');
   };
 
-  const handleGroupContextMenu = (e: React.MouseEvent, group: Group) => {
-    e.preventDefault();
-    setContextMenu({ x: e.clientX, y: e.clientY, group });
-  };
-
   const handleInviteClick = (group: Group) => {
-    setContextMenu(null);
+    useContextMenuStore.getState().close();
     loadMembers(group.id);
     setInviteGroupId(group.id);
   };
 
   const handleLeaveOrDelete = async (group: Group) => {
-    setContextMenu(null);
+    useContextMenuStore.getState().close();
     const isOwner = Number(group.ownerId) === Number(currentUser?.id);
-    if (!confirm(`Tem certeza que deseja ${isOwner ? 'excluir' : 'sair de'} "${group.name}"?`)) return;
+    const ok = await confirmDialog(`Essa ação não pode ser desfeita.`, {
+      title: `${isOwner ? 'Excluir' : 'Sair de'} "${group.name}"?`,
+      confirmLabel: isOwner ? 'Excluir' : 'Sair',
+      danger: isOwner,
+    });
+    if (!ok) return;
     if (isOwner) await deleteGroup(group.id);
     else await leaveGroup(group.id);
+  };
+
+  const handleGroupContextMenu = (e: React.MouseEvent, group: Group) => {
+    e.preventDefault();
+    const isOwner = Number(group.ownerId) === Number(currentUser?.id);
+    useContextMenuStore.getState().open({ x: e.clientX, y: e.clientY }, (
+      <>
+        <div className="px-3 py-2 border-b border-surface-700/50">
+          <p className="text-sm font-semibold text-surface-100 truncate">{group.name}</p>
+        </div>
+
+        {isOwner && (
+          <button
+            onClick={() => { useContextMenuStore.getState().close(); setRenameTarget(group); }}
+            className="w-full text-left px-3 py-2 text-sm text-surface-200 hover:bg-surface-700 transition-colors flex items-center gap-2"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4z" />
+            </svg>
+            Renomear grupo
+          </button>
+        )}
+
+        <button
+          onClick={() => handleInviteClick(group)}
+          className="w-full text-left px-3 py-2 text-sm text-surface-200 hover:bg-surface-700 transition-colors flex items-center gap-2"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+            <circle cx="8.5" cy="7" r="4" />
+            <line x1="20" y1="8" x2="20" y2="14" />
+            <line x1="23" y1="11" x2="17" y2="11" />
+          </svg>
+          Convidar amigo
+        </button>
+
+        <button
+          onClick={() => handleLeaveOrDelete(group)}
+          className="w-full text-left px-3 py-2 text-sm text-danger hover:bg-surface-700 transition-colors flex items-center gap-2"
+        >
+          {isOwner ? (
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="3 6 5 6 21 6" />
+              <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+              <path d="M10 11v6" /><path d="M14 11v6" />
+              <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+            </svg>
+          ) : (
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+              <polyline points="16 17 21 12 16 7" />
+              <line x1="21" y1="12" x2="9" y2="12" />
+            </svg>
+          )}
+          {isOwner ? 'Excluir grupo' : 'Sair do grupo'}
+        </button>
+      </>
+    ));
   };
 
   return (
@@ -367,71 +408,6 @@ export function NavBar({ voice }: NavBarProps) {
           </>
         )}
       </nav>
-
-      {/* Menu de contexto do grupo */}
-      {contextMenu && (() => {
-        const { group } = contextMenu;
-        const isOwner = Number(group.ownerId) === Number(currentUser?.id);
-        return (
-          <div
-            ref={menuRef}
-            style={{ top: contextMenu.y, left: contextMenu.x }}
-            className="fixed z-50 bg-surface-900 border border-surface-700 rounded-lg shadow-2xl py-1 min-w-[190px]"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="px-3 py-2 border-b border-surface-700/50">
-              <p className="text-sm font-semibold text-surface-100 truncate">{group.name}</p>
-            </div>
-
-            {isOwner && (
-              <button
-                onClick={() => { setContextMenu(null); setRenameTarget(group); }}
-                className="w-full text-left px-3 py-2 text-sm text-surface-200 hover:bg-surface-700 transition-colors flex items-center gap-2"
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4z" />
-                </svg>
-                Renomear grupo
-              </button>
-            )}
-
-            <button
-              onClick={() => handleInviteClick(group)}
-              className="w-full text-left px-3 py-2 text-sm text-surface-200 hover:bg-surface-700 transition-colors flex items-center gap-2"
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-                <circle cx="8.5" cy="7" r="4" />
-                <line x1="20" y1="8" x2="20" y2="14" />
-                <line x1="23" y1="11" x2="17" y2="11" />
-              </svg>
-              Convidar amigo
-            </button>
-
-            <button
-              onClick={() => handleLeaveOrDelete(group)}
-              className="w-full text-left px-3 py-2 text-sm text-danger hover:bg-surface-700 transition-colors flex items-center gap-2"
-            >
-              {isOwner ? (
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="3 6 5 6 21 6" />
-                  <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-                  <path d="M10 11v6" /><path d="M14 11v6" />
-                  <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
-                </svg>
-              ) : (
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-                  <polyline points="16 17 21 12 16 7" />
-                  <line x1="21" y1="12" x2="9" y2="12" />
-                </svg>
-              )}
-              {isOwner ? 'Excluir grupo' : 'Sair do grupo'}
-            </button>
-          </div>
-        );
-      })()}
 
       <CreateGroupModal isOpen={showCreateGroup} onClose={() => setShowCreateGroup(false)} />
 

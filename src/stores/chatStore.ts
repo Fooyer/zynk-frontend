@@ -19,6 +19,8 @@ interface ChatState {
   loadMessages: (channelId: number) => Promise<void>;
   loadMore: (channelId: number) => Promise<void>;
   addMessage: (message: Message) => void;
+  updateMessage: (message: Message) => void;
+  removeMessage: (channelId: number, messageId: number) => void;
   addSystemMessage: (channelId: number, content: string) => void;
   setTyping: (event: TypingEvent) => void;
   setReplyingTo: (message: Message | null) => void;
@@ -98,6 +100,32 @@ export const useChatStore = create<ChatState>((set, get) => ({
         },
       };
     });
+  },
+
+  /**
+   * Atualiza uma mensagem existente (edição, própria ou via socket).
+   */
+  updateMessage: (message) => {
+    set((state) => ({
+      messagesByChannel: {
+        ...state.messagesByChannel,
+        [message.channelId]: (state.messagesByChannel[message.channelId] || []).map((m) =>
+          m.id === message.id ? message : m,
+        ),
+      },
+    }));
+  },
+
+  /**
+   * Remove uma mensagem (exclusão, própria ou via socket).
+   */
+  removeMessage: (channelId, messageId) => {
+    set((state) => ({
+      messagesByChannel: {
+        ...state.messagesByChannel,
+        [channelId]: (state.messagesByChannel[channelId] || []).filter((m) => m.id !== messageId),
+      },
+    }));
   },
 
   /**

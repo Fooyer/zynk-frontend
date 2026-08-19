@@ -12,11 +12,11 @@ interface AuthState {
   isLoading: boolean;
   error: string | null;
 
-  login: (username: string, password: string) => Promise<void>;
-  register: (username: string, email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<void>;
+  register: (username: string, tag: string, email: string, password: string) => Promise<void>;
   logout: () => void;
   loadUser: () => Promise<void>;
-  updateUsername: (username: string) => Promise<void>;
+  updateIdentity: (username: string, tag: string) => Promise<void>;
   clearError: () => void;
 }
 
@@ -26,10 +26,10 @@ export const useAuthStore = create<AuthState>((set) => ({
   isLoading: false,
   error: null,
 
-  login: async (username, password) => {
+  login: async (email, password) => {
     set({ isLoading: true, error: null });
     try {
-      const { data } = await authAPI.login({ username, password });
+      const { data } = await authAPI.login({ email, password });
       localStorage.setItem('token', data.accessToken);
       set({ token: data.accessToken, user: data.user as User, isLoading: false });
       connectSocket();
@@ -39,10 +39,10 @@ export const useAuthStore = create<AuthState>((set) => ({
     }
   },
 
-  register: async (username, email, password) => {
+  register: async (username, tag, email, password) => {
     set({ isLoading: true, error: null });
     try {
-      const { data } = await authAPI.register({ username, email, password });
+      const { data } = await authAPI.register({ username, tag, email, password });
       localStorage.setItem('token', data.accessToken);
       set({ token: data.accessToken, user: data.user as User, isLoading: false });
       connectSocket();
@@ -77,15 +77,15 @@ export const useAuthStore = create<AuthState>((set) => ({
     }
   },
 
-  updateUsername: async (username) => {
-    const { data } = await usersAPI.updateMe({ username });
+  updateIdentity: async (username, tag) => {
+    const { data } = await usersAPI.updateMe({ username, tag });
     localStorage.setItem('token', data.accessToken);
     // O token novo carrega o username atualizado (usado pelo gateway de socket),
     // então reconecta pra refletir a mudança em tempo real (voz, presença, etc).
     disconnectSocket();
     set((s) => ({
       token: data.accessToken,
-      user: s.user ? { ...s.user, username: data.user.username } : (data.user as User),
+      user: s.user ? { ...s.user, username: data.user.username, tag: data.user.tag } : (data.user as User),
     }));
     connectSocket();
   },

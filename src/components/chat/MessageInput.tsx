@@ -2,6 +2,7 @@ import { useState, useRef, useCallback } from 'react';
 import { getSocket } from '../../services/socket';
 import { messagesAPI } from '../../services/api';
 import { useChatStore } from '../../stores/chatStore';
+import { alertDialog } from '../../stores/dialogStore';
 import { getUserColor } from '../../utils/formatDate';
 
 interface Props {
@@ -36,11 +37,11 @@ export function MessageInput({ channelId, placeholder = 'Envie uma mensagem...' 
     if (!file) return;
 
     if (!ALLOWED_TYPES.includes(file.type)) {
-      alert('Tipo não suportado. Use JPEG, PNG, GIF ou WebP.');
+      alertDialog('Tipo não suportado. Use JPEG, PNG, GIF ou WebP.', { title: 'Imagem inválida' });
       return;
     }
     if (file.size > MAX_SIZE) {
-      alert('Imagem muito grande. Máximo 5 MB.');
+      alertDialog('Imagem muito grande. Máximo 5 MB.', { title: 'Imagem inválida' });
       return;
     }
 
@@ -60,7 +61,7 @@ export function MessageInput({ channelId, placeholder = 'Envie uma mensagem...' 
         const { data } = await messagesAPI.uploadImage(imageFile);
         imageUrl = data.imageUrl;
       } catch {
-        alert('Erro ao enviar imagem. Tente novamente.');
+        alertDialog('Erro ao enviar imagem. Tente novamente.', { title: 'Falha no envio' });
         setUploading(false);
         return;
       } finally {

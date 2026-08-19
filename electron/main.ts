@@ -66,6 +66,34 @@ function createWindow() {
     return { action: 'deny' };
   });
 
+  // Menu de contexto nativo (Recortar/Copiar/Colar) para campos de texto —
+  // Electron não mostra isso por padrão como um navegador normal mostraria.
+  // Não dispara em elementos que já têm seu próprio menu React (eles chamam
+  // e.preventDefault() no contextmenu do DOM, o que suprime este evento).
+  mainWindow.webContents.on('context-menu', (_event, params) => {
+    const { isEditable, editFlags, selectionText } = params;
+    const template: Electron.MenuItemConstructorOptions[] = [];
+
+    if (isEditable) {
+      template.push(
+        { label: 'Desfazer', role: 'undo', enabled: editFlags.canUndo },
+        { label: 'Refazer', role: 'redo', enabled: editFlags.canRedo },
+        { type: 'separator' },
+        { label: 'Recortar', role: 'cut', enabled: editFlags.canCut },
+        { label: 'Copiar', role: 'copy', enabled: editFlags.canCopy },
+        { label: 'Colar', role: 'paste', enabled: editFlags.canPaste },
+        { type: 'separator' },
+        { label: 'Selecionar tudo', role: 'selectAll', enabled: editFlags.canSelectAll },
+      );
+    } else if (selectionText && selectionText.trim().length > 0) {
+      template.push({ label: 'Copiar', role: 'copy' });
+    } else {
+      return;
+    }
+
+    Menu.buildFromTemplate(template).popup({ window: mainWindow ?? undefined });
+  });
+
   if (process.env.VITE_DEV_SERVER_URL) {
     mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL);
     mainWindow.webContents.openDevTools({ mode: 'detach' });

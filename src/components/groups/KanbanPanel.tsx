@@ -3,6 +3,7 @@ import { groupsAPI } from '../../services/api';
 import { getSocket } from '../../services/socket';
 import { useAuthStore } from '../../stores/authStore';
 import { useGroupStore } from '../../stores/groupStore';
+import { confirmDialog } from '../../stores/dialogStore';
 import type { KanbanCard } from '../../types';
 
 interface Props {
@@ -62,7 +63,12 @@ function CardDetail({ card, groupId, channelId, members, onUpdate, onDelete, onC
   };
 
   const handleDelete = async () => {
-    if (!confirm('Excluir este card?')) return;
+    const ok = await confirmDialog('Essa ação não pode ser desfeita.', {
+      title: 'Excluir este card?',
+      confirmLabel: 'Excluir',
+      danger: true,
+    });
+    if (!ok) return;
     await groupsAPI.deleteCard(groupId, card.id);
     onDelete(card);
     if (channelId) getSocket().emit('kanban:card-deleted', { groupId, channelId, cardId: card.id });
@@ -287,7 +293,7 @@ export function KanbanPanel({ groupId, channelId }: Props) {
                     onDragStart={() => onDragStart(card)}
                     onDragEnd={onDragEnd}
                     onClick={() => setSelectedCard(card)}
-                    className="bg-surface-800 hover:bg-surface-750 border border-surface-700 hover:border-surface-600 rounded-lg p-3 cursor-grab active:cursor-grabbing active:opacity-60 transition-all group/card"
+                    className="bg-surface-800 hover:bg-surface-700 border border-surface-700 hover:border-surface-600 rounded-lg p-3 cursor-grab active:cursor-grabbing active:opacity-60 transition-all group/card"
                   >
                     <p className="text-sm font-medium text-surface-100 leading-snug">{card.title}</p>
 

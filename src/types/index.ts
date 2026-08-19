@@ -3,6 +3,7 @@
 export interface User {
   id: number;
   username: string;
+  tag: string;
   email?: string;
   avatarUrl: string | null;
   status: 'online' | 'offline' | 'away' | 'in_call';
@@ -25,6 +26,7 @@ export interface Message {
   channelId: number;
   senderId: number;
   createdAt: string;
+  editedAt?: string | null;
   sender: Pick<User, 'id' | 'username' | 'avatarUrl'>;
   isSystem?: boolean;
 }
@@ -64,7 +66,7 @@ export interface SentRequest {
 
 export interface AuthResponse {
   accessToken: string;
-  user: Pick<User, 'id' | 'username'>;
+  user: Pick<User, 'id' | 'username' | 'tag'>;
 }
 
 export interface PaginatedMessages {

@@ -6,14 +6,14 @@ interface Props {
 }
 
 export function LoginForm({ onSwitch }: Props) {
-  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const { login, isLoading, error, clearError } = useAuthStore();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!username.trim() || !password.trim()) return;
-    await login(username.trim(), password);
+    if (!email.trim() || !password.trim()) return;
+    await login(email.trim(), password);
   };
 
   return (
@@ -32,13 +32,13 @@ export function LoginForm({ onSwitch }: Props) {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-surface-300 mb-1.5">Usuário</label>
+            <label className="block text-sm font-medium text-surface-300 mb-1.5">Email</label>
             <input
-              type="text"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
               className="w-full px-4 py-3 bg-surface-900 border border-surface-600 rounded-lg text-surface-100 placeholder-surface-500 focus:outline-none focus:border-accent-500 focus:ring-1 focus:ring-accent-500 transition-all"
-              placeholder="Seu username"
+              placeholder="seu@email.com"
               autoFocus
             />
           </div>

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useGroupStore } from '../../stores/groupStore';
 import { useChatStore } from '../../stores/chatStore';
 import { useAuthStore } from '../../stores/authStore';
+import { confirmDialog } from '../../stores/dialogStore';
 import { getSocket } from '../../services/socket';
 import { MessageList } from '../chat/MessageList';
 import { MessageInput } from '../chat/MessageInput';
@@ -78,7 +79,12 @@ export function GroupView({ channelId, onToggleCollapse, collapsed }: Props) {
 
   const handleLeaveOrDelete = async () => {
     if (!group) return;
-    if (!confirm(`Tem certeza que deseja ${isOwner ? 'excluir' : 'sair de'} "${group.name}"?`)) return;
+    const ok = await confirmDialog('Essa ação não pode ser desfeita.', {
+      title: `${isOwner ? 'Excluir' : 'Sair de'} "${group.name}"?`,
+      confirmLabel: isOwner ? 'Excluir' : 'Sair',
+      danger: isOwner,
+    });
+    if (!ok) return;
     setIsLeaving(true);
     try {
       if (isOwner) await deleteGroup(group.id);

@@ -23,7 +23,7 @@ function ScreenThumb({ stream, username, onExpand }: { stream: MediaStream; user
   }, [stream]);
 
   return (
-    <button onClick={onExpand} className="relative w-full aspect-video rounded-lg overflow-hidden bg-black block">
+    <button onClick={onExpand} className="group relative w-full aspect-video rounded-lg overflow-hidden bg-black block ring-1 ring-transparent hover:ring-accent-500/60 transition-all">
       <video ref={videoRef} autoPlay muted className="w-full h-full object-cover" />
       <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent px-2 py-1 flex items-center gap-1">
         <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-success flex-shrink-0">
@@ -99,7 +99,7 @@ export function VoiceStatusBar({ voice, collapsed }: Props) {
           <button
             onClick={handleOpenChannel}
             title={`${vc.name} — Voz conectada`}
-            className="w-9 h-9 rounded-xl bg-success/15 text-success flex items-center justify-center flex-shrink-0"
+            className="w-9 h-9 rounded-xl bg-success/15 text-success flex items-center justify-center flex-shrink-0 transition-colors hover:bg-success/25"
           >
             <span className="w-2 h-2 rounded-full bg-success animate-pulse" />
           </button>

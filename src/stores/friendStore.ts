@@ -20,7 +20,7 @@ interface FriendState {
   closeDm: (channelId: number) => void;
   setActiveDm: (channelId: number | null) => void;
   updateFriendStatus: (userId: number, status: string) => void;
-  sendRequest: (username: string) => Promise<void>;
+  sendRequest: (username: string, tag: string) => Promise<void>;
   accept: (id: number) => Promise<void>;
   reject: (id: number) => Promise<void>;
   remove: (id: number) => Promise<void>;
@@ -116,10 +116,10 @@ export const useFriendStore = create<FriendState>((set, get) => ({
     }
   },
 
-  sendRequest: async (username) => {
+  sendRequest: async (username, tag) => {
     set({ error: null });
     try {
-      await friendsAPI.sendRequest(username);
+      await friendsAPI.sendRequest(username, tag);
       await get().loadAll();
     } catch (err: any) {
       const msg = err.response?.data?.message || 'Erro ao enviar solicitação';

@@ -28,9 +28,9 @@ api.interceptors.response.use(
 // ─── Auth ───────────────────────────────────────
 
 export const authAPI = {
-  register: (data: { username: string; email: string; password: string }) =>
+  register: (data: { username: string; tag: string; email: string; password: string }) =>
     api.post("/auth/register", data),
-  login: (data: { username: string; password: string }) =>
+  login: (data: { email: string; password: string }) =>
     api.post("/auth/login", data),
   me: () => api.get("/users/me"),
 };
@@ -38,7 +38,7 @@ export const authAPI = {
 // ─── Users ────────────────────────────────────────
 
 export const usersAPI = {
-  updateMe: (data: { username: string }) => api.patch("/users/me", data),
+  updateMe: (data: { username: string; tag: string }) => api.patch("/users/me", data),
 };
 
 // ─── Channels (DMs) ───────────────────────────────
@@ -71,7 +71,7 @@ export const friendsAPI = {
   listFriends: () => api.get("/friends"),
   listRequests: () => api.get("/friends/requests"),
   listSent: () => api.get("/friends/sent"),
-  sendRequest: (username: string) => api.post("/friends/request", { username }),
+  sendRequest: (username: string, tag: string) => api.post("/friends/request", { username, tag }),
   accept: (id: number) => api.post(`/friends/${id}/accept`),
   reject: (id: number) => api.post(`/friends/${id}/reject`),
   remove: (id: number) => api.delete(`/friends/${id}`),

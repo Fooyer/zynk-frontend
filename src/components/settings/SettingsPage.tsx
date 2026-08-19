@@ -156,7 +156,7 @@ function Toggle({ label, description, checked, onChange }: {
       <button
         onClick={() => onChange(!checked)}
         className={`relative w-11 h-6 rounded-full transition-colors ${
-          checked ? 'bg-accent-600' : 'bg-surface-600'
+          checked ? 'bg-accent-600 hover:bg-accent-500' : 'bg-surface-600 hover:bg-surface-500'
         }`}
       >
         <div
@@ -191,7 +191,10 @@ function SliderField({ label, value, min, max, step, format, onChange }: {
         step={step ?? 1}
         value={value}
         onChange={(e) => onChange(Number(e.target.value))}
-        className="w-full h-1.5 accent-accent-500 cursor-pointer"
+        className="w-full cursor-pointer"
+        style={{
+          background: `linear-gradient(to right, #00b4d8 ${((value - min) / (max - min)) * 100}%, #313745 ${((value - min) / (max - min)) * 100}%)`,
+        }}
       />
     </div>
   );
@@ -208,34 +211,46 @@ function SectionHeader({ icon, title }: { icon: React.ReactNode; title: string }
 
 function AccountSection() {
   const user = useAuthStore((s) => s.user);
-  const updateUsername = useAuthStore((s) => s.updateUsername);
+  const updateIdentity = useAuthStore((s) => s.updateIdentity);
   const [username, setUsername] = useState(user?.username ?? '');
+  const [tag, setTag] = useState(user?.tag ?? '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [copied, setCopied] = useState(false);
 
-  useEffect(() => { setUsername(user?.username ?? ''); }, [user?.username]);
+  useEffect(() => { setUsername(user?.username ?? ''); setTag(user?.tag ?? ''); }, [user?.username, user?.tag]);
 
-  const trimmed = username.trim();
-  const isValid = /^[a-zA-Z0-9_]{3,32}$/.test(trimmed);
-  const isDirty = trimmed !== (user?.username ?? '');
+  const trimmedUsername = username.trim();
+  const trimmedTag = tag.trim().toUpperCase();
+  const isUsernameValid = /^[a-zA-Z0-9_]{3,32}$/.test(trimmedUsername);
+  const isTagValid = /^[a-zA-Z0-9]{3,5}$/.test(trimmedTag);
+  const isDirty = trimmedUsername !== (user?.username ?? '') || trimmedTag !== (user?.tag ?? '');
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!isValid || !isDirty || saving) return;
+    if (!isUsernameValid || !isTagValid || !isDirty || saving) return;
     setSaving(true);
     setError(null);
     setSuccess(false);
     try {
-      await updateUsername(trimmed);
+      await updateIdentity(trimmedUsername, trimmedTag);
       setSuccess(true);
       setTimeout(() => setSuccess(false), 2500);
     } catch (err: any) {
       const msg = err.response?.data?.message;
-      setError(Array.isArray(msg) ? msg[0] : (msg ?? 'Erro ao atualizar o nome de usuário'));
+      setError(Array.isArray(msg) ? msg[0] : (msg ?? 'Erro ao atualizar a conta'));
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleCopy = () => {
+    if (!user) return;
+    navigator.clipboard.writeText(`${user.username}#${user.tag}`).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    });
   };
 
   return (
@@ -250,20 +265,62 @@ function AccountSection() {
         }
       />
 
-      <div className="bg-surface-800 rounded-xl p-5 border border-surface-700/50">
+      <div className="bg-surface-800 rounded-xl p-5 border border-surface-700/50 space-y-5">
+        {/* Identificador completo — o que a pessoa compartilha pra ser adicionada */}
+        {user && (
+          <div className="flex items-center justify-between gap-3 px-4 py-3 bg-surface-900 rounded-lg border border-surface-700/50">
+            <div className="min-w-0">
+              <p className="text-[11px] font-medium text-surface-500 uppercase tracking-wide mb-0.5">Seu identificador</p>
+              <p className="text-sm font-semibold text-surface-100 truncate">
+                {user.username}<span className="text-surface-500">#{user.tag}</span>
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleCopy}
+              className="px-3 py-1.5 text-xs font-medium rounded-lg bg-surface-700 text-surface-300 hover:bg-surface-600 hover:text-surface-100 transition-colors flex-shrink-0 flex items-center gap-1.5"
+            >
+              {copied ? (
+                <>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                  Copiado
+                </>
+              ) : (
+                <>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="9" y="9" width="13" height="13" rx="2" />
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                  </svg>
+                  Copiar
+                </>
+              )}
+            </button>
+          </div>
+        )}
+
         <form onSubmit={handleSave} className="flex flex-col gap-2">
-          <label className="text-sm font-medium text-surface-300">Nome de usuário</label>
-          <div className="flex items-center gap-2">
+          <label className="text-sm font-medium text-surface-300">Editar nome e tag</label>
+          <div className="flex items-center gap-1.5">
             <input
               type="text"
               value={username}
               onChange={(e) => { setUsername(e.target.value); setError(null); }}
               maxLength={32}
-              className="flex-1 px-3 py-2 bg-surface-900 border border-surface-600 rounded-lg text-surface-100 text-sm focus:outline-none focus:border-accent-500 focus:ring-1 focus:ring-accent-500 transition-all"
+              className="flex-1 min-w-0 px-3 py-2 bg-surface-900 border border-surface-600 rounded-lg text-surface-100 text-sm focus:outline-none focus:border-accent-500 focus:ring-1 focus:ring-accent-500 transition-all"
+            />
+            <span className="text-surface-500 font-medium flex-shrink-0">#</span>
+            <input
+              type="text"
+              value={tag}
+              onChange={(e) => { setTag(e.target.value.slice(0, 5)); setError(null); }}
+              maxLength={5}
+              className="w-20 flex-shrink-0 px-2.5 py-2 bg-surface-900 border border-surface-600 rounded-lg text-surface-100 text-sm focus:outline-none focus:border-accent-500 focus:ring-1 focus:ring-accent-500 transition-all uppercase"
             />
             <button
               type="submit"
-              disabled={!isValid || !isDirty || saving}
+              disabled={!isUsernameValid || !isTagValid || !isDirty || saving}
               className="px-4 py-2 bg-accent-600 hover:bg-accent-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors flex-shrink-0"
             >
               {saving ? 'Salvando...' : 'Salvar'}
@@ -272,9 +329,9 @@ function AccountSection() {
           {error ? (
             <p className="text-xs text-danger">{error}</p>
           ) : success ? (
-            <p className="text-xs text-success">Nome de usuário atualizado.</p>
+            <p className="text-xs text-success">Conta atualizada.</p>
           ) : (
-            <p className="text-xs text-surface-400">3–32 caracteres: letras, números e underscore.</p>
+            <p className="text-xs text-surface-400">Nome: 3–32 caracteres (letras, números e underscore). Tag: 3–5 letras/números.</p>
           )}
         </form>
       </div>

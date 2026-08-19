@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useGroupStore } from '../../stores/groupStore';
 import { useAuthStore } from '../../stores/authStore';
+import { useContextMenuStore } from '../../stores/contextMenuStore';
 import { useVoiceRoom } from '../../hooks/useVoiceRoom';
 import { GroupView } from './GroupView';
 import { GroupMemberList } from './GroupMemberList';
@@ -38,7 +39,6 @@ function ChannelSidebar({ group, voice, activeChannelId, onSelectChannel }: Chan
   const [dragOverInfo, setDragOverInfo] = useState<{ key: string; position: 'before' | 'after' } | null>(null);
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
-  const [channelMenu, setChannelMenu] = useState<{ x: number; y: number; row: ChannelRow } | null>(null);
 
   const [showCreate, setShowCreate] = useState(false);
   const [createType, setCreateType] = useState<ChannelType>('text');
@@ -76,19 +76,6 @@ function ChannelSidebar({ group, voice, activeChannelId, onSelectChannel }: Chan
     socket.on('channel:renamed', onRenamed);
     return () => { socket.off('channel:renamed', onRenamed); };
   }, []);
-
-  // Fecha o menu de opções do canal ao clicar fora ou apertar Esc
-  useEffect(() => {
-    if (!channelMenu) return;
-    const handleClick = () => setChannelMenu(null);
-    const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setChannelMenu(null); };
-    document.addEventListener('click', handleClick);
-    document.addEventListener('keydown', handleKey);
-    return () => {
-      document.removeEventListener('click', handleClick);
-      document.removeEventListener('keydown', handleKey);
-    };
-  }, [channelMenu]);
 
   const merged: ChannelRow[] = useMemo(() => {
     const rows: ChannelRow[] = [
@@ -187,7 +174,51 @@ function ChannelSidebar({ group, voice, activeChannelId, onSelectChannel }: Chan
     if (row.type === 'text' && row.channel.id === group?.channelId) return; // canal principal não tem ações
     e.preventDefault();
     e.stopPropagation();
-    setChannelMenu({ x: e.clientX, y: e.clientY, row });
+
+    const isVoice = row.type === 'voice';
+    const canManage = isVoice || Number((row.channel as GroupTextChannel).ownerId) === Number(currentUser?.id);
+    const displayName = row.type === 'text' && row.channel.id === group?.channelId ? 'geral' : row.channel.name;
+
+    useContextMenuStore.getState().open({ x: e.clientX, y: e.clientY }, (
+      <>
+        <div className="px-3 py-2 border-b border-surface-700/50">
+          <p className="text-sm font-semibold text-surface-100 truncate">{displayName}</p>
+        </div>
+
+        {canManage ? (
+          <>
+            <button
+              onClick={() => { useContextMenuStore.getState().close(); startEdit(row); }}
+              className="w-full text-left px-3 py-2 text-sm text-surface-200 hover:bg-surface-700 transition-colors flex items-center gap-2"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4z" />
+              </svg>
+              Renomear
+            </button>
+            <button
+              onClick={() => {
+                useContextMenuStore.getState().close();
+                if (row.type === 'voice') voice.deleteChannel(row.channel.id);
+                else handleTextDelete(row.channel);
+              }}
+              className="w-full text-left px-3 py-2 text-sm text-danger hover:bg-surface-700 transition-colors flex items-center gap-2"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="3 6 5 6 21 6" />
+                <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                <path d="M10 11v6" /><path d="M14 11v6" />
+                <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+              </svg>
+              Excluir
+            </button>
+          </>
+        ) : (
+          <p className="px-3 py-2 text-xs text-surface-500">Sem permissão para gerenciar este canal</p>
+        )}
+      </>
+    ));
   };
 
   if (!group) {
@@ -476,58 +507,6 @@ function ChannelSidebar({ group, voice, activeChannelId, onSelectChannel }: Chan
           })}
         </div>
       </div>
-
-      {/* Menu de opções do canal — abre por clique no ⋮ ou botão direito na linha */}
-      {channelMenu && (() => {
-        const { row } = channelMenu;
-        const isVoice = row.type === 'voice';
-        const canManage = isVoice || Number((row.channel as GroupTextChannel).ownerId) === Number(currentUser?.id);
-        const displayName = row.type === 'text' && row.channel.id === group.channelId ? 'geral' : row.channel.name;
-        return (
-          <div
-            style={{ top: channelMenu.y, left: channelMenu.x }}
-            className="fixed z-50 bg-surface-900 border border-surface-700 rounded-lg shadow-2xl py-1 min-w-[170px]"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="px-3 py-2 border-b border-surface-700/50">
-              <p className="text-sm font-semibold text-surface-100 truncate">{displayName}</p>
-            </div>
-
-            {canManage ? (
-              <>
-                <button
-                  onClick={() => { setChannelMenu(null); startEdit(row); }}
-                  className="w-full text-left px-3 py-2 text-sm text-surface-200 hover:bg-surface-700 transition-colors flex items-center gap-2"
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4z" />
-                  </svg>
-                  Renomear
-                </button>
-                <button
-                  onClick={() => {
-                    setChannelMenu(null);
-                    if (row.type === 'voice') voice.deleteChannel(row.channel.id);
-                    else handleTextDelete(row.channel);
-                  }}
-                  className="w-full text-left px-3 py-2 text-sm text-danger hover:bg-surface-700 transition-colors flex items-center gap-2"
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="3 6 5 6 21 6" />
-                    <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-                    <path d="M10 11v6" /><path d="M14 11v6" />
-                    <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
-                  </svg>
-                  Excluir
-                </button>
-              </>
-            ) : (
-              <p className="px-3 py-2 text-xs text-surface-500">Sem permissão para gerenciar este canal</p>
-            )}
-          </div>
-        );
-      })()}
     </div>
   );
 }
