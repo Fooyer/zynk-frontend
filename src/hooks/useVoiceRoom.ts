@@ -311,6 +311,10 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
         await renegotiate(uid, pc);
       }
 
+      // Mostra a própria tela pra mim também — sem isso só quem recebe via
+      // WebRTC (os outros participantes, via `ontrack`) conseguia ver.
+      if (user?.id) addScreenStream(user.id, screenStream);
+
       setIsScreenSharing(true);
 
       videoTrack.onended = () => { stopScreenShare(); };
@@ -334,6 +338,7 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
     }
     localScreenStream.current.getTracks().forEach((t) => t.stop());
     localScreenStream.current = null;
+    if (user?.id) removeScreenStream(user.id);
     setIsScreenSharing(false);
   };
 

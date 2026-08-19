@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { getInitials, getUserColor } from '../../utils/formatDate';
+import { useAuthStore } from '../../stores/authStore';
 import { ScreenPicker } from '../call/ScreenPicker';
 import type { useVoiceRoom } from '../../hooks/useVoiceRoom';
 import type { ScreenSource } from '../../types';
@@ -39,6 +40,7 @@ function ScreenThumb({ stream, username, onExpand }: { stream: MediaStream; user
  */
 export function VoiceStatusBar({ voice }: Props) {
   const vc = voice.activeVc;
+  const currentUser = useAuthStore((s) => s.user);
 
   const [showPicker, setShowPicker] = useState(false);
   const [expandedUserId, setExpandedUserId] = useState<number | null>(null);
@@ -78,6 +80,14 @@ export function VoiceStatusBar({ voice }: Props) {
 
   const nameFor = (uid: number) => vc.participants.find((p) => p.userId === uid)?.username ?? 'Alguém';
 
+  // Barra de status é só "eu" — a lista com todo mundo da call fica na
+  // visão de chamada (aberta clicando no canal de voz conectado).
+  const self = vc.participants.find((p) => Number(p.userId) === Number(currentUser?.id)) ?? {
+    userId: currentUser?.id ?? 0,
+    username: currentUser?.username ?? '',
+    avatarUrl: currentUser?.avatarUrl ?? null,
+  };
+
   return (
     <>
       <div className="flex-shrink-0 bg-surface-900 border-t border-surface-700/60 overflow-hidden flex flex-col max-h-[45vh]">
@@ -90,26 +100,25 @@ export function VoiceStatusBar({ voice }: Props) {
           </div>
         </div>
 
-        {/* Participantes */}
-        {vc.participants.length > 0 && (
-          <div className="px-3 py-2 space-y-1.5 overflow-y-auto flex-shrink-0 max-h-32">
-            {vc.participants.map((p) => (
-              <div key={p.userId} className="flex items-center gap-2">
-                <div
-                  className="w-6 h-6 rounded-full flex items-center justify-center text-white text-[9px] font-semibold flex-shrink-0"
-                  style={{ backgroundColor: getUserColor(p.username) }}
-                >
-                  {p.avatarUrl ? (
-                    <img src={p.avatarUrl} alt="" className="w-full h-full rounded-full object-cover" />
-                  ) : (
-                    getInitials(p.username)
-                  )}
-                </div>
-                <span className="text-xs text-surface-200 truncate flex-1">{p.username}</span>
-              </div>
-            ))}
+        {/* Só eu — a lista completa de participantes fica na visão de chamada */}
+        <div className="px-3 py-2 flex-shrink-0">
+          <div className="flex items-center gap-2">
+            <div
+              className="w-6 h-6 rounded-full flex items-center justify-center text-white text-[9px] font-semibold flex-shrink-0"
+              style={{ backgroundColor: getUserColor(self.username) }}
+            >
+              {self.avatarUrl ? (
+                <img src={self.avatarUrl} alt="" className="w-full h-full rounded-full object-cover" />
+              ) : (
+                getInitials(self.username)
+              )}
+            </div>
+            <span className="text-xs text-surface-200 truncate flex-1">{self.username}</span>
+            {vc.participants.length > 1 && (
+              <span className="text-[10px] text-surface-500 flex-shrink-0">+{vc.participants.length - 1}</span>
+            )}
           </div>
-        )}
+        </div>
 
         {/* Telas compartilhadas */}
         {voice.screenStreams.size > 0 && (

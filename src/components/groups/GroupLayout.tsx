@@ -5,6 +5,7 @@ import { useContextMenuStore } from '../../stores/contextMenuStore';
 import { useLayoutStore } from '../../stores/layoutStore';
 import { useVoiceRoom } from '../../hooks/useVoiceRoom';
 import { GroupView } from './GroupView';
+import type { Tab } from './GroupView';
 import { GroupMemberList } from './GroupMemberList';
 import { VoiceStatusBar } from './VoiceStatusBar';
 import { ChannelListSkeleton } from '../common/Skeleton';
@@ -33,9 +34,10 @@ interface ChannelSidebarProps {
   voice: ReturnType<typeof useVoiceRoom>;
   activeChannelId: number | null;
   onSelectChannel: (id: number) => void;
+  onOpenCall: () => void;
 }
 
-function ChannelSidebar({ group, voice, activeChannelId, onSelectChannel }: ChannelSidebarProps) {
+function ChannelSidebar({ group, voice, activeChannelId, onSelectChannel, onOpenCall }: ChannelSidebarProps) {
   const currentUser = useAuthStore((s) => s.user);
 
   const [textChannels, setTextChannels] = useState<GroupTextChannel[]>([]);
@@ -429,8 +431,9 @@ function ChannelSidebar({ group, voice, activeChannelId, onSelectChannel }: Chan
                     </div>
                   ) : (
                     <button
-                      onClick={() => voice.join(vc)}
+                      onClick={() => { if (isActive) onOpenCall(); else voice.join(vc); }}
                       disabled={voice.isConnecting}
+                      title={isActive ? 'Abrir a chamada' : undefined}
                       className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-left transition-colors ${
                         isActive
                           ? 'text-success'
@@ -589,6 +592,9 @@ export function GroupLayout({ voice }: { voice: ReturnType<typeof useVoiceRoom> 
   const collapsed = useLayoutStore((s) => s.channelSidebarCollapsed);
   const setCollapsed = useLayoutStore((s) => s.setChannelSidebarCollapsed);
   const [activeChannelId, setActiveChannelId] = useState<number | null>(null);
+  // Vive aqui (não dentro de GroupView) porque o clique no canal de voz já
+  // conectado, na sidebar, precisa poder trocar pra aba "Chamada".
+  const [activeTab, setActiveTab] = useState<Tab>('chat');
 
   const activeGroup = groups.find((g) => g.id === activeGroupId) ?? null;
 
@@ -609,7 +615,8 @@ export function GroupLayout({ voice }: { voice: ReturnType<typeof useVoiceRoom> 
           group={activeGroup}
           voice={voice}
           activeChannelId={activeChannelId}
-          onSelectChannel={setActiveChannelId}
+          onSelectChannel={(id) => { setActiveChannelId(id); setActiveTab('chat'); }}
+          onOpenCall={() => setActiveTab('call')}
         />
       </div>
 
@@ -618,6 +625,9 @@ export function GroupLayout({ voice }: { voice: ReturnType<typeof useVoiceRoom> 
         channelId={activeChannelId}
         onToggleCollapse={() => setCollapsed(!collapsed)}
         collapsed={collapsed}
+        voice={voice}
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
       />
 
       {/* ── Col 3: Members ───────────────────────────────── */}

@@ -9,22 +9,28 @@ import { MessageInput } from '../chat/MessageInput';
 import { InviteFriendModal } from './InviteFriendModal';
 import { NotesPanel } from './NotesPanel';
 import { KanbanPanel } from './KanbanPanel';
+import { GroupCallView } from './GroupCallView';
+import type { useVoiceRoom } from '../../hooks/useVoiceRoom';
 
-type Tab = 'chat' | 'kanban' | 'notes';
+export type Tab = 'chat' | 'kanban' | 'notes' | 'call';
 
 const TAB_LABELS: Record<Tab, string> = {
   chat: 'Chat',
   kanban: 'Tasks',
   notes: 'Notas',
+  call: 'Chamada',
 };
 
 interface Props {
   channelId: number | null;
   onToggleCollapse: () => void;
   collapsed: boolean;
+  voice: ReturnType<typeof useVoiceRoom>;
+  activeTab: Tab;
+  setActiveTab: (tab: Tab) => void;
 }
 
-export function GroupView({ channelId, onToggleCollapse, collapsed }: Props) {
+export function GroupView({ channelId, onToggleCollapse, collapsed, voice, activeTab, setActiveTab }: Props) {
   const activeGroupId = useGroupStore((s) => s.activeGroupId);
   const groups = useGroupStore((s) => s.groups);
   const user = useAuthStore((s) => s.user);
@@ -35,7 +41,6 @@ export function GroupView({ channelId, onToggleCollapse, collapsed }: Props) {
   const setGroupName = useGroupStore((s) => s.setGroupName);
 
   const [showInvite, setShowInvite] = useState(false);
-  const [activeTab, setActiveTab] = useState<Tab>('chat');
   const [isLeaving, setIsLeaving] = useState(false);
 
   const group = groups.find((g) => g.id === activeGroupId);
@@ -43,16 +48,18 @@ export function GroupView({ channelId, onToggleCollapse, collapsed }: Props) {
   const hasKanban = features.includes('kanban');
   const hasNotes = features.includes('notes');
   const isOwner = Number(group?.ownerId) === Number(user?.id);
+  const isThisGroupCall = !!group && voice.activeVc?.groupId === group.id;
 
   const visibleTabs = ([
     { id: 'chat' as Tab, visible: true },
+    { id: 'call' as Tab, visible: isThisGroupCall },
     { id: 'kanban' as Tab, visible: hasKanban },
     { id: 'notes' as Tab, visible: hasNotes },
   ] as const).filter((t) => t.visible);
 
   useEffect(() => {
     if (!visibleTabs.find((t) => t.id === activeTab)) setActiveTab('chat');
-  }, [group?.id]);
+  }, [group?.id, isThisGroupCall]);
 
   useEffect(() => {
     if (channelId) {
@@ -185,14 +192,17 @@ export function GroupView({ channelId, onToggleCollapse, collapsed }: Props) {
         </div>
       </div>
 
-      {/* Content — chat é só texto agora; a call de voz vive na barra fixa
-          (VoiceStatusBar), separada, como qualquer app com call de verdade. */}
+      {/* Content — chat é o padrão; a aba "Chamada" (só existe enquanto
+          conectado a uma voz deste grupo) abre a visão estilo app de
+          reunião no lugar do chat. */}
       {activeTab === 'chat' && channelId && (
         <div className="flex-1 flex flex-col overflow-hidden min-h-0">
           <MessageList channelId={channelId} />
           <MessageInput channelId={channelId} />
         </div>
       )}
+
+      {activeTab === 'call' && isThisGroupCall && <GroupCallView voice={voice} />}
 
       {activeTab === 'kanban' && hasKanban && (
         <KanbanPanel groupId={group.id} channelId={group.channelId} />

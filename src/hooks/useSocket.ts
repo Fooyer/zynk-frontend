@@ -3,6 +3,7 @@ import { getSocket } from '../services/socket';
 import { notifyMessage, requestNotificationPermission } from '../services/notification';
 import { useChatStore } from '../stores/chatStore';
 import { useFriendStore } from '../stores/friendStore';
+import { useGroupStore } from '../stores/groupStore';
 import type { Message, TypingEvent, UserStatusEvent } from '../types';
 
 export function useSocket() {
@@ -12,6 +13,7 @@ export function useSocket() {
   const setTyping = useChatStore((s) => s.setTyping);
   const loadDmChannels = useFriendStore((s) => s.loadDmChannels);
   const updateFriendStatus = useFriendStore((s) => s.updateFriendStatus);
+  const loadGroups = useGroupStore((s) => s.loadGroups);
   const hasSetup = useRef(false);
 
   useEffect(() => {
@@ -42,6 +44,13 @@ export function useSocket() {
     // Novo DM aberto pelo outro usuário — recarrega lista de DMs
     socket.on('dm:new', () => {
       loadDmChannels();
+    });
+
+    // Fui adicionado a um grupo (ou convidado) enquanto online — antes só
+    // aparecia após relogar. O payload do evento é parcial (id/nome/canal),
+    // então recarrega a lista inteira em vez de tentar montar o Group na mão.
+    socket.on('group:invited', () => {
+      loadGroups();
     });
 
     socket.on('user:status', (event: UserStatusEvent) => {
@@ -84,6 +93,7 @@ export function useSocket() {
       socket.off('message:updated');
       socket.off('message:deleted');
       socket.off('dm:new');
+      socket.off('group:invited');
       socket.off('user:status');
       socket.off('error');
       socket.off('connect');
@@ -94,5 +104,5 @@ export function useSocket() {
       if (awayTimer) clearTimeout(awayTimer);
       hasSetup.current = false;
     };
-  }, [addMessage, updateMessage, removeMessage, setTyping, loadDmChannels, updateFriendStatus]);
+  }, [addMessage, updateMessage, removeMessage, setTyping, loadDmChannels, updateFriendStatus, loadGroups]);
 }
