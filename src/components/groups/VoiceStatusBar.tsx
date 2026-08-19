@@ -98,10 +98,18 @@ export function VoiceStatusBar({ voice, collapsed }: Props) {
         <div className="flex-shrink-0 flex flex-col items-center gap-1.5 py-2 border-y border-surface-800 w-full">
           <button
             onClick={handleOpenChannel}
-            title={`${vc.name} — Voz conectada`}
-            className="w-9 h-9 rounded-xl bg-success/15 text-success flex items-center justify-center flex-shrink-0 transition-colors hover:bg-success/25"
+            title={`${vc.name} — ${vc.mode === 'game' ? 'Voz conectada (jogos, baixa latência)' : 'Voz conectada'}`}
+            className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 transition-colors ${
+              vc.mode === 'game' ? 'bg-warning/15 text-warning hover:bg-warning/25' : 'bg-success/15 text-success hover:bg-success/25'
+            }`}
           >
-            <span className="w-2 h-2 rounded-full bg-success animate-pulse" />
+            {vc.mode === 'game' ? (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M13 2 3 14h7l-1 8 10-12h-7l1-8z" />
+              </svg>
+            ) : (
+              <span className="w-2 h-2 rounded-full bg-success animate-pulse" />
+            )}
           </button>
           <button
             onClick={voice.toggleMute}
@@ -159,11 +167,21 @@ export function VoiceStatusBar({ voice, collapsed }: Props) {
       <div className="mx-2 mb-2 flex-shrink-0 bg-surface-800 border border-surface-700 rounded-xl shadow-lg overflow-hidden flex flex-col max-h-[45vh]">
         {/* Header */}
         <button onClick={handleOpenChannel} className="px-3 py-2.5 border-b border-surface-700/60 flex items-center gap-2 flex-shrink-0 text-left hover:bg-surface-700/40 transition-colors">
-          <span className="w-2 h-2 rounded-full bg-success animate-pulse flex-shrink-0" />
+          <span className={`w-2 h-2 rounded-full animate-pulse flex-shrink-0 ${vc.mode === 'game' ? 'bg-warning' : 'bg-success'}`} />
           <div className="min-w-0 flex-1">
             <p className="text-xs font-semibold text-surface-100 truncate">{vc.name}</p>
-            <p className="text-[10px] text-success">Voz conectada</p>
+            <p className={`text-[10px] ${vc.mode === 'game' ? 'text-warning' : 'text-success'}`}>
+              {vc.mode === 'game' ? 'Voz conectada — modo jogos' : 'Voz conectada'}
+            </p>
           </div>
+          {vc.mode === 'game' && (
+            <span className="flex-shrink-0 flex items-center gap-1 px-1.5 py-0.5 rounded bg-warning/15 text-warning text-[10px] font-semibold">
+              <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M13 2 3 14h7l-1 8 10-12h-7l1-8z" />
+              </svg>
+              JOGOS
+            </span>
+          )}
         </button>
 
         {/* Participantes */}

@@ -4,9 +4,9 @@ import { getSocket } from '../services/socket';
 import { useAuthStore } from '../stores/authStore';
 import { captureScreen } from '../services/screenCapture';
 import { alertDialog } from '../stores/dialogStore';
-import type { VoiceChannel, VoiceParticipant } from '../types';
-
-const ICE_SERVERS = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+import { ICE_SERVERS } from '../services/iceServers';
+import { LOW_LATENCY_AUDIO_CONSTRAINTS, applyLowLatencySenderParams, withLowLatencyOpus } from '../services/lowLatencyAudio';
+import type { CallMode, VoiceChannel, VoiceParticipant } from '../types';
 
 interface ScreenSenders {
   video: RTCRtpSender;
@@ -39,6 +39,9 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
   const screenSenders = useRef<Map<number, ScreenSenders>>(new Map());
   const activeVcIdRef = useRef<number | null>(null);
   activeVcIdRef.current = activeVcId;
+  // Modo do canal conectado no momento — usado pelo signaling (offer/answer)
+  // pra saber se aplica o tuning de baixa latência nessa negociação.
+  const activeModeRef = useRef<CallMode>('normal');
   // Snapshot do canal de texto do grupo no momento da entrada — usado pro
   // 'voice:leave' mesmo que o usuário tenha navegado pra outro grupo depois.
   const connectedGroupChannelIdRef = useRef<number | null>(null);
@@ -109,6 +112,7 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
     const voiceChannelId = activeVcIdRef.current;
     if (!voiceChannelId) return;
     const offer = await pc.createOffer();
+    if (activeModeRef.current === 'game' && offer.sdp) offer.sdp = withLowLatencyOpus(offer.sdp);
     await pc.setLocalDescription(offer);
     getSocket().emit('voice:offer', { targetUserId, offer, voiceChannelId });
   };
@@ -124,6 +128,7 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
         if (p.userId === user?.id) continue;
         const pc = createPeer(p.userId);
         const offer = await pc.createOffer();
+        if (activeModeRef.current === 'game' && offer.sdp) offer.sdp = withLowLatencyOpus(offer.sdp);
         await pc.setLocalDescription(offer);
         socket.emit('voice:offer', { targetUserId: p.userId, offer, voiceChannelId: activeVcId });
       }
@@ -134,6 +139,7 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
       if (!pc) pc = createPeer(data.from);
       await pc.setRemoteDescription(data.offer);
       const answer = await pc.createAnswer();
+      if (activeModeRef.current === 'game' && answer.sdp) answer.sdp = withLowLatencyOpus(answer.sdp);
       await pc.setLocalDescription(answer);
       socket.emit('voice:answer', { targetUserId: data.from, answer, voiceChannelId: activeVcId });
     };
@@ -171,7 +177,7 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
   }, []);
 
   const createPeer = (targetUserId: number): RTCPeerConnection => {
-    const pc = new RTCPeerConnection(ICE_SERVERS);
+    const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
     pc.onicecandidate = (e) => {
       if (e.candidate) getSocket().emit('voice:ice', { targetUserId, candidate: e.candidate });
     };
@@ -187,8 +193,12 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
         track.onended = () => removeScreenStream(targetUserId);
       }
     };
-    if (localStream.current)
-      localStream.current.getTracks().forEach((t) => pc.addTrack(t, localStream.current!));
+    if (localStream.current) {
+      localStream.current.getTracks().forEach((t) => {
+        const sender = pc.addTrack(t, localStream.current!);
+        if (activeModeRef.current === 'game') applyLowLatencySenderParams(sender);
+      });
+    }
 
     // Se já estamos compartilhando a tela, o novo peer entra recebendo o
     // compartilhamento em andamento (sem precisar de renegociação extra).
@@ -229,14 +239,19 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
     setActiveVcId(null);
     setConnectedVc(null);
     setIsMuted(false);
+    activeModeRef.current = 'normal';
   };
 
   const join = async (vc: VoiceChannel) => {
     if (activeVcId === vc.id) return;
     if (activeVcId !== null) _leave(activeVcId);
     setIsConnecting(true);
+    activeModeRef.current = vc.mode;
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: vc.mode === 'game' ? LOW_LATENCY_AUDIO_CONSTRAINTS : true,
+        video: false,
+      });
       localStream.current = stream;
       // Fixa o grupo/canal de texto do momento da entrada — se o usuário
       // navegar pra outro grupo depois, a saída ainda usa o grupo certo.
@@ -303,8 +318,8 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
     setIsScreenSharing(false);
   };
 
-  const createChannel = async (name: string) => {
-    const { data } = await groupsAPI.createVoiceChannel(groupId, name);
+  const createChannel = async (name: string, mode: CallMode = 'normal') => {
+    const { data } = await groupsAPI.createVoiceChannel(groupId, name, mode);
     setVoiceChannels((prev) => [...prev, { ...data, participants: [] }]);
   };
 

@@ -8,7 +8,7 @@ import { GroupMemberList } from './GroupMemberList';
 import { groupsAPI } from '../../services/api';
 import { getSocket } from '../../services/socket';
 import { getInitials, getUserColor } from '../../utils/formatDate';
-import type { GroupTextChannel, VoiceChannel } from '../../types';
+import type { CallMode, GroupTextChannel, VoiceChannel } from '../../types';
 
 // ─── Channel sidebar ────────────────────────────────────────
 // Voz e texto são canais separados de verdade (tipos distintos), mas com
@@ -42,6 +42,7 @@ function ChannelSidebar({ group, voice, activeChannelId, onSelectChannel }: Chan
 
   const [showCreate, setShowCreate] = useState(false);
   const [createType, setCreateType] = useState<ChannelType>('text');
+  const [createMode, setCreateMode] = useState<CallMode>('normal');
   const [newName, setNewName] = useState('');
   const [error, setError] = useState<string | null>(null);
 
@@ -88,6 +89,7 @@ function ChannelSidebar({ group, voice, activeChannelId, onSelectChannel }: Chan
   const resetCreateForm = () => {
     setShowCreate(false);
     setNewName('');
+    setCreateMode('normal');
     setError(null);
   };
 
@@ -97,7 +99,7 @@ function ChannelSidebar({ group, voice, activeChannelId, onSelectChannel }: Chan
     setError(null);
     try {
       if (createType === 'voice') {
-        await voice.createChannel(newName.trim());
+        await voice.createChannel(newName.trim(), createMode);
       } else {
         const { data } = await groupsAPI.createTextChannel(group.id, newName.trim());
         setTextChannels((prev) => prev.some((p) => p.id === data.id) ? prev : [...prev, data]);
@@ -290,6 +292,40 @@ function ChannelSidebar({ group, voice, activeChannelId, onSelectChannel }: Chan
                   </button>
                 </div>
               )}
+              {hasVoice && createType === 'voice' && (
+                <div className="grid grid-cols-2 gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setCreateMode('normal')}
+                    title="Processamento normal de áudio — melhor pra conversar"
+                    className={`flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+                      createMode === 'normal'
+                        ? 'bg-accent-600/15 border-accent-500 text-accent-300'
+                        : 'bg-surface-700 border-surface-600 text-surface-300 hover:border-surface-500'
+                    }`}
+                  >
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                    </svg>
+                    Conversa
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCreateMode('game')}
+                    title="Sem processamento de áudio — menor delay possível, pensado pra call durante partida"
+                    className={`flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+                      createMode === 'game'
+                        ? 'bg-warning/15 border-warning text-warning'
+                        : 'bg-surface-700 border-surface-600 text-surface-300 hover:border-surface-500'
+                    }`}
+                  >
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M13 2 3 14h7l-1 8 10-12h-7l1-8z" />
+                    </svg>
+                    Jogos
+                  </button>
+                </div>
+              )}
               <input
                 autoFocus
                 type="text"
@@ -347,7 +383,7 @@ function ChannelSidebar({ group, voice, activeChannelId, onSelectChannel }: Chan
                   onContextMenu={(e) => openChannelMenu(e, row)}
                   className={`group/vc rounded-lg transition-colors cursor-grab active:cursor-grabbing ${
                     isDragging ? 'opacity-40' : ''
-                  } ${isActive ? 'bg-success/10 ring-1 ring-inset ring-success/30' : ''}`}
+                  } ${isActive ? (vc.mode === 'game' ? 'bg-warning/10 ring-1 ring-inset ring-warning/30' : 'bg-success/10 ring-1 ring-inset ring-success/30') : ''}`}
                 >
                   {showDropBefore && <DropIndicator />}
                   {editingKey === rowKey(row) ? (
@@ -389,6 +425,16 @@ function ChannelSidebar({ group, voice, activeChannelId, onSelectChannel }: Chan
                         <line x1="8" y1="23" x2="16" y2="23" />
                       </svg>
                       <span className={`flex-1 min-w-0 text-sm truncate ${isActive ? 'font-semibold' : ''}`}>{vc.name}</span>
+                      {vc.mode === 'game' && (
+                        <span
+                          title="Canal de jogos — menor delay possível"
+                          className="flex-shrink-0 flex items-center gap-0.5 px-1 py-0.5 rounded bg-warning/15 text-warning"
+                        >
+                          <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M13 2 3 14h7l-1 8 10-12h-7l1-8z" />
+                          </svg>
+                        </span>
+                      )}
                       {vc.participants.length > 0 && (
                         <span className="text-[10px] text-surface-400 flex-shrink-0">{vc.participants.length}</span>
                       )}

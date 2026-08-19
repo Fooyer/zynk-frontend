@@ -3,20 +3,11 @@ import { useGameSessionStore } from '../../stores/gameSessionStore';
 import { useAuthStore } from '../../stores/authStore';
 import { getSocket } from '../../services/socket';
 import { getInitials, getUserColor } from '../../utils/formatDate';
+import { ICE_SERVERS } from '../../services/iceServers';
 
 interface Props {
   onBack: () => void;
 }
-
-const ICE_SERVERS: RTCIceServer[] = [
-  { urls: 'stun:stun.l.google.com:19302' },
-  { urls: 'stun:stun1.l.google.com:19302' },
-  {
-    urls: 'turn:relay1.expressturn.com:443',
-    username: 'public',
-    credential: 'public',
-  },
-];
 
 export function GameSessionView({ onBack }: Props) {
   const { activeSession, leaveSession } = useGameSessionStore();

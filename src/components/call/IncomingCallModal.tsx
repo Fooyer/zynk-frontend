@@ -1,15 +1,18 @@
 import { useEffect, useState } from 'react';
 import { getInitials, getUserColor } from '../../utils/formatDate';
+import type { CallMode } from '../../types';
 
 interface Props {
   peerUsername: string;
+  mode: CallMode;
   onAccept: () => void;
   onReject: () => void;
 }
 
-export function IncomingCallModal({ peerUsername, onAccept, onReject }: Props) {
+export function IncomingCallModal({ peerUsername, mode, onAccept, onReject }: Props) {
   const [dots, setDots] = useState('');
   const color = getUserColor(peerUsername);
+  const isGame = mode === 'game';
 
   useEffect(() => {
     const interval = setInterval(() => setDots(d => d.length >= 3 ? '' : d + '.'), 600);
@@ -18,7 +21,7 @@ export function IncomingCallModal({ peerUsername, onAccept, onReject }: Props) {
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="bg-surface-800 rounded-2xl p-8 flex flex-col items-center gap-5 shadow-2xl border border-surface-700 w-72">
+      <div className={`bg-surface-800 rounded-2xl p-8 flex flex-col items-center gap-5 shadow-2xl border w-72 ${isGame ? 'border-warning/50' : 'border-surface-700'}`}>
         {/* Avatar animado com pulse */}
         <div className="relative">
           <div className="absolute inset-0 rounded-full animate-ping opacity-30" style={{ backgroundColor: color }} />
@@ -30,8 +33,17 @@ export function IncomingCallModal({ peerUsername, onAccept, onReject }: Props) {
           </div>
         </div>
 
+        {isGame && (
+          <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-warning/15 text-warning text-[11px] font-semibold -mt-2">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M13 2 3 14h7l-1 8 10-12h-7l1-8z" />
+            </svg>
+            CHAMADA DE JOGOS — BAIXA LATÊNCIA
+          </span>
+        )}
+
         <div className="text-center">
-          <p className="text-surface-400 text-sm">Chamada de voz de</p>
+          <p className="text-surface-400 text-sm">{isGame ? 'Chamada de jogos de' : 'Chamada de voz de'}</p>
           <p className="text-surface-100 font-bold text-xl">{peerUsername}</p>
           <p className="text-surface-500 text-xs mt-1">Chamando{dots}</p>
         </div>

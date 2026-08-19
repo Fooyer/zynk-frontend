@@ -16,9 +16,11 @@ function formatDuration(seconds: number) {
 export function ActiveCallOverlay() {
   const status = useCallStore((s) => s.status);
   const peerUsername = useCallStore((s) => s.peerUsername);
+  const mode = useCallStore((s) => s.mode);
   const isMuted = useCallStore((s) => s.isMuted);
   const isScreenSharing = useCallStore((s) => s.isScreenSharing);
   const [seconds, setSeconds] = useState(0);
+  const isGame = mode === 'game';
 
   useEffect(() => {
     if (status !== 'active') { setSeconds(0); return; }
@@ -35,7 +37,7 @@ export function ActiveCallOverlay() {
 
   return (
     <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[90]">
-      <div className="bg-surface-800 border border-surface-700 rounded-2xl px-5 py-4 flex items-center gap-4 shadow-2xl min-w-[320px]">
+      <div className={`bg-surface-800 border rounded-2xl px-5 py-4 flex items-center gap-4 shadow-2xl min-w-[320px] ${isGame ? 'border-warning/50' : 'border-surface-700'}`}>
         {/* Avatar */}
         <div
           className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0"
@@ -46,8 +48,17 @@ export function ActiveCallOverlay() {
 
         {/* Info */}
         <div className="flex-1 min-w-0">
-          <p className="text-surface-100 font-semibold text-sm truncate">{peerUsername}</p>
-          <p className={`text-xs ${status === 'active' ? 'text-success' : 'text-surface-300'}`}>
+          <div className="flex items-center gap-1.5">
+            <p className="text-surface-100 font-semibold text-sm truncate">{peerUsername}</p>
+            {isGame && (
+              <span className="flex-shrink-0 flex items-center gap-0.5 px-1 py-0.5 rounded bg-warning/15 text-warning" title="Chamada de jogos — baixa latência">
+                <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M13 2 3 14h7l-1 8 10-12h-7l1-8z" />
+                </svg>
+              </span>
+            )}
+          </div>
+          <p className={`text-xs ${status === 'active' ? (isGame ? 'text-warning' : 'text-success') : 'text-surface-300'}`}>
             {status === 'calling' ? 'Chamando...' : status === 'ringing' ? 'Conectando...' : formatDuration(seconds)}
           </p>
         </div>

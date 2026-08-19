@@ -100,8 +100,8 @@ export const groupsAPI = {
   deleteCard: (id: number, cardId: number) => api.delete(`/groups/${id}/kanban/${cardId}`),
   // Voice channels
   getVoiceChannels: (id: number) => api.get(`/groups/${id}/voice-channels`),
-  createVoiceChannel: (id: number, name: string) =>
-    api.post(`/groups/${id}/voice-channels`, { name }),
+  createVoiceChannel: (id: number, name: string, mode?: 'normal' | 'game') =>
+    api.post(`/groups/${id}/voice-channels`, { name, mode }),
   renameVoiceChannel: (id: number, vcId: number, name: string) =>
     api.patch(`/groups/${id}/voice-channels/${vcId}`, { name }),
   deleteVoiceChannel: (id: number, vcId: number) => api.delete(`/groups/${id}/voice-channels/${vcId}`),

@@ -13,12 +13,13 @@ interface Props {
   dm: DmChannel;
 }
 
-function HeaderIconButton({ title, onClick, children, danger, active }: {
+function HeaderIconButton({ title, onClick, children, danger, active, warn }: {
   title: string;
   onClick?: () => void;
   children: React.ReactNode;
   danger?: boolean;
   active?: boolean;
+  warn?: boolean;
 }) {
   return (
     <button
@@ -26,9 +27,11 @@ function HeaderIconButton({ title, onClick, children, danger, active }: {
       title={title}
       className={`p-1.5 rounded transition-colors ${
         active
-          ? 'text-success bg-surface-700'
+          ? warn ? 'text-warning bg-surface-700' : 'text-success bg-surface-700'
           : danger
           ? 'text-surface-400 hover:text-danger hover:bg-surface-700'
+          : warn
+          ? 'text-surface-400 hover:text-warning hover:bg-surface-700'
           : 'text-surface-400 hover:text-surface-100 hover:bg-surface-700'
       }`}
     >
@@ -39,6 +42,8 @@ function HeaderIconButton({ title, onClick, children, danger, active }: {
 
 function CallPanel({ dm, callStatus }: { dm: DmChannel; callStatus: 'calling' | 'active' }) {
   const user = useAuthStore((s) => s.user);
+  const mode = useCallStore((s) => s.mode);
+  const isGame = mode === 'game';
   const isMuted = useCallStore((s) => s.isMuted);
   const isScreenSharing = useCallStore((s) => s.isScreenSharing);
   const remoteHasScreen = useCallStore((s) => s.remoteHasScreen);
@@ -164,7 +169,7 @@ function CallPanel({ dm, callStatus }: { dm: DmChannel; callStatus: 'calling' | 
 
   return (
     <>
-      <div className="bg-surface-800 border-b border-surface-700/50 flex-shrink-0">
+      <div className={`bg-surface-800 border-b flex-shrink-0 ${isGame ? 'border-warning/40' : 'border-surface-700/50'}`}>
         {isCalling ? (
           /* ─── Estado: Chamando ─── */
           <div className="py-8 flex flex-col items-center gap-4">
@@ -181,6 +186,14 @@ function CallPanel({ dm, callStatus }: { dm: DmChannel; callStatus: 'calling' | 
                 )}
               </div>
             </div>
+            {isGame && (
+              <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-warning/15 text-warning text-[11px] font-semibold">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M13 2 3 14h7l-1 8 10-12h-7l1-8z" />
+                </svg>
+                CHAMADA DE JOGOS — BAIXA LATÊNCIA
+              </span>
+            )}
             <div className="text-center">
               <p className="text-surface-100 font-semibold">{dm.friend.username}</p>
               <p className="text-sm text-surface-400 mt-0.5">Chamando...</p>
@@ -200,8 +213,16 @@ function CallPanel({ dm, callStatus }: { dm: DmChannel; callStatus: 'calling' | 
           <div className="py-5 px-4">
             {/* Timer */}
             <div className="flex items-center justify-center gap-2 mb-4">
-              <div className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
+              <div className={`w-1.5 h-1.5 rounded-full animate-pulse ${isGame ? 'bg-warning' : 'bg-success'}`} />
               <span className="text-xs text-surface-400 font-mono tracking-wide">{formatDuration(callDuration)}</span>
+              {isGame && (
+                <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-warning/15 text-warning text-[10px] font-semibold ml-1">
+                  <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M13 2 3 14h7l-1 8 10-12h-7l1-8z" />
+                  </svg>
+                  JOGOS
+                </span>
+              )}
             </div>
 
             {/* Dois cards de usuário */}
@@ -399,6 +420,7 @@ export function DMChatArea({ dm }: Props) {
   const initCall = useCallStore((s) => s.initCall);
   const callStatus = useCallStore((s) => s.status);
   const callPeerId = useCallStore((s) => s.peerId);
+  const callMode = useCallStore((s) => s.mode);
 
   const isInCallWithFriend = Number(callPeerId) === Number(friend.id) && callStatus !== 'idle';
 
@@ -456,16 +478,29 @@ export function DMChatArea({ dm }: Props) {
 
         {/* Right: action buttons */}
         <div className="ml-auto flex items-center gap-0.5">
-          {/* Chamada de voz */}
+          {/* Chamada de voz — normal ou jogos (baixa latência), lado a lado */}
           <HeaderIconButton
-            title={isInCallWithFriend ? 'Em chamada' : 'Chamada de voz'}
+            title={isInCallWithFriend && callMode === 'normal' ? 'Em chamada' : 'Chamada de voz'}
             onClick={() => {
-              if (callStatus === 'idle') initCall(Number(friend.id), friend.username, channelId);
+              if (callStatus === 'idle') initCall(Number(friend.id), friend.username, channelId, 'normal');
             }}
-            active={isInCallWithFriend}
+            active={isInCallWithFriend && callMode === 'normal'}
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 13a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.62 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 9.91a16 16 0 0 0 6.29 6.29l.97-.97a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z" />
+            </svg>
+          </HeaderIconButton>
+
+          <HeaderIconButton
+            title={isInCallWithFriend && callMode === 'game' ? 'Em chamada de jogos' : 'Chamada de jogos — menor delay possível'}
+            onClick={() => {
+              if (callStatus === 'idle') initCall(Number(friend.id), friend.username, channelId, 'game');
+            }}
+            active={isInCallWithFriend && callMode === 'game'}
+            warn
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M13 2 3 14h7l-1 8 10-12h-7l1-8z" />
             </svg>
           </HeaderIconButton>
 

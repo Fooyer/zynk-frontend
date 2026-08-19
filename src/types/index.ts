@@ -141,10 +141,13 @@ export interface VoiceParticipant {
   avatarUrl: string | null;
 }
 
+export type CallMode = 'normal' | 'game';
+
 export interface VoiceChannel {
   id: number;
   groupId: number;
   name: string;
+  mode: CallMode;
   creator: Pick<User, 'id' | 'username' | 'avatarUrl'>;
   participants: VoiceParticipant[];
   position: number;

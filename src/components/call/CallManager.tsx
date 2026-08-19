@@ -5,18 +5,37 @@ import { useSettingsStore } from '../../stores/settingsStore';
 import { getSocket } from '../../services/socket';
 import { remoteScreenStreamRef, localScreenStreamRef, localAnalyserRef, remoteAnalyserRef } from '../../services/callStream';
 import { captureScreen } from '../../services/screenCapture';
+import { ICE_SERVERS } from '../../services/iceServers';
+import { LOW_LATENCY_AUDIO_CONSTRAINTS, applyLowLatencySenderParams, withLowLatencyOpus } from '../../services/lowLatencyAudio';
 import { IncomingCallModal } from './IncomingCallModal';
 import { ScreenPicker } from './ScreenPicker';
-import type { ScreenSource } from '../../types';
+import type { CallMode, ScreenSource } from '../../types';
 
-const ICE_SERVERS: RTCIceServer[] = [
-  { urls: 'stun:stun.l.google.com:19302' },
-  { urls: 'stun:stun1.l.google.com:19302' },
-  { urls: 'stun:stun2.l.google.com:19302' },
-];
-
-async function getProcessedStream(): Promise<MediaStream> {
+async function getProcessedStream(mode: CallMode): Promise<MediaStream> {
   const settings = useSettingsStore.getState();
+
+  // Call de jogo: ignora as preferências de processamento do usuário e vai
+  // sempre de áudio cru — é o próprio propósito desse modo (menor delay
+  // possível, abre mão de eco/ruído em troca disso).
+  if (mode === 'game') {
+    const deviceConstraints: MediaTrackConstraints = {
+      ...LOW_LATENCY_AUDIO_CONSTRAINTS,
+      channelCount: 1,
+      sampleRate: 48000,
+    };
+    if (settings.inputDeviceId) deviceConstraints.deviceId = { exact: settings.inputDeviceId };
+    const rawStream = await navigator.mediaDevices.getUserMedia({ audio: deviceConstraints });
+    try {
+      const ctx = new AudioContext({ sampleRate: 48000 });
+      const src = ctx.createMediaStreamSource(rawStream);
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 256;
+      src.connect(analyser);
+      localAnalyserRef.current = analyser;
+    } catch { /* */ }
+    return rawStream;
+  }
+
   const deviceConstraints: MediaTrackConstraints = {
     noiseSuppression: settings.echoCancellation,
     echoCancellation: settings.echoCancellation,
@@ -138,7 +157,7 @@ async function applyScreenVideoParams(sender: RTCRtpSender) {
 
 export function CallManager() {
   const {
-    status, peerId, peerUsername, pendingOffer, volume,
+    status, peerId, peerUsername, pendingOffer, volume, mode,
     setActive, setMuted, setScreenSharing, setRemoteHasScreen, reset,
   } = useCallStore();
   const [showScreenPicker, setShowScreenPicker] = useState(false);
@@ -325,21 +344,28 @@ export function CallManager() {
     const currentPeerId = peerId;
     const channelId = useCallStore.getState().channelId;
 
+    const mode = useCallStore.getState().mode;
+
     (async () => {
       try {
-        const stream = await getProcessedStream();
+        const stream = await getProcessedStream(mode);
         localStreamRef.current = stream;
 
         const pc = createPC(currentPeerId);
-        stream.getTracks().forEach((track) => pc.addTrack(track, stream));
+        stream.getTracks().forEach((track) => {
+          const sender = pc.addTrack(track, stream);
+          if (mode === 'game') applyLowLatencySenderParams(sender);
+        });
 
         const offer = await pc.createOffer();
+        if (mode === 'game' && offer.sdp) offer.sdp = withLowLatencyOpus(offer.sdp);
         await pc.setLocalDescription(offer);
 
         getSocket()?.emit('call:offer', {
           targetUserId: currentPeerId,
           offer: pc.localDescription,
           channelId,
+          mode,
         });
       } catch {
         cleanup();
@@ -353,13 +379,13 @@ export function CallManager() {
     const socket = getSocket();
     if (!socket) return;
 
-    const onIncoming = (data: { from: { id: number; username: string }; offer: RTCSessionDescriptionInit; channelId: number }) => {
+    const onIncoming = (data: { from: { id: number; username: string }; offer: RTCSessionDescriptionInit; channelId: number; mode?: CallMode }) => {
       const { status } = useCallStore.getState();
       if (status !== 'idle') {
         socket.emit('call:reject', { targetUserId: data.from.id });
         return;
       }
-      useCallStore.getState().receiveCall(data.from, data.channelId, data.offer);
+      useCallStore.getState().receiveCall(data.from, data.channelId, data.offer, data.mode);
     };
 
     const onAnswered = async (data: { answer: RTCSessionDescriptionInit }) => {
@@ -405,6 +431,7 @@ export function CallManager() {
       try {
         await pcRef.current.setRemoteDescription(new RTCSessionDescription(data.offer));
         const answer = await pcRef.current.createAnswer();
+        if (useCallStore.getState().mode === 'game' && answer.sdp) answer.sdp = withLowLatencyOpus(answer.sdp);
         await pcRef.current.setLocalDescription(answer);
         const { peerId } = useCallStore.getState();
         getSocket()?.emit('call:reanswer', { targetUserId: peerId, answer });
@@ -460,6 +487,7 @@ export function CallManager() {
       if (!pcRef.current) return;
       const pc = pcRef.current;
       const offer = await pc.createOffer();
+      if (useCallStore.getState().mode === 'game' && offer.sdp) offer.sdp = withLowLatencyOpus(offer.sdp);
       await pc.setLocalDescription(offer);
       getSocket()?.emit('call:reoffer', { targetUserId: targetPeerId, offer });
     };
@@ -565,17 +593,20 @@ export function CallManager() {
   }, []);
 
   const handleAccept = useCallback(async () => {
-    const { pendingOffer, peerId } = useCallStore.getState();
+    const { pendingOffer, peerId, mode } = useCallStore.getState();
     if (!pendingOffer || !peerId) return;
 
     const currentPeerId = peerId;
 
     try {
-      const stream = await getProcessedStream();
+      const stream = await getProcessedStream(mode);
       localStreamRef.current = stream;
 
       const pc = createPC(currentPeerId);
-      stream.getTracks().forEach((track) => pc.addTrack(track, stream));
+      stream.getTracks().forEach((track) => {
+        const sender = pc.addTrack(track, stream);
+        if (mode === 'game') applyLowLatencySenderParams(sender);
+      });
 
       await pc.setRemoteDescription(pendingOffer);
 
@@ -585,6 +616,7 @@ export function CallManager() {
       pendingCandidates.current = [];
 
       const answer = await pc.createAnswer();
+      if (mode === 'game' && answer.sdp) answer.sdp = withLowLatencyOpus(answer.sdp);
       await pc.setLocalDescription(answer);
 
       getSocket()?.emit('call:answer', {
@@ -625,6 +657,7 @@ export function CallManager() {
       {status === 'ringing' && peerUsername && (
         <IncomingCallModal
           peerUsername={peerUsername}
+          mode={mode}
           onAccept={handleAccept}
           onReject={handleReject}
         />
