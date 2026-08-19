@@ -35,6 +35,10 @@ function ChannelSidebar({ group, voice, activeChannelId, onSelectChannel }: Chan
 
   const [textChannels, setTextChannels] = useState<GroupTextChannel[]>([]);
   const [draggedKey, setDraggedKey] = useState<string | null>(null);
+  const [dragOverInfo, setDragOverInfo] = useState<{ key: string; position: 'before' | 'after' } | null>(null);
+  const [editingKey, setEditingKey] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState('');
+  const [channelMenu, setChannelMenu] = useState<{ x: number; y: number; row: ChannelRow } | null>(null);
 
   const [showCreate, setShowCreate] = useState(false);
   const [createType, setCreateType] = useState<ChannelType>('text');
@@ -60,6 +64,31 @@ function ChannelSidebar({ group, voice, activeChannelId, onSelectChannel }: Chan
     socket.on('group-channel:created', onCreated);
     return () => { socket.off('group-channel:created', onCreated); };
   }, [group?.id]);
+
+  // Escuta renomeações de canais de texto feitas por outros membros
+  // (canais de voz já são sincronizados dentro do próprio useVoiceRoom)
+  useEffect(() => {
+    const socket = getSocket();
+    const onRenamed = (data: { channelId: number; type: 'text' | 'voice'; name: string }) => {
+      if (data.type !== 'text') return;
+      setTextChannels((prev) => prev.map((c) => (c.id === data.channelId ? { ...c, name: data.name } : c)));
+    };
+    socket.on('channel:renamed', onRenamed);
+    return () => { socket.off('channel:renamed', onRenamed); };
+  }, []);
+
+  // Fecha o menu de opções do canal ao clicar fora ou apertar Esc
+  useEffect(() => {
+    if (!channelMenu) return;
+    const handleClick = () => setChannelMenu(null);
+    const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setChannelMenu(null); };
+    document.addEventListener('click', handleClick);
+    document.addEventListener('keydown', handleKey);
+    return () => {
+      document.removeEventListener('click', handleClick);
+      document.removeEventListener('keydown', handleKey);
+    };
+  }, [channelMenu]);
 
   const merged: ChannelRow[] = useMemo(() => {
     const rows: ChannelRow[] = [
@@ -102,12 +131,38 @@ function ChannelSidebar({ group, voice, activeChannelId, onSelectChannel }: Chan
     } catch {}
   };
 
+  const startEdit = (row: ChannelRow) => {
+    setEditingKey(rowKey(row));
+    setEditValue(row.channel.name);
+  };
+
+  const commitEdit = async (row: ChannelRow) => {
+    const trimmed = editValue.trim();
+    setEditingKey(null);
+    if (!trimmed || !group || trimmed === row.channel.name) return;
+    try {
+      if (row.type === 'voice') {
+        await voice.renameChannel(row.channel.id, trimmed);
+      } else {
+        await groupsAPI.renameTextChannel(group.id, row.channel.id, trimmed);
+        setTextChannels((prev) => prev.map((c) => (c.id === row.channel.id ? { ...c, name: trimmed } : c)));
+      }
+    } catch {}
+  };
+
   const handleDrop = (targetRow: ChannelRow) => {
-    if (!group || !draggedKey) return;
-    const fromIdx = merged.findIndex((r) => rowKey(r) === draggedKey);
-    const toIdx = merged.findIndex((r) => rowKey(r) === rowKey(targetRow));
+    const info = dragOverInfo;
+    const draggedKeySnapshot = draggedKey;
     setDraggedKey(null);
-    if (fromIdx === -1 || toIdx === -1 || fromIdx === toIdx) return;
+    setDragOverInfo(null);
+    if (!group || !draggedKeySnapshot) return;
+
+    const fromIdx = merged.findIndex((r) => rowKey(r) === draggedKeySnapshot);
+    let toIdx = merged.findIndex((r) => rowKey(r) === rowKey(targetRow));
+    if (fromIdx === -1 || toIdx === -1) return;
+    if (info?.position === 'after') toIdx += 1;
+    if (fromIdx < toIdx) toIdx -= 1;
+    if (toIdx === fromIdx) return;
 
     const next = [...merged];
     const [moved] = next.splice(fromIdx, 1);
@@ -125,6 +180,14 @@ function ChannelSidebar({ group, voice, activeChannelId, onSelectChannel }: Chan
 
     const items = next.map((row) => ({ id: row.channel.id, type: row.type }));
     groupsAPI.reorderChannels(group.id, items).catch(() => {});
+  };
+
+  /** Menu de opções do canal (renomear/excluir) — abre por clique no ⋮ ou por botão direito. */
+  const openChannelMenu = (e: React.MouseEvent, row: ChannelRow) => {
+    if (row.type === 'text' && row.channel.id === group?.channelId) return; // canal principal não tem ações
+    e.preventDefault();
+    e.stopPropagation();
+    setChannelMenu({ x: e.clientX, y: e.clientY, row });
   };
 
   if (!group) {
@@ -229,10 +292,19 @@ function ChannelSidebar({ group, voice, activeChannelId, onSelectChannel }: Chan
             const dragProps = {
               draggable: true,
               onDragStart: () => setDraggedKey(rowKey(row)),
-              onDragEnd: () => setDraggedKey(null),
-              onDragOver: (e: React.DragEvent) => e.preventDefault(),
+              onDragEnd: () => { setDraggedKey(null); setDragOverInfo(null); },
+              onDragOver: (e: React.DragEvent<HTMLDivElement>) => {
+                e.preventDefault();
+                const rect = e.currentTarget.getBoundingClientRect();
+                const position: 'before' | 'after' = e.clientY < rect.top + rect.height / 2 ? 'before' : 'after';
+                setDragOverInfo((prev) => (prev?.key === rowKey(row) && prev.position === position ? prev : { key: rowKey(row), position }));
+              },
               onDrop: (e: React.DragEvent) => { e.preventDefault(); handleDrop(row); },
             };
+            // Linha indicadora de onde o canal vai parar ao soltar
+            const showDropBefore = dragOverInfo?.key === rowKey(row) && dragOverInfo.position === 'before' && draggedKey !== rowKey(row);
+            const showDropAfter = dragOverInfo?.key === rowKey(row) && dragOverInfo.position === 'after' && draggedKey !== rowKey(row);
+            const DropIndicator = () => <div className="h-0.5 mx-1 rounded-full bg-accent-400" />;
 
             if (row.type === 'voice') {
               const vc = row.channel;
@@ -241,38 +313,65 @@ function ChannelSidebar({ group, voice, activeChannelId, onSelectChannel }: Chan
                 <div
                   key={rowKey(row)}
                   {...dragProps}
+                  onContextMenu={(e) => openChannelMenu(e, row)}
                   className={`group/vc rounded-lg transition-colors cursor-grab active:cursor-grabbing ${
                     isDragging ? 'opacity-40' : ''
                   } ${isActive ? 'bg-success/10 ring-1 ring-inset ring-success/30' : ''}`}
                 >
-                  <button
-                    onClick={() => voice.join(vc)}
-                    disabled={voice.isConnecting}
-                    className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-left transition-colors ${
-                      isActive
-                        ? 'text-success'
-                        : 'text-surface-300 hover:bg-surface-700/60 hover:text-surface-100'
-                    }`}
-                  >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className={`flex-shrink-0 ${isActive ? 'text-success' : 'text-surface-500'}`}>
-                      <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
-                      <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-                      <line x1="12" y1="19" x2="12" y2="23" />
-                      <line x1="8" y1="23" x2="16" y2="23" />
-                    </svg>
-                    <span className={`flex-1 min-w-0 text-sm truncate ${isActive ? 'font-semibold' : ''}`}>{vc.name}</span>
-                    {vc.participants.length > 0 && (
-                      <span className="text-[10px] text-surface-400 flex-shrink-0">{vc.participants.length}</span>
-                    )}
-                    <span
-                      onClick={(e) => { e.stopPropagation(); voice.deleteChannel(vc.id); }}
-                      className="opacity-0 group-hover/vc:opacity-100 text-surface-500 hover:text-danger transition-all cursor-pointer p-0.5 rounded flex-shrink-0"
-                    >
-                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                        <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                  {showDropBefore && <DropIndicator />}
+                  {editingKey === rowKey(row) ? (
+                    <div className="flex items-center gap-2 px-2 py-1.5">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="flex-shrink-0 text-surface-500">
+                        <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+                        <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                        <line x1="12" y1="19" x2="12" y2="23" />
+                        <line x1="8" y1="23" x2="16" y2="23" />
                       </svg>
-                    </span>
-                  </button>
+                      <input
+                        autoFocus
+                        value={editValue}
+                        onChange={(e) => setEditValue(e.target.value)}
+                        onFocus={(e) => e.target.select()}
+                        onBlur={() => commitEdit(row)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') { e.preventDefault(); commitEdit(row); }
+                          if (e.key === 'Escape') { e.preventDefault(); setEditingKey(null); }
+                        }}
+                        maxLength={64}
+                        className="flex-1 min-w-0 bg-surface-700 border border-accent-500 rounded px-1.5 py-0.5 text-sm text-surface-100 focus:outline-none"
+                      />
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => voice.join(vc)}
+                      disabled={voice.isConnecting}
+                      className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-left transition-colors ${
+                        isActive
+                          ? 'text-success'
+                          : 'text-surface-300 hover:bg-surface-700/60 hover:text-surface-100'
+                      }`}
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className={`flex-shrink-0 ${isActive ? 'text-success' : 'text-surface-500'}`}>
+                        <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+                        <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                        <line x1="12" y1="19" x2="12" y2="23" />
+                        <line x1="8" y1="23" x2="16" y2="23" />
+                      </svg>
+                      <span className={`flex-1 min-w-0 text-sm truncate ${isActive ? 'font-semibold' : ''}`}>{vc.name}</span>
+                      {vc.participants.length > 0 && (
+                        <span className="text-[10px] text-surface-400 flex-shrink-0">{vc.participants.length}</span>
+                      )}
+                      <span
+                        onClick={(e) => { e.stopPropagation(); openChannelMenu(e, row); }}
+                        className="opacity-0 group-hover/vc:opacity-100 text-surface-500 hover:text-surface-200 transition-all cursor-pointer p-0.5 rounded flex-shrink-0"
+                        title="Opções"
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                          <circle cx="12" cy="5" r="1.7" /><circle cx="12" cy="12" r="1.7" /><circle cx="12" cy="19" r="1.7" />
+                        </svg>
+                      </span>
+                    </button>
+                  )}
 
                   {/* Participantes — linha conectora reforça que pertencem a este canal */}
                   {vc.participants.length > 0 && (
@@ -310,6 +409,7 @@ function ChannelSidebar({ group, voice, activeChannelId, onSelectChannel }: Chan
                       </div>
                     </div>
                   )}
+                  {showDropAfter && <DropIndicator />}
                 </div>
               );
             }
@@ -318,35 +418,116 @@ function ChannelSidebar({ group, voice, activeChannelId, onSelectChannel }: Chan
             const isPrimary = ch.id === group.channelId;
             const isActive = activeChannelId === ch.id;
             return (
-              <div key={rowKey(row)} {...dragProps} className={`group/tc cursor-grab active:cursor-grabbing ${isDragging ? 'opacity-40' : ''}`}>
-                <button
-                  onClick={() => onSelectChannel(ch.id)}
-                  className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-left transition-colors ${
-                    isActive
-                      ? 'text-accent-300 bg-accent-600/15'
-                      : 'text-surface-300 hover:bg-surface-700/60 hover:text-surface-100'
-                  }`}
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="flex-shrink-0">
-                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-                  </svg>
-                  <span className="text-sm truncate flex-1">{isPrimary ? 'geral' : ch.name}</span>
-                  {!isPrimary && Number(ch.ownerId) === Number(currentUser?.id) && (
-                    <span
-                      onClick={(e) => { e.stopPropagation(); handleTextDelete(ch); }}
-                      className="opacity-0 group-hover/tc:opacity-100 text-surface-500 hover:text-danger transition-all cursor-pointer p-0.5 rounded"
-                    >
-                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                        <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-                      </svg>
-                    </span>
-                  )}
-                </button>
+              <div
+                key={rowKey(row)}
+                {...dragProps}
+                onContextMenu={(e) => openChannelMenu(e, row)}
+                className={`group/tc cursor-grab active:cursor-grabbing ${isDragging ? 'opacity-40' : ''}`}
+              >
+                {showDropBefore && <DropIndicator />}
+                {editingKey === rowKey(row) ? (
+                  <div className="flex items-center gap-2 px-2 py-1.5">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="flex-shrink-0 text-surface-500">
+                      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                    </svg>
+                    <input
+                      autoFocus
+                      value={editValue}
+                      onChange={(e) => setEditValue(e.target.value)}
+                      onFocus={(e) => e.target.select()}
+                      onBlur={() => commitEdit(row)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') { e.preventDefault(); commitEdit(row); }
+                        if (e.key === 'Escape') { e.preventDefault(); setEditingKey(null); }
+                      }}
+                      maxLength={64}
+                      className="flex-1 min-w-0 bg-surface-700 border border-accent-500 rounded px-1.5 py-0.5 text-sm text-surface-100 focus:outline-none"
+                    />
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => onSelectChannel(ch.id)}
+                    className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-left transition-colors ${
+                      isActive
+                        ? 'text-accent-300 bg-accent-600/15'
+                        : 'text-surface-300 hover:bg-surface-700/60 hover:text-surface-100'
+                    }`}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="flex-shrink-0">
+                      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                    </svg>
+                    <span className="text-sm truncate flex-1">{isPrimary ? 'geral' : ch.name}</span>
+                    {!isPrimary && Number(ch.ownerId) === Number(currentUser?.id) && (
+                      <span
+                        onClick={(e) => { e.stopPropagation(); openChannelMenu(e, row); }}
+                        className="opacity-0 group-hover/tc:opacity-100 text-surface-500 hover:text-surface-200 transition-all cursor-pointer p-0.5 rounded"
+                        title="Opções"
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                          <circle cx="12" cy="5" r="1.7" /><circle cx="12" cy="12" r="1.7" /><circle cx="12" cy="19" r="1.7" />
+                        </svg>
+                      </span>
+                    )}
+                  </button>
+                )}
+                {showDropAfter && <DropIndicator />}
               </div>
             );
           })}
         </div>
       </div>
+
+      {/* Menu de opções do canal — abre por clique no ⋮ ou botão direito na linha */}
+      {channelMenu && (() => {
+        const { row } = channelMenu;
+        const isVoice = row.type === 'voice';
+        const canManage = isVoice || Number((row.channel as GroupTextChannel).ownerId) === Number(currentUser?.id);
+        const displayName = row.type === 'text' && row.channel.id === group.channelId ? 'geral' : row.channel.name;
+        return (
+          <div
+            style={{ top: channelMenu.y, left: channelMenu.x }}
+            className="fixed z-50 bg-surface-900 border border-surface-700 rounded-lg shadow-2xl py-1 min-w-[170px]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-3 py-2 border-b border-surface-700/50">
+              <p className="text-sm font-semibold text-surface-100 truncate">{displayName}</p>
+            </div>
+
+            {canManage ? (
+              <>
+                <button
+                  onClick={() => { setChannelMenu(null); startEdit(row); }}
+                  className="w-full text-left px-3 py-2 text-sm text-surface-200 hover:bg-surface-700 transition-colors flex items-center gap-2"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4z" />
+                  </svg>
+                  Renomear
+                </button>
+                <button
+                  onClick={() => {
+                    setChannelMenu(null);
+                    if (row.type === 'voice') voice.deleteChannel(row.channel.id);
+                    else handleTextDelete(row.channel);
+                  }}
+                  className="w-full text-left px-3 py-2 text-sm text-danger hover:bg-surface-700 transition-colors flex items-center gap-2"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="3 6 5 6 21 6" />
+                    <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                    <path d="M10 11v6" /><path d="M14 11v6" />
+                    <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+                  </svg>
+                  Excluir
+                </button>
+              </>
+            ) : (
+              <p className="px-3 py-2 text-xs text-surface-500">Sem permissão para gerenciar este canal</p>
+            )}
+          </div>
+        );
+      })()}
     </div>
   );
 }

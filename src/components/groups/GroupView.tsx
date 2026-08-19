@@ -1,21 +1,18 @@
 import { useEffect, useState } from 'react';
 import { useGroupStore } from '../../stores/groupStore';
-import { useCodeSessionStore } from '../../stores/codeSessionStore';
 import { useChatStore } from '../../stores/chatStore';
 import { useAuthStore } from '../../stores/authStore';
 import { getSocket } from '../../services/socket';
 import { MessageList } from '../chat/MessageList';
 import { MessageInput } from '../chat/MessageInput';
 import { InviteFriendModal } from './InviteFriendModal';
-import { CodeSessionPanel } from '../code/CodeSessionPanel';
 import { NotesPanel } from './NotesPanel';
 import { KanbanPanel } from './KanbanPanel';
 
-type Tab = 'chat' | 'code' | 'kanban' | 'notes';
+type Tab = 'chat' | 'kanban' | 'notes';
 
 const TAB_LABELS: Record<Tab, string> = {
   chat: 'Chat',
-  code: 'Código',
   kanban: 'Tasks',
   notes: 'Notas',
 };
@@ -31,10 +28,10 @@ export function GroupView({ channelId, onToggleCollapse, collapsed }: Props) {
   const groups = useGroupStore((s) => s.groups);
   const user = useAuthStore((s) => s.user);
   const loadMessages = useChatStore((s) => s.loadMessages);
-  const loadActiveCode = useCodeSessionStore((s) => s.loadActiveSession);
   const deleteGroup = useGroupStore((s) => s.deleteGroup);
   const leaveGroup = useGroupStore((s) => s.leaveGroup);
   const removeGroupFromState = useGroupStore((s) => s.removeGroupFromState);
+  const setGroupName = useGroupStore((s) => s.setGroupName);
 
   const [showInvite, setShowInvite] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>('chat');
@@ -42,17 +39,12 @@ export function GroupView({ channelId, onToggleCollapse, collapsed }: Props) {
 
   const group = groups.find((g) => g.id === activeGroupId);
   const features = group?.features ?? [];
-  const hasCodeTunnel = features.includes('code_tunnel');
   const hasKanban = features.includes('kanban');
   const hasNotes = features.includes('notes');
   const isOwner = Number(group?.ownerId) === Number(user?.id);
 
-  const activeCodeSession = useCodeSessionStore((s) => s.activeSession);
-  const setTunnelInfo = useCodeSessionStore((s) => s.setTunnelInfo);
-
   const visibleTabs = ([
     { id: 'chat' as Tab, visible: true },
-    { id: 'code' as Tab, visible: hasCodeTunnel },
     { id: 'kanban' as Tab, visible: hasKanban },
     { id: 'notes' as Tab, visible: hasNotes },
   ] as const).filter((t) => t.visible);
@@ -66,30 +58,23 @@ export function GroupView({ channelId, onToggleCollapse, collapsed }: Props) {
       getSocket().emit('group:join-room', { channelId });
       loadMessages(channelId);
     }
-    if (activeGroupId) loadActiveCode(activeGroupId);
-  }, [activeGroupId, channelId, loadMessages, loadActiveCode]);
+  }, [activeGroupId, channelId, loadMessages]);
 
   useEffect(() => {
     const socket = getSocket();
-    const onTunnelStarted = (data: { sessionId: number; folderName: string; userId: number; username: string }) => {
-      if (activeCodeSession && data.sessionId === activeCodeSession.id)
-        setTunnelInfo({ folderName: data.folderName, userId: data.userId, username: data.username });
-    };
-    const onTunnelStopped = (data: { sessionId: number }) => {
-      if (activeCodeSession && data.sessionId === activeCodeSession.id) setTunnelInfo(null);
-    };
     const onGroupDeleted = (data: { groupId: number }) => {
       if (data.groupId === activeGroupId) removeGroupFromState(data.groupId);
     };
-    socket.on('code:tunnel-started', onTunnelStarted);
-    socket.on('code:tunnel-stopped', onTunnelStopped);
-    socket.on('group:deleted', onGroupDeleted);
-    return () => {
-      socket.off('code:tunnel-started', onTunnelStarted);
-      socket.off('code:tunnel-stopped', onTunnelStopped);
-      socket.off('group:deleted', onGroupDeleted);
+    const onGroupUpdated = (data: { groupId: number; name: string }) => {
+      setGroupName(data.groupId, data.name);
     };
-  }, [activeCodeSession?.id, setTunnelInfo, activeGroupId, removeGroupFromState]);
+    socket.on('group:deleted', onGroupDeleted);
+    socket.on('group:updated', onGroupUpdated);
+    return () => {
+      socket.off('group:deleted', onGroupDeleted);
+      socket.off('group:updated', onGroupUpdated);
+    };
+  }, [activeGroupId, removeGroupFromState, setGroupName]);
 
   const handleLeaveOrDelete = async () => {
     if (!group) return;
@@ -203,9 +188,6 @@ export function GroupView({ channelId, onToggleCollapse, collapsed }: Props) {
         </div>
       )}
 
-      {activeTab === 'code' && hasCodeTunnel && (
-        <CodeSessionPanel groupId={group.id} channelId={group.channelId} />
-      )}
       {activeTab === 'kanban' && hasKanban && (
         <KanbanPanel groupId={group.id} channelId={group.channelId} />
       )}

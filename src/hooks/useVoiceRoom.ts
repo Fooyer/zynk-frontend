@@ -75,6 +75,18 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
     return () => { socket.off('voice:channel-updated', onChannelUpdated); };
   }, []);
 
+  // Socket: renomeação de canal de voz por outro membro do grupo.
+  useEffect(() => {
+    const socket = getSocket();
+    const onChannelRenamed = (data: { channelId: number; type: 'text' | 'voice'; name: string }) => {
+      if (data.type !== 'voice') return;
+      setVoiceChannels((prev) => prev.map((vc) => (vc.id === data.channelId ? { ...vc, name: data.name } : vc)));
+      setConnectedVc((prev) => (prev && prev.id === data.channelId ? { ...prev, name: data.name } : prev));
+    };
+    socket.on('channel:renamed', onChannelRenamed);
+    return () => { socket.off('channel:renamed', onChannelRenamed); };
+  }, []);
+
   const addScreenStream = (uid: number, stream: MediaStream) => {
     setScreenStreams((prev) => {
       const next = new Map(prev);
@@ -301,6 +313,12 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
     setVoiceChannels((prev) => prev.filter((c) => c.id !== vcId));
   };
 
+  const renameChannel = async (vcId: number, name: string) => {
+    setVoiceChannels((prev) => prev.map((vc) => (vc.id === vcId ? { ...vc, name } : vc)));
+    setConnectedVc((prev) => (prev && prev.id === vcId ? { ...prev, name } : prev));
+    await groupsAPI.renameVoiceChannel(groupId, vcId, name);
+  };
+
   /** Atualização otimista da posição (drag-and-drop) antes de persistir no servidor. */
   const updateChannelPositions = (positions: Map<number, number>) => {
     setVoiceChannels((prev) => prev.map((vc) => (positions.has(vc.id) ? { ...vc, position: positions.get(vc.id)! } : vc)));
@@ -321,6 +339,7 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
     stopScreenShare,
     createChannel,
     deleteChannel,
+    renameChannel,
     updateChannelPositions,
   };
 }

@@ -83,6 +83,7 @@ export const groupsAPI = {
   list: () => api.get('/groups'),
   get: (id: number) => api.get(`/groups/${id}`),
   create: (data: { name: string; maxMembers?: number; features?: string[] }) => api.post('/groups', data),
+  update: (id: number, name: string) => api.patch(`/groups/${id}`, { name }),
   delete: (id: number) => api.delete(`/groups/${id}`),
   getMembers: (id: number) => api.get(`/groups/${id}/members`),
   invite: (id: number, userId: number) => api.post(`/groups/${id}/invite`, { userId }),
@@ -101,11 +102,15 @@ export const groupsAPI = {
   getVoiceChannels: (id: number) => api.get(`/groups/${id}/voice-channels`),
   createVoiceChannel: (id: number, name: string) =>
     api.post(`/groups/${id}/voice-channels`, { name }),
+  renameVoiceChannel: (id: number, vcId: number, name: string) =>
+    api.patch(`/groups/${id}/voice-channels/${vcId}`, { name }),
   deleteVoiceChannel: (id: number, vcId: number) => api.delete(`/groups/${id}/voice-channels/${vcId}`),
   // Text channels
   getTextChannels: (id: number) => api.get(`/groups/${id}/text-channels`),
   createTextChannel: (id: number, name: string) =>
     api.post(`/groups/${id}/text-channels`, { name }),
+  renameTextChannel: (id: number, channelId: number, name: string) =>
+    api.patch(`/groups/${id}/text-channels/${channelId}`, { name }),
   deleteTextChannel: (id: number, channelId: number) =>
     api.delete(`/groups/${id}/text-channels/${channelId}`),
   // Ordem dos canais (drag-and-drop)
@@ -123,20 +128,6 @@ export const gameSessionsAPI = {
   leave: (id: number) => api.post(`/game-sessions/${id}/leave`),
   end: (id: number) => api.post(`/game-sessions/${id}/end`),
   getActive: (groupId: number) => api.get(`/game-sessions/group/${groupId}/active`),
-};
-
-// ─── Code Sessions ─────────────────────────────
-
-export const codeSessionsAPI = {
-  create: (data: { groupId: number; title: string }) => api.post('/code-sessions', data),
-  get: (id: number) => api.get(`/code-sessions/${id}`),
-  join: (id: number) => api.post(`/code-sessions/${id}/join`),
-  leave: (id: number) => api.post(`/code-sessions/${id}/leave`),
-  end: (id: number) => api.post(`/code-sessions/${id}/end`),
-  getFiles: (id: number) => api.get(`/code-sessions/${id}/files`),
-  saveFile: (id: number, data: { filename: string; language?: string; content: string }) =>
-    api.put(`/code-sessions/${id}/files`, data),
-  getActive: (groupId: number) => api.get(`/code-sessions/group/${groupId}/active`),
 };
 
 export default api;

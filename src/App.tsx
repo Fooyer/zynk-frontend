@@ -14,7 +14,6 @@ import { RegisterForm } from './components/auth/RegisterForm';
 import { CallManager } from './components/call/CallManager';
 import { SettingsPage } from './components/settings/SettingsPage';
 import { GroupLayout } from './components/groups/GroupLayout';
-import { VoiceStatusBar } from './components/groups/VoiceStatusBar';
 
 
 function TitleBar() {
@@ -92,12 +91,11 @@ function AppLayout() {
     <div className="h-screen flex flex-col overflow-hidden">
       <TitleBar />
       <div className="flex-1 flex overflow-hidden">
-        <NavBar />
+        <NavBar voice={voice} />
         {view === 'settings' ? <SettingsPage /> : view === 'group' ? <GroupLayout voice={voice} /> : <HomeLayout />}
       </div>
       <CallManager />
       {showFloatingCall && <ActiveCallOverlay />}
-      <VoiceStatusBar voice={voice} />
     </div>
   );
 }

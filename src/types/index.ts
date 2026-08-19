@@ -89,7 +89,7 @@ export interface UserStatusEvent {
 
 // ─── Groups ────────────────────────────────────
 
-export type GroupFeature = 'code_tunnel' | 'voice' | 'kanban' | 'notes';
+export type GroupFeature = 'voice' | 'kanban' | 'notes';
 
 export interface Group {
   id: number;
@@ -178,35 +178,6 @@ export interface GameSessionParticipant {
   role: 'host' | 'player' | 'spectator';
   user: Pick<User, 'id' | 'username' | 'avatarUrl'>;
   joinedAt: string;
-}
-
-// ─── Code Sessions ─────────────────────────────
-
-export interface CodeSession {
-  id: number;
-  groupId: number;
-  hostId: number;
-  title: string;
-  status: 'active' | 'ended';
-  host: Pick<User, 'id' | 'username' | 'avatarUrl'>;
-  participants: CodeSessionParticipant[];
-  files: CodeSessionFileEntry[];
-  createdAt: string;
-}
-
-export interface CodeSessionParticipant {
-  id: number;
-  userId: number;
-  user: Pick<User, 'id' | 'username' | 'avatarUrl'>;
-  joinedAt: string;
-}
-
-export interface CodeSessionFileEntry {
-  id: number;
-  filename: string;
-  language: string;
-  content: string | null;
-  updatedAt: string;
 }
 
 // ─── Electron ───────────────────────────────────

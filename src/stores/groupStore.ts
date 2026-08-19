@@ -10,6 +10,8 @@ interface GroupState {
 
   loadGroups: () => Promise<void>;
   createGroup: (name: string, maxMembers?: number, features?: string[]) => Promise<Group>;
+  renameGroup: (groupId: number, name: string) => Promise<void>;
+  setGroupName: (groupId: number, name: string) => void;
   deleteGroup: (groupId: number) => Promise<void>;
   inviteMember: (groupId: number, userId: number) => Promise<void>;
   leaveGroup: (groupId: number) => Promise<void>;
@@ -39,6 +41,15 @@ export const useGroupStore = create<GroupState>((set, get) => ({
     const { data } = await groupsAPI.create({ name, maxMembers, features });
     set((s) => ({ groups: [...s.groups, data] }));
     return data;
+  },
+
+  renameGroup: async (groupId, name) => {
+    const { data } = await groupsAPI.update(groupId, name);
+    set((s) => ({ groups: s.groups.map((g) => (g.id === groupId ? { ...g, name: data.name } : g)) }));
+  },
+
+  setGroupName: (groupId, name) => {
+    set((s) => ({ groups: s.groups.map((g) => (g.id === groupId ? { ...g, name } : g)) }));
   },
 
   deleteGroup: async (groupId) => {

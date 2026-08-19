@@ -15,32 +15,24 @@ interface FeatureDef {
   icon: React.ReactNode;
 }
 
+// Voz vem sempre ligada por padrão e não pode ser desmarcada — é o core do
+// app. Os demais recursos são complementos opcionais, por isso ficam com
+// bem menos destaque visual (checkboxes discretos) mais abaixo.
+const VOICE_FEATURE: FeatureDef = {
+  id: 'voice',
+  label: 'Voz',
+  description: 'Call direto no grupo, sempre disponível — sem sair pro Discord no meio da sessão.',
+  icon: (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+      <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+      <line x1="12" y1="19" x2="12" y2="23" />
+      <line x1="8" y1="23" x2="16" y2="23" />
+    </svg>
+  ),
+};
+
 const AVAILABLE_FEATURES: FeatureDef[] = [
-  {
-    id: 'code_tunnel',
-    label: 'Code Tunnel',
-    description: 'Sync de arquivos em tempo real. Abre no VS Code de cada um automaticamente.',
-    icon: (
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <polyline points="16 18 22 12 16 6" />
-        <polyline points="8 6 2 12 8 18" />
-      </svg>
-    ),
-  },
-  {
-    id: 'voice',
-    label: 'Voz',
-    description: 'Call direto no grupo, sem sair pro Discord no meio da sessão.',
-    badge: 'Elimina o Discord',
-    icon: (
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
-        <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-        <line x1="12" y1="19" x2="12" y2="23" />
-        <line x1="8" y1="23" x2="16" y2="23" />
-      </svg>
-    ),
-  },
   {
     id: 'kanban',
     label: 'Board de Tarefas',
@@ -75,7 +67,8 @@ const AVAILABLE_FEATURES: FeatureDef[] = [
 export function CreateGroupModal({ isOpen, onClose }: Props) {
   const [name, setName] = useState('');
   const [maxMembers, setMaxMembers] = useState(8);
-  const [features, setFeatures] = useState<GroupFeature[]>(['code_tunnel']);
+  // Voz vem sempre incluída, por padrão e obrigatoriamente.
+  const [features, setFeatures] = useState<GroupFeature[]>(['voice']);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const createGroup = useGroupStore((s) => s.createGroup);
   const setActiveGroup = useGroupStore((s) => s.setActiveGroup);
@@ -83,6 +76,7 @@ export function CreateGroupModal({ isOpen, onClose }: Props) {
   if (!isOpen) return null;
 
   const toggleFeature = (feature: GroupFeature) => {
+    if (feature === 'voice') return; // não pode ser desmarcada
     setFeatures((prev) =>
       prev.includes(feature) ? prev.filter((f) => f !== feature) : [...prev, feature],
     );
@@ -97,7 +91,7 @@ export function CreateGroupModal({ isOpen, onClose }: Props) {
       const group = await createGroup(name.trim(), maxMembers, features);
       setActiveGroup(group.id);
       setName('');
-      setFeatures(['code_tunnel']);
+      setFeatures(['voice']);
       onClose();
     } finally {
       setIsSubmitting(false);
@@ -140,59 +134,52 @@ export function CreateGroupModal({ isOpen, onClose }: Props) {
             />
           </div>
 
+          {/* Voz — sempre incluída, não dá pra desmarcar */}
+          <div className="flex items-start gap-3 px-4 py-3 rounded-lg border-2 bg-success/15 border-success">
+            <span className="flex-shrink-0 mt-0.5 text-success">{VOICE_FEATURE.icon}</span>
+            <span className="flex-1 min-w-0">
+              <span className="flex items-center gap-2 flex-wrap">
+                <span className="text-sm font-semibold leading-tight text-white">{VOICE_FEATURE.label}</span>
+                <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full leading-none bg-success/30 text-success border border-success/40">
+                  Sempre incluída
+                </span>
+              </span>
+              <span className="block text-xs mt-1 leading-snug text-success/80">{VOICE_FEATURE.description}</span>
+            </span>
+            <span className="w-5 h-5 rounded border-2 flex-shrink-0 flex items-center justify-center mt-0.5 bg-success border-success">
+              <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="2 6 5 9 10 3" />
+              </svg>
+            </span>
+          </div>
+
+          {/* Extras — opcionais, com bem menos destaque que a voz */}
           <div>
-            <div className="flex items-center justify-between mb-3">
-              <label className="text-sm font-semibold text-surface-100">Recursos</label>
-              <span className="text-xs text-surface-500">{features.length} selecionado{features.length !== 1 ? 's' : ''}</span>
-            </div>
-            <div className="flex flex-col gap-2">
+            <label className="block text-[11px] font-medium text-surface-500 uppercase tracking-wide mb-1.5">
+              Recursos extras (opcional)
+            </label>
+            <div className="flex flex-col gap-0.5">
               {AVAILABLE_FEATURES.map((f) => {
                 const enabled = features.includes(f.id);
                 return (
-                  <button
+                  <label
                     key={f.id}
-                    type="button"
-                    onClick={() => toggleFeature(f.id)}
-                    className={`flex items-start gap-3 px-4 py-3 rounded-lg border-2 text-left transition-all ${
-                      enabled
-                        ? 'bg-accent-600/25 border-accent-400 shadow-sm shadow-accent-500/20'
-                        : 'bg-surface-900 border-surface-600 hover:border-surface-500'
-                    }`}
+                    className="flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer hover:bg-surface-700/40 transition-colors"
                   >
-                    <span className={`flex-shrink-0 mt-0.5 ${enabled ? 'text-accent-300' : 'text-surface-500'}`}>
+                    <input
+                      type="checkbox"
+                      checked={enabled}
+                      onChange={() => toggleFeature(f.id)}
+                      className="accent-accent-500 flex-shrink-0"
+                    />
+                    <span className={`flex-shrink-0 ${enabled ? 'text-surface-300' : 'text-surface-600'}`}>
                       {f.icon}
                     </span>
-                    <span className="flex-1 min-w-0">
-                      <span className="flex items-center gap-2 flex-wrap">
-                        <span className={`text-sm font-semibold leading-tight ${enabled ? 'text-white' : 'text-surface-200'}`}>
-                          {f.label}
-                        </span>
-                        {f.badge && (
-                          <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full leading-none ${
-                            enabled
-                              ? 'bg-accent-500/30 text-accent-200 border border-accent-400/40'
-                              : 'bg-surface-700 text-surface-400 border border-surface-600'
-                          }`}>
-                            {f.badge}
-                          </span>
-                        )}
-                      </span>
-                      <span className={`block text-xs mt-1 leading-snug ${enabled ? 'text-accent-200/80' : 'text-surface-500'}`}>
-                        {f.description}
-                      </span>
+                    <span className="min-w-0">
+                      <span className={`text-xs font-medium ${enabled ? 'text-surface-200' : 'text-surface-400'}`}>{f.label}</span>
+                      <span className="block text-[11px] text-surface-500 truncate">{f.description}</span>
                     </span>
-                    <span
-                      className={`w-5 h-5 rounded border-2 flex-shrink-0 flex items-center justify-center mt-0.5 transition-all ${
-                        enabled ? 'bg-accent-500 border-accent-400' : 'border-surface-500 bg-surface-800'
-                      }`}
-                    >
-                      {enabled && (
-                        <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                          <polyline points="2 6 5 9 10 3" />
-                        </svg>
-                      )}
-                    </span>
-                  </button>
+                  </label>
                 );
               })}
             </div>

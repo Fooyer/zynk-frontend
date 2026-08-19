@@ -197,6 +197,15 @@ function SliderField({ label, value, min, max, step, format, onChange }: {
   );
 }
 
+function SectionHeader({ icon, title }: { icon: React.ReactNode; title: string }) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-accent-400 flex-shrink-0">{icon}</span>
+      <h2 className="text-base font-semibold text-surface-100">{title}</h2>
+    </div>
+  );
+}
+
 function AccountSection() {
   const user = useAuthStore((s) => s.user);
   const updateUsername = useAuthStore((s) => s.updateUsername);
@@ -231,13 +240,15 @@ function AccountSection() {
 
   return (
     <section className="space-y-4">
-      <div className="flex items-center gap-2">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-accent-400">
-          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-          <circle cx="12" cy="7" r="4" />
-        </svg>
-        <h2 className="text-base font-semibold text-surface-100">Conta</h2>
-      </div>
+      <SectionHeader
+        title="Conta"
+        icon={
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+            <circle cx="12" cy="7" r="4" />
+          </svg>
+        }
+      />
 
       <div className="bg-surface-800 rounded-xl p-5 border border-surface-700/50">
         <form onSubmit={handleSave} className="flex flex-col gap-2">
@@ -271,19 +282,282 @@ function AccountSection() {
   );
 }
 
+function MicSection({ inputs }: { inputs: DeviceInfo[] }) {
+  const { inputDeviceId, inputVolume, setInputDevice, setInputVolume } = useSettingsStore();
+
+  return (
+    <section className="space-y-4">
+      <SectionHeader
+        title="Microfone"
+        icon={
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+            <line x1="12" y1="19" x2="12" y2="23" />
+            <line x1="8" y1="23" x2="16" y2="23" />
+          </svg>
+        }
+      />
+
+      <div className="bg-surface-800 rounded-xl p-5 space-y-5 border border-surface-700/50">
+        <SelectField
+          label="Dispositivo de entrada"
+          value={inputDeviceId}
+          onChange={setInputDevice}
+          options={[
+            { value: '', label: 'Padrão do sistema' },
+            ...inputs.map((d) => ({ value: d.deviceId, label: d.label })),
+          ]}
+        />
+
+        <SliderField
+          label="Volume do microfone"
+          value={Math.round(inputVolume * 100)}
+          min={0}
+          max={200}
+          format={(v) => `${v}%`}
+          onChange={(v) => setInputVolume(v / 100)}
+        />
+
+        <MicTest deviceId={inputDeviceId} />
+      </div>
+    </section>
+  );
+}
+
+function OutputSection({ outputs }: { outputs: DeviceInfo[] }) {
+  const { outputDeviceId, setOutputDevice } = useSettingsStore();
+
+  return (
+    <section className="space-y-4">
+      <SectionHeader
+        title="Saída de áudio"
+        icon={
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+            <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+            <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+          </svg>
+        }
+      />
+
+      <div className="bg-surface-800 rounded-xl p-5 space-y-5 border border-surface-700/50">
+        <SelectField
+          label="Dispositivo de saída"
+          value={outputDeviceId}
+          onChange={setOutputDevice}
+          options={[
+            { value: '', label: 'Padrão do sistema' },
+            ...outputs.map((d) => ({ value: d.deviceId, label: d.label })),
+          ]}
+        />
+
+        <p className="text-xs text-surface-500">
+          O volume de saída é controlado pelo slider na chamada (0–200%).
+        </p>
+      </div>
+    </section>
+  );
+}
+
+function ProcessingSection() {
+  const { noiseSuppression, echoCancellation, autoGainControl, setNoiseSuppression, setEchoCancellation, setAutoGainControl } =
+    useSettingsStore();
+
+  return (
+    <section className="space-y-4">
+      <SectionHeader
+        title="Processamento de áudio"
+        icon={
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+          </svg>
+        }
+      />
+
+      <div className="bg-surface-800 rounded-xl p-5 space-y-5 border border-surface-700/50">
+        {/* Nível de supressão */}
+        <div className="space-y-3">
+          <label className="text-sm font-medium text-surface-300">Supressão de ruído</label>
+          <div className="grid grid-cols-2 gap-2">
+            {NOISE_OPTIONS.map((opt) => (
+              <button
+                key={opt.value}
+                onClick={() => setNoiseSuppression(opt.value)}
+                className={`p-3 rounded-lg border text-left transition-all ${
+                  noiseSuppression === opt.value
+                    ? 'border-accent-500 bg-accent-600/10'
+                    : 'border-surface-600 bg-surface-900 hover:border-surface-500'
+                }`}
+              >
+                <p className={`text-sm font-medium ${
+                  noiseSuppression === opt.value ? 'text-accent-400' : 'text-surface-200'
+                }`}>
+                  {opt.label}
+                </p>
+                <p className="text-[11px] text-surface-500 mt-0.5 leading-snug">{opt.desc}</p>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="h-px bg-surface-700" />
+
+        <Toggle
+          label="Cancelamento de eco"
+          description="Evita que o som do seu alto-falante volte pelo microfone"
+          checked={echoCancellation}
+          onChange={setEchoCancellation}
+        />
+
+        <Toggle
+          label="Controle automático de ganho"
+          description="Normaliza automaticamente o volume do microfone"
+          checked={autoGainControl}
+          onChange={setAutoGainControl}
+        />
+      </div>
+    </section>
+  );
+}
+
+function NotificationsSection() {
+  const { notifSound, notifPush, notifVolume, setNotifSound, setNotifPush, setNotifVolume } = useSettingsStore();
+
+  return (
+    <section className="space-y-4">
+      <SectionHeader
+        title="Notificações"
+        icon={
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+            <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+          </svg>
+        }
+      />
+
+      <div className="bg-surface-800 rounded-xl p-5 space-y-5 border border-surface-700/50">
+        <Toggle
+          label="Som de notificação"
+          description="Toca um som ao receber mensagens em canais inativos"
+          checked={notifSound}
+          onChange={setNotifSound}
+        />
+
+        {notifSound && (
+          <SliderField
+            label="Volume da notificação"
+            value={Math.round(notifVolume * 100)}
+            min={0}
+            max={100}
+            format={(v) => `${v}%`}
+            onChange={(v) => setNotifVolume(v / 100)}
+          />
+        )}
+
+        <div className="h-px bg-surface-700" />
+
+        <Toggle
+          label="Notificações push"
+          description="Exibe notificações do sistema ao receber mensagens"
+          checked={notifPush}
+          onChange={setNotifPush}
+        />
+      </div>
+    </section>
+  );
+}
+
+function InfoNote() {
+  return (
+    <div className="bg-surface-800/50 rounded-xl p-4 border border-surface-700/30">
+      <div className="flex items-start gap-3">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="text-surface-500 flex-shrink-0 mt-0.5">
+          <circle cx="12" cy="12" r="10" />
+          <line x1="12" y1="16" x2="12" y2="12" />
+          <line x1="12" y1="8" x2="12.01" y2="8" />
+        </svg>
+        <p className="text-xs text-surface-500 leading-relaxed">
+          As configurações são salvas automaticamente e aplicadas na próxima chamada.
+          O teste de microfone mostra o nível sem processamento de áudio.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ─── Abas + busca ───────────────────────────────────────────
+// Divide a página (antes uma rolagem única e longa) em abas por assunto, e
+// a busca ignora a aba atual — mostra qualquer seção cujo nome/palavra-chave
+// bata, com um atalho pra pular direto pra aba correspondente.
+
+type TabId = 'account' | 'audio' | 'notifications';
+
+const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
+  {
+    id: 'account',
+    label: 'Conta',
+    icon: (
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+        <circle cx="12" cy="7" r="4" />
+      </svg>
+    ),
+  },
+  {
+    id: 'audio',
+    label: 'Áudio',
+    icon: (
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+        <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+        <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+        <line x1="12" y1="19" x2="12" y2="23" />
+        <line x1="8" y1="23" x2="16" y2="23" />
+      </svg>
+    ),
+  },
+  {
+    id: 'notifications',
+    label: 'Notificações',
+    icon: (
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+        <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+      </svg>
+    ),
+  },
+];
+
+const SECTION_META: { id: string; tabId: TabId; label: string; keywords: string }[] = [
+  { id: 'account', tabId: 'account', label: 'Conta', keywords: 'conta usuário username nome perfil account' },
+  { id: 'mic', tabId: 'audio', label: 'Microfone', keywords: 'microfone entrada input volume mic teste' },
+  { id: 'output', tabId: 'audio', label: 'Saída de áudio', keywords: 'saída output alto-falante speaker áudio' },
+  { id: 'processing', tabId: 'audio', label: 'Processamento de áudio', keywords: 'ruído noise supressão eco echo cancelamento ganho gain' },
+  { id: 'notifications', tabId: 'notifications', label: 'Notificações', keywords: 'notificação som push volume' },
+];
+
 export function SettingsPage() {
   const setView = useUiStore((s) => s.setView);
-
-  const {
-    inputDeviceId, outputDeviceId, inputVolume,
-    noiseSuppression, echoCancellation, autoGainControl,
-    notifSound, notifPush, notifVolume,
-    setInputDevice, setOutputDevice, setInputVolume,
-    setNoiseSuppression, setEchoCancellation, setAutoGainControl,
-    setNotifSound, setNotifPush, setNotifVolume,
-  } = useSettingsStore();
+  const [activeTab, setActiveTab] = useState<TabId>('account');
+  const [query, setQuery] = useState('');
 
   const { inputs, outputs } = useMediaDevices();
+
+  const sectionNodes: Record<string, React.ReactNode> = {
+    account: <AccountSection />,
+    mic: <MicSection inputs={inputs} />,
+    output: <OutputSection outputs={outputs} />,
+    processing: <ProcessingSection />,
+    notifications: <NotificationsSection />,
+  };
+
+  const q = query.trim().toLowerCase();
+  const matches = q ? SECTION_META.filter((m) => m.label.toLowerCase().includes(q) || m.keywords.includes(q)) : [];
+
+  const jumpToTab = (tabId: TabId) => {
+    setActiveTab(tabId);
+    setQuery('');
+  };
 
   return (
     <div className="flex-1 flex flex-col min-w-0 bg-surface-900">
@@ -303,188 +577,94 @@ export function SettingsPage() {
           <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
         </svg>
         <h1 className="text-sm font-semibold text-surface-100">Configurações</h1>
+
+        <div className="ml-auto relative w-56">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className="absolute left-2.5 top-1/2 -translate-y-1/2 text-surface-500 pointer-events-none">
+            <circle cx="11" cy="11" r="8" />
+            <line x1="21" y1="21" x2="16.65" y2="16.65" />
+          </svg>
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Buscar configurações..."
+            className="w-full pl-8 pr-7 py-1.5 bg-surface-800 border border-surface-700 rounded-lg text-xs text-surface-100 placeholder-surface-500 focus:outline-none focus:border-accent-500 transition-colors"
+          />
+          {query && (
+            <button
+              onClick={() => setQuery('')}
+              title="Limpar busca"
+              aria-label="Limpar busca"
+              className="absolute right-1.5 top-1/2 -translate-y-1/2 w-4 h-4 flex items-center justify-center text-surface-500 hover:text-surface-200"
+            >
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          )}
+        </div>
       </header>
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto">
-        <div className="max-w-2xl mx-auto px-6 py-8 space-y-10">
-
-          <AccountSection />
-
-          {/* Dispositivos de entrada */}
-          <section className="space-y-4">
-            <div className="flex items-center gap-2">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="text-accent-400">
-                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
-                <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-                <line x1="12" y1="19" x2="12" y2="23" />
-                <line x1="8" y1="23" x2="16" y2="23" />
-              </svg>
-              <h2 className="text-base font-semibold text-surface-100">Microfone</h2>
-            </div>
-
-            <div className="bg-surface-800 rounded-xl p-5 space-y-5 border border-surface-700/50">
-              <SelectField
-                label="Dispositivo de entrada"
-                value={inputDeviceId}
-                onChange={setInputDevice}
-                options={[
-                  { value: '', label: 'Padrão do sistema' },
-                  ...inputs.map((d) => ({ value: d.deviceId, label: d.label })),
-                ]}
-              />
-
-              <SliderField
-                label="Volume do microfone"
-                value={Math.round(inputVolume * 100)}
-                min={0}
-                max={200}
-                format={(v) => `${v}%`}
-                onChange={(v) => setInputVolume(v / 100)}
-              />
-
-              <MicTest deviceId={inputDeviceId} />
-            </div>
-          </section>
-
-          {/* Dispositivos de saída */}
-          <section className="space-y-4">
-            <div className="flex items-center gap-2">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="text-accent-400">
-                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
-                <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
-                <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
-              </svg>
-              <h2 className="text-base font-semibold text-surface-100">Saída de áudio</h2>
-            </div>
-
-            <div className="bg-surface-800 rounded-xl p-5 space-y-5 border border-surface-700/50">
-              <SelectField
-                label="Dispositivo de saída"
-                value={outputDeviceId}
-                onChange={setOutputDevice}
-                options={[
-                  { value: '', label: 'Padrão do sistema' },
-                  ...outputs.map((d) => ({ value: d.deviceId, label: d.label })),
-                ]}
-              />
-
-              <p className="text-xs text-surface-500">
-                O volume de saída é controlado pelo slider na chamada (0–200%).
-              </p>
-            </div>
-          </section>
-
-          {/* Processamento de áudio */}
-          <section className="space-y-4">
-            <div className="flex items-center gap-2">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-accent-400">
-                <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
-              </svg>
-              <h2 className="text-base font-semibold text-surface-100">Processamento de áudio</h2>
-            </div>
-
-            <div className="bg-surface-800 rounded-xl p-5 space-y-5 border border-surface-700/50">
-              {/* Nível de supressão */}
-              <div className="space-y-3">
-                <label className="text-sm font-medium text-surface-300">Supressão de ruído</label>
-                <div className="grid grid-cols-2 gap-2">
-                  {NOISE_OPTIONS.map((opt) => (
+        <div className="max-w-2xl mx-auto px-6 py-8">
+          {q ? (
+            matches.length === 0 ? (
+              <div className="text-center py-16">
+                <p className="text-surface-400 text-sm">Nada encontrado para "{query.trim()}"</p>
+              </div>
+            ) : (
+              <div className="space-y-8">
+                {matches.map((m) => (
+                  <div key={m.id}>
                     <button
-                      key={opt.value}
-                      onClick={() => setNoiseSuppression(opt.value)}
-                      className={`p-3 rounded-lg border text-left transition-all ${
-                        noiseSuppression === opt.value
-                          ? 'border-accent-500 bg-accent-600/10'
-                          : 'border-surface-600 bg-surface-900 hover:border-surface-500'
-                      }`}
+                      onClick={() => jumpToTab(m.tabId)}
+                      className="text-[10px] font-semibold uppercase tracking-widest text-accent-400 hover:text-accent-300 transition-colors mb-2 flex items-center gap-1"
                     >
-                      <p className={`text-sm font-medium ${
-                        noiseSuppression === opt.value ? 'text-accent-400' : 'text-surface-200'
-                      }`}>
-                        {opt.label}
-                      </p>
-                      <p className="text-[11px] text-surface-500 mt-0.5 leading-snug">{opt.desc}</p>
+                      {TABS.find((t) => t.id === m.tabId)?.label}
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="9 18 15 12 9 6" />
+                      </svg>
                     </button>
-                  ))}
-                </div>
+                    {sectionNodes[m.id]}
+                  </div>
+                ))}
+              </div>
+            )
+          ) : (
+            <>
+              {/* Abas */}
+              <div className="flex gap-1 mb-8 border-b border-surface-700/50">
+                {TABS.map((t) => (
+                  <button
+                    key={t.id}
+                    onClick={() => setActiveTab(t.id)}
+                    className={`flex items-center gap-1.5 px-3 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                      activeTab === t.id
+                        ? 'border-accent-500 text-surface-50'
+                        : 'border-transparent text-surface-400 hover:text-surface-200'
+                    }`}
+                  >
+                    {t.icon}
+                    {t.label}
+                  </button>
+                ))}
               </div>
 
-              <div className="h-px bg-surface-700" />
-
-              <Toggle
-                label="Cancelamento de eco"
-                description="Evita que o som do seu alto-falante volte pelo microfone"
-                checked={echoCancellation}
-                onChange={setEchoCancellation}
-              />
-
-              <Toggle
-                label="Controle automático de ganho"
-                description="Normaliza automaticamente o volume do microfone"
-                checked={autoGainControl}
-                onChange={setAutoGainControl}
-              />
-            </div>
-          </section>
-
-          {/* Notificações */}
-          <section className="space-y-4">
-            <div className="flex items-center gap-2">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-accent-400">
-                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
-                <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-              </svg>
-              <h2 className="text-base font-semibold text-surface-100">Notificações</h2>
-            </div>
-
-            <div className="bg-surface-800 rounded-xl p-5 space-y-5 border border-surface-700/50">
-              <Toggle
-                label="Som de notificação"
-                description="Toca um som ao receber mensagens em canais inativos"
-                checked={notifSound}
-                onChange={setNotifSound}
-              />
-
-              {notifSound && (
-                <SliderField
-                  label="Volume da notificação"
-                  value={Math.round(notifVolume * 100)}
-                  min={0}
-                  max={100}
-                  format={(v) => `${v}%`}
-                  onChange={(v) => setNotifVolume(v / 100)}
-                />
-              )}
-
-              <div className="h-px bg-surface-700" />
-
-              <Toggle
-                label="Notificações push"
-                description="Exibe notificações do sistema ao receber mensagens"
-                checked={notifPush}
-                onChange={setNotifPush}
-              />
-            </div>
-          </section>
-
-          {/* Info */}
-          <div className="pb-8">
-            <div className="bg-surface-800/50 rounded-xl p-4 border border-surface-700/30">
-              <div className="flex items-start gap-3">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="text-surface-500 flex-shrink-0 mt-0.5">
-                  <circle cx="12" cy="12" r="10" />
-                  <line x1="12" y1="16" x2="12" y2="12" />
-                  <line x1="12" y1="8" x2="12.01" y2="8" />
-                </svg>
-                <p className="text-xs text-surface-500 leading-relaxed">
-                  As configurações são salvas automaticamente e aplicadas na próxima chamada.
-                  O teste de microfone mostra o nível sem processamento de áudio.
-                </p>
+              <div className="space-y-10 pb-8">
+                {activeTab === 'account' && sectionNodes.account}
+                {activeTab === 'audio' && (
+                  <>
+                    {sectionNodes.mic}
+                    {sectionNodes.output}
+                    {sectionNodes.processing}
+                    <InfoNote />
+                  </>
+                )}
+                {activeTab === 'notifications' && sectionNodes.notifications}
               </div>
-            </div>
-          </div>
-
+            </>
+          )}
         </div>
       </div>
     </div>
