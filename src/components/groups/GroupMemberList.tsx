@@ -1,21 +1,61 @@
+import { useMemo, useState } from 'react';
 import { useGroupStore } from '../../stores/groupStore';
 import { useLayoutStore } from '../../stores/layoutStore';
 import { getInitials, getUserColor } from '../../utils/formatDate';
 import { MemberListSkeleton } from '../common/Skeleton';
+import type { GroupMemberEntry } from '../../types';
+
+// ─── Roster de membros — em vez da lista "avatar redondo + nome" padrão,
+// os avatares ganham anel de status (verde online / vermelho em chamada /
+// cinza offline) e um cabeçalho tipo HUD com contador + barra de presença.
+// Offline vem recolhido por padrão pra não poluir grupos grandes. ──────
+
+function StatusAvatar({ status, username, avatarUrl, size = 36 }: {
+  status: string;
+  username: string;
+  avatarUrl?: string | null;
+  size?: number;
+}) {
+  const ringClass =
+    status === 'online' ? 'bg-success' :
+    status === 'in_call' ? 'bg-accent-500' :
+    'bg-surface-600';
+  const inner = size - 6;
+
+  return (
+    <div
+      className={`relative flex-shrink-0 rounded-full flex items-center justify-center ${ringClass}`}
+      style={{ width: size, height: size }}
+    >
+      <div
+        className="rounded-full flex items-center justify-center text-white font-bold overflow-hidden flex-shrink-0"
+        style={{ width: inner, height: inner, backgroundColor: getUserColor(username), fontSize: inner * 0.36 }}
+      >
+        {avatarUrl ? (
+          <img src={avatarUrl} alt="" className="w-full h-full object-cover" />
+        ) : (
+          getInitials(username)
+        )}
+      </div>
+    </div>
+  );
+}
 
 export function GroupMemberList() {
   const members = useGroupStore((s) => s.members);
   const isLoadingMembers = useGroupStore((s) => s.isLoadingMembers);
   const collapsed = useLayoutStore((s) => s.memberListCollapsed);
   const setCollapsed = useLayoutStore((s) => s.setMemberListCollapsed);
+  const [offlineOpen, setOfflineOpen] = useState(false);
 
-  const online = members.filter((m) => m.user.status !== 'offline');
-  const offline = members.filter((m) => m.user.status === 'offline');
+  const online = useMemo(() => members.filter((m) => m.user.status !== 'offline'), [members]);
+  const offline = useMemo(() => members.filter((m) => m.user.status === 'offline'), [members]);
+  const presencePct = members.length ? Math.round((online.length / members.length) * 100) : 0;
 
   if (members.length === 0) {
     if (!isLoadingMembers) return null;
     return (
-      <aside className="w-48 bg-surface-800 border-l border-surface-700/50 flex flex-col flex-shrink-0 overflow-y-auto">
+      <aside className="w-52 zk-surface shadow-panel rounded-2xl flex flex-col flex-shrink-0 overflow-y-auto">
         <MemberListSkeleton />
       </aside>
     );
@@ -23,105 +63,100 @@ export function GroupMemberList() {
 
   if (collapsed) {
     return (
-      <aside className="w-12 bg-surface-800 border-l border-surface-700/50 flex flex-col items-center flex-shrink-0 overflow-y-auto py-3 gap-2">
+      <aside className="w-12 zk-surface shadow-panel rounded-2xl flex flex-col items-center flex-shrink-0 overflow-y-auto py-3 gap-2.5">
         <button
           onClick={() => setCollapsed(false)}
           title="Mostrar membros"
           aria-label="Mostrar lista de membros"
-          className="w-8 h-8 flex items-center justify-center text-surface-500 hover:text-surface-200 hover:bg-surface-700/50 rounded-lg transition-colors flex-shrink-0"
+          className="w-8 h-8 flex items-center justify-center text-surface-500 hover:text-surface-200 hover:bg-white/[0.06] rounded-lg transition-colors flex-shrink-0"
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="15 18 9 12 15 6" />
           </svg>
         </button>
-        <div className="w-6 h-px bg-surface-700 my-0.5 flex-shrink-0" />
+        <div className="w-6 h-px bg-white/[0.08] flex-shrink-0" />
         {[...online, ...offline].map((m) => (
-          <div key={m.id} title={m.user.username} className="relative flex-shrink-0">
-            <div
-              className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-[10px] font-semibold ${
-                m.user.status === 'offline' ? 'opacity-40' : ''
-              }`}
-              style={{ backgroundColor: getUserColor(m.user.username) }}
-            >
-              {getInitials(m.user.username)}
-            </div>
-            <span
-              className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-surface-800 ${
-                m.user.status === 'online' ? 'bg-success' :
-                m.user.status === 'in_call' ? 'bg-accent-500' :
-                'bg-surface-500'
-              }`}
-            />
+          <div key={m.id} title={m.user.username} className={m.user.status === 'offline' ? 'opacity-40' : ''}>
+            <StatusAvatar status={m.user.status} username={m.user.username} avatarUrl={m.user.avatarUrl} size={32} />
           </div>
         ))}
       </aside>
     );
   }
 
-  const renderMember = (m: (typeof members)[0]) => (
-    <div key={m.id} className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg hover:bg-surface-700/50 transition-colors">
-      <div className="relative flex-shrink-0">
-        <div
-          className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-semibold"
-          style={{ backgroundColor: getUserColor(m.user.username) }}
-        >
-          {getInitials(m.user.username)}
-        </div>
-        <span
-          className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-surface-800 ${
-            m.user.status === 'online'  ? 'bg-success' :
-            m.user.status === 'in_call' ? 'bg-accent-500' :
-            'bg-surface-500'
-          }`}
-        />
-      </div>
+  const renderMember = (m: GroupMemberEntry) => (
+    <div
+      key={m.id}
+      className={`group relative flex items-center gap-2.5 mx-2 pl-3 pr-2 py-1.5 rounded-lg transition-colors hover:bg-white/[0.05] ${
+        m.user.status === 'offline' ? 'opacity-50 hover:opacity-90' : ''
+      }`}
+    >
+      <span className="absolute left-0.5 top-1/2 -translate-y-1/2 w-0.5 h-0 group-hover:h-5 bg-accent-500 rounded-full transition-all duration-200" />
+      <StatusAvatar status={m.user.status} username={m.user.username} avatarUrl={m.user.avatarUrl} size={32} />
       <div className="flex-1 min-w-0">
-        <p className={`text-xs truncate ${m.user.status === 'offline' ? 'text-surface-500' : 'text-surface-200'}`}>
+        <p className={`text-xs font-mono truncate ${m.user.status === 'offline' ? 'text-surface-500' : 'text-surface-200'}`}>
           {m.user.username}
         </p>
         {m.role !== 'member' && (
-          <p className="text-[9px] text-accent-400 uppercase font-semibold">{m.role}</p>
+          <p className="text-[9px] text-accent-400 font-mono tracking-wide">[{m.role.toUpperCase()}]</p>
         )}
       </div>
+      {m.user.status === 'in_call' && (
+        <span className="w-1.5 h-1.5 rounded-full bg-accent-500 shadow-glow-accent-sm animate-pulse flex-shrink-0" />
+      )}
     </div>
   );
 
   return (
-    <aside className="w-48 bg-surface-800 border-l border-surface-700/50 flex flex-col flex-shrink-0 overflow-y-auto">
-      <div className="flex items-center justify-between pt-3 pb-1 px-3 flex-shrink-0">
-        <span className="text-[10px] font-semibold text-surface-500 uppercase tracking-widest">Membros</span>
-        <button
-          onClick={() => setCollapsed(true)}
-          title="Ocultar membros"
-          aria-label="Ocultar lista de membros"
-          className="w-5 h-5 flex items-center justify-center text-surface-500 hover:text-surface-200 rounded transition-colors"
-        >
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="9 18 15 12 9 6" />
-          </svg>
-        </button>
+    <aside className="w-52 zk-surface shadow-panel rounded-2xl flex flex-col flex-shrink-0 overflow-hidden">
+      {/* Header estilo HUD — contador grande + barra de presença, em vez do rótulo "Membros" plano */}
+      <div className="px-3 pt-3 pb-2.5 border-b border-white/[0.06] flex-shrink-0">
+        <div className="flex items-center justify-between mb-1.5">
+          <span className="zk-label">Roster</span>
+          <button
+            onClick={() => setCollapsed(true)}
+            title="Ocultar membros"
+            aria-label="Ocultar lista de membros"
+            className="w-5 h-5 flex items-center justify-center text-surface-500 hover:text-surface-200 rounded transition-colors"
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="9 18 15 12 9 6" />
+            </svg>
+          </button>
+        </div>
+        <div className="flex items-baseline gap-1.5">
+          <span className="text-lg font-bold font-mono text-surface-50 tabular-nums leading-none">{online.length}</span>
+          <span className="text-[10px] text-surface-500 uppercase tracking-wide">/ {members.length} online</span>
+        </div>
+        <div className="h-[3px] rounded-full bg-white/[0.06] overflow-hidden mt-2">
+          <div
+            className="h-full bg-accent-500 shadow-glow-accent-sm rounded-full transition-all duration-500"
+            style={{ width: `${presencePct}%` }}
+          />
+        </div>
       </div>
 
-      {online.length > 0 && (
-        <>
-          <div className="pt-2 pb-1 px-3">
-            <p className="text-[10px] font-semibold text-surface-500 uppercase tracking-widest">
-              Online — {online.length}
-            </p>
-          </div>
-          {online.map(renderMember)}
-        </>
-      )}
-      {offline.length > 0 && (
-        <>
-          <div className="pt-3 pb-1 px-3">
-            <p className="text-[10px] font-semibold text-surface-500 uppercase tracking-widest">
+      <div className="flex-1 overflow-y-auto py-2">
+        {online.map(renderMember)}
+
+        {offline.length > 0 && (
+          <div className="mt-1 pt-1 border-t border-white/[0.05]">
+            <button
+              onClick={() => setOfflineOpen((o) => !o)}
+              className="w-full flex items-center gap-1.5 px-3 py-1.5 zk-label hover:text-surface-300 transition-colors"
+            >
+              <svg
+                width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"
+                className={`transition-transform ${offlineOpen ? 'rotate-90' : ''}`}
+              >
+                <polyline points="9 18 15 12 9 6" />
+              </svg>
               Offline — {offline.length}
-            </p>
+            </button>
+            {offlineOpen && <div className="pb-1">{offline.map(renderMember)}</div>}
           </div>
-          {offline.map(renderMember)}
-        </>
-      )}
+        )}
+      </div>
     </aside>
   );
 }

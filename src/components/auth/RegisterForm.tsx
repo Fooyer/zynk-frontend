@@ -21,14 +21,15 @@ export function RegisterForm({ onSwitch }: Props) {
   };
 
   return (
-    <div className="w-full max-w-md p-8 bg-surface-800 rounded-2xl shadow-2xl mx-4">
+    <div className="relative w-full max-w-md mx-4 p-8 zk-corners">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-surface-50 mb-2">Criar conta</h1>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.3em] text-accent-400 mb-3">Novo registro</p>
+          <h1 className="text-3xl font-bold text-surface-50 mb-2 tracking-tight">Criar conta</h1>
           <p className="text-surface-400">Junte-se à conversa</p>
         </div>
 
         {error && (
-          <div className="mb-4 p-3 bg-danger/10 border border-danger/30 rounded-lg text-danger text-sm">
+          <div className="mb-4 p-3 bg-danger/10 border border-danger/25 rounded-xl text-danger text-sm">
             {error}
             <button onClick={clearError} className="float-right text-danger/60 hover:text-danger">✕</button>
           </div>
@@ -42,7 +43,7 @@ export function RegisterForm({ onSwitch }: Props) {
                 type="text"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                className="flex-1 min-w-0 px-4 py-3 bg-surface-900 border border-surface-600 rounded-lg text-surface-100 placeholder-surface-500 focus:outline-none focus:border-accent-500 focus:ring-1 focus:ring-accent-500 transition-all"
+                className="flex-1 min-w-0 px-4 py-3 zk-input rounded-xl"
                 placeholder="Escolha um nome"
                 autoFocus
               />
@@ -52,7 +53,7 @@ export function RegisterForm({ onSwitch }: Props) {
                 value={tag}
                 onChange={(e) => setTag(e.target.value.slice(0, 5))}
                 maxLength={5}
-                className="w-20 flex-shrink-0 px-3 py-3 bg-surface-900 border border-surface-600 rounded-lg text-surface-100 placeholder-surface-500 focus:outline-none focus:border-accent-500 focus:ring-1 focus:ring-accent-500 transition-all uppercase"
+                className="w-20 flex-shrink-0 px-3 py-3 zk-input rounded-xl uppercase"
                 placeholder="TAG"
               />
             </div>
@@ -67,7 +68,7 @@ export function RegisterForm({ onSwitch }: Props) {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-4 py-3 bg-surface-900 border border-surface-600 rounded-lg text-surface-100 placeholder-surface-500 focus:outline-none focus:border-accent-500 focus:ring-1 focus:ring-accent-500 transition-all"
+              className="w-full px-4 py-3 zk-input rounded-xl"
               placeholder="seu@email.com"
             />
           </div>
@@ -78,7 +79,7 @@ export function RegisterForm({ onSwitch }: Props) {
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-4 py-3 bg-surface-900 border border-surface-600 rounded-lg text-surface-100 placeholder-surface-500 focus:outline-none focus:border-accent-500 focus:ring-1 focus:ring-accent-500 transition-all"
+              className="w-full px-4 py-3 zk-input rounded-xl"
               placeholder="Mínimo 6 caracteres"
             />
           </div>
@@ -86,7 +87,7 @@ export function RegisterForm({ onSwitch }: Props) {
           <button
             type="submit"
             disabled={isLoading}
-            className="w-full py-3 bg-accent-500 hover:bg-accent-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition-colors"
+            className="w-full py-3 zk-btn-primary rounded-xl"
           >
             {isLoading ? 'Criando...' : 'Criar conta'}
           </button>

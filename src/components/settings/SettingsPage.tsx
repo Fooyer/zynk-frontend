@@ -99,13 +99,13 @@ function MicTest({ deviceId }: { deviceId: string }) {
           className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
             testing
               ? 'bg-danger/20 text-danger hover:bg-danger/30'
-              : 'bg-surface-700 text-surface-200 hover:bg-surface-600'
+              : 'bg-white/[0.06] text-surface-200 hover:bg-white/[0.12]'
           }`}
         >
           {testing ? 'Parar teste' : 'Testar microfone'}
         </button>
         {testing && (
-          <div className="flex-1 h-2 bg-surface-700 rounded-full overflow-hidden">
+          <div className="flex-1 h-2 bg-white/[0.08] rounded-full overflow-hidden">
             <div
               className="h-full bg-success rounded-full transition-all duration-75"
               style={{ width: `${level * 100}%` }}
@@ -134,7 +134,7 @@ function SelectField({ label, value, onChange, options }: {
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full px-3 py-2.5 bg-surface-900 border border-surface-600 rounded-lg text-surface-100 text-sm focus:outline-none focus:border-accent-500 focus:ring-1 focus:ring-accent-500 transition-all appearance-none cursor-pointer"
+        className="w-full px-3 py-2.5 rounded-xl text-sm appearance-none cursor-pointer zk-input"
       >
         {options.map((o) => (
           <option key={o.value} value={o.value}>{o.label}</option>
@@ -159,7 +159,7 @@ function Toggle({ label, description, checked, onChange }: {
       <button
         onClick={() => onChange(!checked)}
         className={`relative w-11 h-6 rounded-full transition-colors ${
-          checked ? 'bg-accent-600 hover:bg-accent-500' : 'bg-surface-600 hover:bg-surface-500'
+          checked ? 'bg-accent-600 hover:bg-accent-500' : 'bg-white/[0.10] hover:bg-white/[0.16]'
         }`}
       >
         <div
@@ -196,7 +196,7 @@ function SliderField({ label, value, min, max, step, format, onChange }: {
         onChange={(e) => onChange(Number(e.target.value))}
         className="w-full cursor-pointer"
         style={{
-          background: `linear-gradient(to right, #00b4d8 ${((value - min) / (max - min)) * 100}%, #313745 ${((value - min) / (max - min)) * 100}%)`,
+          background: `linear-gradient(to right, #ff1339 ${((value - min) / (max - min)) * 100}%, #2c2c30 ${((value - min) / (max - min)) * 100}%)`,
         }}
       />
     </div>
@@ -268,10 +268,10 @@ function AccountSection() {
         }
       />
 
-      <div className="bg-surface-800 rounded-xl p-5 border border-surface-700/50 space-y-5">
+      <div className="bg-surface-800 rounded-2xl p-5 border border-white/[0.06] shadow-panel space-y-5">
         {/* Identificador completo — o que a pessoa compartilha pra ser adicionada */}
         {user && (
-          <div className="flex items-center justify-between gap-3 px-4 py-3 bg-surface-900 rounded-lg border border-surface-700/50">
+          <div className="flex items-center justify-between gap-3 px-4 py-3 bg-surface-900 rounded-xl border border-white/[0.06]">
             <div className="min-w-0">
               <p className="text-[11px] font-medium text-surface-500 uppercase tracking-wide mb-0.5">Seu identificador</p>
               <p className="text-sm font-semibold text-surface-100 truncate">
@@ -281,7 +281,7 @@ function AccountSection() {
             <button
               type="button"
               onClick={handleCopy}
-              className="px-3 py-1.5 text-xs font-medium rounded-lg bg-surface-700 text-surface-300 hover:bg-surface-600 hover:text-surface-100 transition-colors flex-shrink-0 flex items-center gap-1.5"
+              className="px-3 py-1.5 text-xs font-medium rounded-lg bg-white/[0.06] text-surface-300 hover:bg-white/[0.12] hover:text-surface-100 transition-colors flex-shrink-0 flex items-center gap-1.5"
             >
               {copied ? (
                 <>
@@ -311,7 +311,7 @@ function AccountSection() {
               value={username}
               onChange={(e) => { setUsername(e.target.value); setError(null); }}
               maxLength={32}
-              className="flex-1 min-w-0 px-3 py-2 bg-surface-900 border border-surface-600 rounded-lg text-surface-100 text-sm focus:outline-none focus:border-accent-500 focus:ring-1 focus:ring-accent-500 transition-all"
+              className="flex-1 min-w-0 px-3 py-2 rounded-xl text-sm zk-input"
             />
             <span className="text-surface-500 font-medium flex-shrink-0">#</span>
             <input
@@ -319,12 +319,12 @@ function AccountSection() {
               value={tag}
               onChange={(e) => { setTag(e.target.value.slice(0, 5)); setError(null); }}
               maxLength={5}
-              className="w-20 flex-shrink-0 px-2.5 py-2 bg-surface-900 border border-surface-600 rounded-lg text-surface-100 text-sm focus:outline-none focus:border-accent-500 focus:ring-1 focus:ring-accent-500 transition-all uppercase"
+              className="w-20 flex-shrink-0 px-2.5 py-2 rounded-xl text-sm uppercase zk-input"
             />
             <button
               type="submit"
               disabled={!isUsernameValid || !isTagValid || !isDirty || saving}
-              className="px-4 py-2 bg-accent-600 hover:bg-accent-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors flex-shrink-0"
+              className="px-4 py-2 zk-btn-primary text-sm rounded-lg flex-shrink-0"
             >
               {saving ? 'Salvando...' : 'Salvar'}
             </button>
@@ -359,7 +359,7 @@ function MicSection({ inputs }: { inputs: DeviceInfo[] }) {
         }
       />
 
-      <div className="bg-surface-800 rounded-xl p-5 space-y-5 border border-surface-700/50">
+      <div className="bg-surface-800 rounded-2xl p-5 space-y-5 border border-white/[0.06] shadow-panel">
         <SelectField
           label="Dispositivo de entrada"
           value={inputDeviceId}
@@ -401,7 +401,7 @@ function OutputSection({ outputs }: { outputs: DeviceInfo[] }) {
         }
       />
 
-      <div className="bg-surface-800 rounded-xl p-5 space-y-5 border border-surface-700/50">
+      <div className="bg-surface-800 rounded-2xl p-5 space-y-5 border border-white/[0.06] shadow-panel">
         <SelectField
           label="Dispositivo de saída"
           value={outputDeviceId}
@@ -435,7 +435,7 @@ function ProcessingSection() {
         }
       />
 
-      <div className="bg-surface-800 rounded-xl p-5 space-y-5 border border-surface-700/50">
+      <div className="bg-surface-800 rounded-2xl p-5 space-y-5 border border-white/[0.06] shadow-panel">
         <Toggle
           label="Supressão de ruído"
           description="RNNoise (IA) remove ruído de fundo (mouse, teclado etc.) de forma contínua, sem cortar sua voz"
@@ -443,7 +443,7 @@ function ProcessingSection() {
           onChange={setNoiseSuppression}
         />
 
-        <div className="h-px bg-surface-700" />
+        <div className="h-px bg-white/[0.06]" />
 
         <Toggle
           label="Cancelamento de eco"
@@ -478,7 +478,7 @@ function NotificationsSection() {
         }
       />
 
-      <div className="bg-surface-800 rounded-xl p-5 space-y-5 border border-surface-700/50">
+      <div className="bg-surface-800 rounded-2xl p-5 space-y-5 border border-white/[0.06] shadow-panel">
         <Toggle
           label="Som de notificação"
           description="Toca um som ao receber mensagens em canais inativos"
@@ -497,7 +497,7 @@ function NotificationsSection() {
           />
         )}
 
-        <div className="h-px bg-surface-700" />
+        <div className="h-px bg-white/[0.06]" />
 
         <Toggle
           label="Notificações push"
@@ -512,7 +512,7 @@ function NotificationsSection() {
 
 function InfoNote() {
   return (
-    <div className="bg-surface-800/50 rounded-xl p-4 border border-surface-700/30">
+    <div className="bg-surface-800/50 rounded-2xl p-4 border border-white/[0.05]">
       <div className="flex items-start gap-3">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="text-surface-500 flex-shrink-0 mt-0.5">
           <circle cx="12" cy="12" r="10" />
@@ -602,12 +602,12 @@ export function SettingsPage() {
   };
 
   return (
-    <div className="flex-1 flex flex-col min-w-0 bg-surface-900">
+    <div className="flex-1 flex flex-col min-w-0 zk-surface shadow-panel rounded-2xl overflow-hidden">
       {/* Header */}
-      <header className="h-12 flex items-center gap-3 px-4 border-b border-surface-700/50 flex-shrink-0">
+      <header className="h-12 flex items-center gap-3 px-4 border-b border-white/[0.06] flex-shrink-0">
         <button
           onClick={() => setView('home')}
-          className="p-1.5 -ml-1 text-surface-400 hover:text-surface-100 hover:bg-surface-700 rounded transition-colors"
+          className="p-1.5 -ml-1 text-surface-400 hover:text-surface-100 hover:bg-white/[0.08] rounded transition-colors"
           title="Voltar"
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -630,7 +630,7 @@ export function SettingsPage() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Buscar configurações..."
-            className="w-full pl-8 pr-7 py-1.5 bg-surface-800 border border-surface-700 rounded-lg text-xs text-surface-100 placeholder-surface-500 focus:outline-none focus:border-accent-500 transition-colors"
+            className="w-full pl-8 pr-7 py-1.5 rounded-xl text-xs zk-input"
           />
           {query && (
             <button
@@ -676,7 +676,7 @@ export function SettingsPage() {
           ) : (
             <>
               {/* Abas */}
-              <div className="flex gap-1 mb-8 border-b border-surface-700/50">
+              <div className="flex gap-1 mb-8 border-b border-white/[0.06]">
                 {TABS.map((t) => (
                   <button
                     key={t.id}

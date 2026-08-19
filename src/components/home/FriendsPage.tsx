@@ -70,9 +70,9 @@ export function FriendsPage() {
   const displayFriends = tab === 'online' ? onlineFriends : friends;
 
   return (
-    <main className="flex-1 flex flex-col min-w-0 bg-surface-900">
+    <main className="flex-1 flex flex-col min-w-0 zk-surface shadow-panel rounded-2xl overflow-hidden">
       {/* Header — visão geral em cartões clicáveis, em vez de abas discretas */}
-      <header className="px-6 pt-6 pb-4 border-b border-surface-700/50 flex-shrink-0">
+      <header className="px-6 pt-6 pb-4 border-b border-white/[0.06] flex-shrink-0">
         <h2 className="text-xl font-bold text-surface-50 mb-4">Amigos</h2>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
           {stats.map((s) => (
@@ -83,7 +83,7 @@ export function FriendsPage() {
               className={`rounded-xl border p-3 text-left transition-colors ${
                 tab === s.id
                   ? 'border-accent-500 bg-accent-600/10'
-                  : 'border-surface-700 bg-surface-800/40 hover:border-surface-600 hover:bg-surface-800'
+                  : 'border-white/[0.08] bg-surface-800/40 shadow-panel hover:border-white/[0.14] hover:bg-surface-800'
               }`}
             >
               <div className={`text-2xl font-bold leading-none mb-1.5 ${s.accent}`}>{s.value}</div>
@@ -121,12 +121,12 @@ export function FriendsPage() {
                   }}
                   placeholder="Usuário#TAG"
                   autoFocus
-                  className="flex-1 bg-surface-800 border border-surface-600 rounded-lg px-3 py-2 text-sm text-surface-100 placeholder:text-surface-500 focus:outline-none focus:border-accent-500 transition-colors"
+                  className="flex-1 zk-input rounded-xl px-3 py-2 text-sm"
                 />
                 <button
                   type="submit"
                   disabled={!parsedHandle}
-                  className="px-4 py-2 bg-accent-600 hover:bg-accent-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors"
+                  className="px-4 py-2 zk-btn-primary text-sm rounded-xl"
                 >
                   Enviar
                 </button>
@@ -147,7 +147,7 @@ export function FriendsPage() {
               {requests.map((r) => (
                 <div
                   key={r.id}
-                  className="rounded-xl border-l-4 border-l-danger border border-surface-700/70 bg-surface-800/60 p-4"
+                  className="rounded-xl border-l-4 border-l-danger border border-white/[0.07] bg-surface-800/60 shadow-panel p-4"
                 >
                   <div className="flex items-center gap-3 mb-3">
                     <div
@@ -173,7 +173,7 @@ export function FriendsPage() {
                     </button>
                     <button
                       onClick={() => reject(r.id)}
-                      className="flex-1 flex items-center justify-center gap-1.5 py-1.5 bg-surface-700 hover:bg-danger/20 text-surface-300 hover:text-danger text-xs font-semibold rounded-lg transition-colors"
+                      className="flex-1 flex items-center justify-center gap-1.5 py-1.5 bg-white/[0.06] hover:bg-danger/20 text-surface-300 hover:text-danger text-xs font-semibold rounded-lg transition-colors"
                     >
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                         <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
@@ -206,7 +206,7 @@ export function FriendsPage() {
             {displayFriends.map((f) => (
               <div
                 key={f.id}
-                className="rounded-xl border border-surface-700/70 bg-surface-800/60 hover:border-surface-600 hover:bg-surface-800 transition-colors p-3 flex items-center gap-3 cursor-pointer"
+                className="rounded-xl border border-white/[0.07] bg-surface-800/60 shadow-panel hover:border-white/[0.14] hover:bg-surface-800 hover:shadow-elevated transition-all p-3 flex items-center gap-3 cursor-pointer"
                 onClick={() => handleOpenDm(f.friend.id)}
               >
                 <div className="relative flex-shrink-0">
@@ -238,7 +238,7 @@ export function FriendsPage() {
                 <div className="flex gap-1 flex-shrink-0">
                   <button
                     onClick={(e) => { e.stopPropagation(); handleOpenDm(f.friend.id); }}
-                    className="p-2 bg-surface-700 hover:bg-accent-600 hover:text-white text-surface-300 rounded-lg transition-colors"
+                    className="p-2 bg-white/[0.06] hover:bg-accent-600 hover:text-white text-surface-300 rounded-lg transition-colors"
                     title="Mensagem"
                     aria-label={`Enviar mensagem para ${f.friend.username}`}
                   >
@@ -248,7 +248,7 @@ export function FriendsPage() {
                   </button>
                   <button
                     onClick={(e) => { e.stopPropagation(); remove(f.id); }}
-                    className="p-2 bg-surface-700 hover:bg-danger/30 text-surface-300 hover:text-danger rounded-lg transition-colors"
+                    className="p-2 bg-white/[0.06] hover:bg-danger/30 text-surface-300 hover:text-danger rounded-lg transition-colors"
                     title="Remover amigo"
                     aria-label={`Remover ${f.friend.username} da lista de amigos`}
                   >

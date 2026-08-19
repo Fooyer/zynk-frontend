@@ -25,14 +25,14 @@ function HeaderIconButton({ title, onClick, children, danger, active, warn }: {
     <button
       onClick={onClick}
       title={title}
-      className={`p-1.5 rounded transition-colors ${
+      className={`p-1.5 rounded-lg transition-colors ${
         active
-          ? warn ? 'text-warning bg-surface-700' : 'text-success bg-surface-700'
+          ? warn ? 'text-warning bg-white/[0.08]' : 'text-success bg-white/[0.08]'
           : danger
-          ? 'text-surface-400 hover:text-danger hover:bg-surface-700'
+          ? 'text-surface-400 hover:text-danger hover:bg-white/[0.06]'
           : warn
-          ? 'text-surface-400 hover:text-warning hover:bg-surface-700'
-          : 'text-surface-400 hover:text-surface-100 hover:bg-surface-700'
+          ? 'text-surface-400 hover:text-warning hover:bg-white/[0.06]'
+          : 'text-surface-400 hover:text-surface-100 hover:bg-white/[0.06]'
       }`}
     >
       {children}
@@ -139,7 +139,7 @@ function CallPanel({ dm, callStatus }: { dm: DmChannel; callStatus: 'calling' | 
       <div className={`relative rounded-full transition-all duration-200 ${
         speaking
           ? 'ring-[3px] ring-success shadow-[0_0_20px_rgba(67,181,129,0.35)]'
-          : 'ring-[3px] ring-surface-700'
+          : 'ring-[3px] ring-white/[0.1]'
       }`}>
         <div
           className="w-[72px] h-[72px] rounded-full flex items-center justify-center text-white text-xl font-bold"
@@ -169,7 +169,7 @@ function CallPanel({ dm, callStatus }: { dm: DmChannel; callStatus: 'calling' | 
 
   return (
     <>
-      <div className={`bg-surface-800 border-b flex-shrink-0 ${isGame ? 'border-warning/40' : 'border-surface-700/50'}`}>
+      <div className={`bg-accent-900 border-b flex-shrink-0 ${isGame ? 'border-warning/40' : 'border-white/[0.06]'}`}>
         {isCalling ? (
           /* ─── Estado: Chamando ─── */
           <div className="py-8 flex flex-col items-center gap-4">
@@ -248,7 +248,7 @@ function CallPanel({ dm, callStatus }: { dm: DmChannel; callStatus: 'calling' | 
               {/* Mute */}
               <button onClick={handleToggleMute} title={isMuted ? 'Ativar microfone' : 'Silenciar'}
                 className={`p-2.5 rounded-full transition-colors ${
-                  isMuted ? 'bg-danger/20 text-danger hover:bg-danger/30' : 'bg-surface-700 text-surface-300 hover:bg-surface-600 hover:text-surface-100'
+                  isMuted ? 'bg-danger/20 text-danger hover:bg-danger/30' : 'bg-white/[0.06] text-surface-300 hover:bg-white/[0.12] hover:text-surface-100'
                 }`}
               >
                 {isMuted ? (
@@ -270,7 +270,7 @@ function CallPanel({ dm, callStatus }: { dm: DmChannel; callStatus: 'calling' | 
               {/* Screen share */}
               <button onClick={handleScreenShare} title={isScreenSharing ? 'Parar compartilhamento' : 'Compartilhar tela'}
                 className={`p-2.5 rounded-full transition-colors ${
-                  isScreenSharing ? 'bg-success/20 text-success hover:bg-success/30' : 'bg-surface-700 text-surface-300 hover:bg-surface-600 hover:text-surface-100'
+                  isScreenSharing ? 'bg-success/20 text-success hover:bg-success/30' : 'bg-white/[0.06] text-surface-300 hover:bg-white/[0.12] hover:text-surface-100'
                 }`}
               >
                 <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -281,7 +281,7 @@ function CallPanel({ dm, callStatus }: { dm: DmChannel; callStatus: 'calling' | 
               </button>
 
               {/* Volume */}
-              <div className="flex items-center gap-1.5 bg-surface-700 rounded-full px-3 py-1.5">
+              <div className="flex items-center gap-1.5 bg-white/[0.06] rounded-full px-3 py-1.5">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="text-surface-400 flex-shrink-0">
                   <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
                   {volume > 0 && <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />}
@@ -292,7 +292,7 @@ function CallPanel({ dm, callStatus }: { dm: DmChannel; callStatus: 'calling' | 
                   title={`Volume: ${Math.round(volume * 100)}%`}
                   className="w-20 cursor-pointer"
                   style={{
-                    background: `linear-gradient(to right, #43b581 ${(volume / 2) * 100}%, #1a1d29 ${(volume / 2) * 100}%)`,
+                    background: `linear-gradient(to right, #43b581 ${(volume / 2) * 100}%, #19191b ${(volume / 2) * 100}%)`,
                   }}
                 />
                 <span className="text-[10px] text-surface-500 w-7 text-right tabular-nums">{Math.round(volume * 100)}%</span>
@@ -312,7 +312,7 @@ function CallPanel({ dm, callStatus }: { dm: DmChannel; callStatus: 'calling' | 
 
         {/* Tela compartilhada remotamente — inline */}
         {!isCalling && remoteHasScreen && !screenExpanded && (
-          <div className="bg-black border-t border-surface-700/30 max-h-[60vh] flex items-center justify-center relative group">
+          <div className="bg-black border-t border-white/[0.05] max-h-[60vh] flex items-center justify-center relative group">
             <video ref={videoRef} autoPlay muted className="w-full max-h-[60vh] object-contain cursor-pointer" onDoubleClick={() => setScreenExpanded(true)} />
             <div className="absolute top-2 right-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
               <button onClick={() => setScreenExpanded(true)} title="Expandir tela"
@@ -329,7 +329,7 @@ function CallPanel({ dm, callStatus }: { dm: DmChannel; callStatus: 'calling' | 
 
         {/* Indicador de compartilhamento local */}
         {!isCalling && isScreenSharing && !remoteHasScreen && (
-          <div className="px-4 py-2 border-t border-surface-700/30 flex items-center gap-2 text-xs text-success">
+          <div className="px-4 py-2 border-t border-white/[0.05] flex items-center gap-2 text-xs text-success">
             <div className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
             Você está compartilhando a tela
           </div>
@@ -431,12 +431,12 @@ export function DMChatArea({ dm }: Props) {
   };
 
   return (
-    <main className="flex-1 flex flex-col min-w-0 bg-surface-900">
-      <header className="h-12 flex items-center gap-2 px-3 border-b border-surface-700/50 flex-shrink-0">
+    <main className="flex-1 flex flex-col min-w-0 zk-surface shadow-panel rounded-2xl overflow-hidden">
+      <header className="h-12 flex items-center gap-2 px-3 border-b border-white/[0.06] flex-shrink-0">
         {/* Left: back + identity */}
         <button
           onClick={() => setActiveDm(null)}
-          className="p-1.5 -ml-0.5 text-surface-400 hover:text-surface-100 hover:bg-surface-700 rounded transition-colors flex-shrink-0"
+          className="p-1.5 -ml-0.5 text-surface-400 hover:text-surface-100 hover:bg-white/[0.06] rounded-lg transition-colors flex-shrink-0"
           title="Voltar"
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -449,7 +449,7 @@ export function DMChatArea({ dm }: Props) {
           <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
         </svg>
 
-        <div className="w-px h-5 bg-surface-700 mx-1 flex-shrink-0" />
+        <div className="w-px h-5 bg-white/[0.1] mx-1 flex-shrink-0" />
 
         {/* Avatar */}
         <div className="relative flex-shrink-0">
@@ -504,7 +504,7 @@ export function DMChatArea({ dm }: Props) {
             </svg>
           </HeaderIconButton>
 
-          <div className="w-px h-5 bg-surface-700 mx-1" />
+          <div className="w-px h-5 bg-white/[0.1] mx-1" />
 
           {/* Fechar chat (volta para amigos) */}
           <HeaderIconButton title="Voltar para amigos" danger onClick={() => setActiveDm(null)}>

@@ -17,7 +17,7 @@ export function HomeLayout({ voice }: HomeLayoutProps) {
     : null;
 
   return (
-    <div className="flex-1 flex overflow-hidden">
+    <div className="flex-1 flex gap-2 overflow-hidden">
       <DMSidebar voice={voice} />
       {activeDm ? <DMChatArea dm={activeDm} /> : <FriendsPage />}
     </div>

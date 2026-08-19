@@ -55,7 +55,7 @@ export function DMSidebar({ voice }: DMSidebarProps) {
   };
 
   return (
-    <aside className="w-60 bg-surface-800 flex flex-col border-r border-surface-700/50 flex-shrink-0">
+    <aside className="w-60 zk-surface shadow-panel rounded-2xl flex flex-col flex-shrink-0 overflow-hidden">
       {/* DMs */}
       <div className="flex-1 overflow-y-auto py-2">
         {/* Seção mensagens diretas */}
@@ -80,10 +80,10 @@ export function DMSidebar({ voice }: DMSidebarProps) {
               return (
                 <div
                   key={dm.channelId}
-                  className={`group relative flex items-center gap-2.5 px-2 py-1.5 rounded-lg transition-colors cursor-pointer ${
+                  className={`group relative flex items-center gap-2.5 px-2 py-1.5 rounded-xl transition-colors cursor-pointer ${
                     isActive
-                      ? 'bg-surface-600 text-surface-100'
-                      : 'text-surface-400 hover:text-surface-100 hover:bg-surface-700/70'
+                      ? 'bg-white/[0.08] text-surface-100'
+                      : 'text-surface-400 hover:text-surface-100 hover:bg-white/[0.05]'
                   }`}
                   onClick={() => setActiveDm(dm.channelId)}
                 >
@@ -125,7 +125,7 @@ export function DMSidebar({ voice }: DMSidebarProps) {
                   ) : (
                     <button
                       onClick={(e) => { e.stopPropagation(); closeDm(dm.channelId); }}
-                      className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-surface-500 text-surface-400 hover:text-surface-100 transition-all flex-shrink-0"
+                      className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-white/[0.12] text-surface-400 hover:text-surface-100 transition-all flex-shrink-0"
                       title="Fechar conversa"
                     >
                       <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
@@ -160,7 +160,7 @@ export function DMSidebar({ voice }: DMSidebarProps) {
                   <button
                     key={f.id}
                     onClick={() => handleOpenDm(f.friend.id)}
-                    className="w-full flex items-center gap-2.5 px-2 py-1.5 rounded-lg text-surface-400 hover:text-surface-100 hover:bg-surface-700/70 transition-colors text-left"
+                    className="w-full flex items-center gap-2.5 px-2 py-1.5 rounded-xl text-surface-400 hover:text-surface-100 hover:bg-white/[0.05] transition-colors text-left"
                     title={hasDm ? 'Abrir conversa' : 'Iniciar conversa'}
                   >
                     <div className="relative flex-shrink-0">
@@ -187,7 +187,7 @@ export function DMSidebar({ voice }: DMSidebarProps) {
 
       {/* Indicador mínimo de chamada 1:1 ativa (controles completos ficam acima do chat) */}
       {callStatus !== 'idle' && (
-        <div className="px-3 py-2 bg-surface-900 border-t border-surface-700/50">
+        <div className="px-3 py-2 bg-accent-900 border-t border-white/[0.06]">
           <div className="flex items-center gap-2">
             <div className={`w-2 h-2 rounded-full flex-shrink-0 ${callStatus === 'active' ? 'bg-success animate-pulse' : 'bg-warning animate-pulse'}`} />
             <div className="flex-1 min-w-0">

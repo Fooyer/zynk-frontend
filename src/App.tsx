@@ -23,13 +23,14 @@ function TitleBar() {
   const isLinux = window.electronAPI?.platform === 'linux';
 
   return (
-    <div className="h-9 flex-shrink-0 bg-surface-900 drag-region flex items-center px-4 border-b border-surface-700/50">
-      <span className="text-xs font-semibold text-surface-500 no-drag select-none">Zynk</span>
+    <div className="h-9 flex-shrink-0 bg-surface-900 drag-region flex items-center gap-2 px-4 border-b border-white/[0.06]">
+      <span className="w-1.5 h-1.5 rounded-full bg-accent-500 shadow-glow-accent-sm animate-pulse no-drag select-none" />
+      <span className="text-xs font-semibold text-surface-400 uppercase tracking-[0.2em] no-drag select-none">Zynk</span>
       {isLinux && (
         <div className="ml-auto flex items-center no-drag">
           <button
             onClick={() => window.electronAPI?.windowMinimize()}
-            className="w-9 h-9 flex items-center justify-center text-surface-400 hover:text-surface-100 hover:bg-surface-700 transition-colors"
+            className="w-9 h-9 flex items-center justify-center text-surface-400 hover:text-surface-100 hover:bg-white/[0.06] transition-colors"
             title="Minimizar"
           >
             <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
@@ -38,7 +39,7 @@ function TitleBar() {
           </button>
           <button
             onClick={() => window.electronAPI?.windowMaximize()}
-            className="w-9 h-9 flex items-center justify-center text-surface-400 hover:text-surface-100 hover:bg-surface-700 transition-colors"
+            className="w-9 h-9 flex items-center justify-center text-surface-400 hover:text-surface-100 hover:bg-white/[0.06] transition-colors"
             title="Maximizar"
           >
             <svg width="11" height="11" viewBox="0 0 11 11" fill="none" stroke="currentColor" strokeWidth="1">
@@ -47,7 +48,7 @@ function TitleBar() {
           </button>
           <button
             onClick={() => window.electronAPI?.windowClose()}
-            className="w-9 h-9 flex items-center justify-center text-surface-400 hover:text-white hover:bg-red-600 transition-colors"
+            className="w-9 h-9 flex items-center justify-center text-surface-400 hover:text-white hover:bg-danger transition-colors"
             title="Fechar"
           >
             <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
@@ -91,9 +92,12 @@ function AppLayout() {
     callStatus !== 'idle' && !(view === 'home' && activeDmChannelId === callChannelId);
 
   return (
-    <div className="window-shell h-screen flex flex-col overflow-hidden bg-surface-900">
+    <div className="window-shell h-screen flex flex-col overflow-hidden bg-surface-950">
       <TitleBar />
-      <div className="flex-1 flex overflow-hidden">
+      {/* Cada seção principal (nav, conteúdo) é seu próprio painel flutuante com
+          cantos arredondados e um respiro entre elas — em vez de coladas com só
+          uma linha de borda — pra reforçar a leitura "módulos de HUD" do tema. */}
+      <div className="flex-1 flex gap-2 p-2 overflow-hidden">
         <NavBar />
         {view === 'settings' ? <SettingsPage /> : view === 'group' ? <GroupLayout voice={voice} /> : <HomeLayout voice={voice} />}
       </div>
@@ -110,7 +114,9 @@ function AuthScreen() {
   return (
     <div className="window-shell h-screen flex flex-col bg-surface-950">
       <TitleBar />
-      <div className="flex-1 flex items-center justify-center">
+      <div className="relative flex-1 flex items-center justify-center overflow-hidden">
+        {/* Glow decorativo atrás do card — dá profundidade ao fundo sólido sem sair do preto/cinza */}
+        <div className="pointer-events-none absolute -top-32 left-1/2 -translate-x-1/2 w-[560px] h-[560px] rounded-full bg-accent-500/[0.07] blur-[120px]" />
         {isLogin ? (
           <LoginForm onSwitch={() => setIsLogin(false)} />
         ) : (

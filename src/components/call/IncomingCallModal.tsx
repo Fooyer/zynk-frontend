@@ -21,7 +21,7 @@ export function IncomingCallModal({ peerUsername, mode, onAccept, onReject }: Pr
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className={`bg-surface-800 rounded-2xl p-8 flex flex-col items-center gap-5 shadow-2xl border w-72 ${isGame ? 'border-warning/50' : 'border-surface-700'}`}>
+      <div className={`zk-corners bg-accent-900 rounded-2xl p-8 flex flex-col items-center gap-5 shadow-modal border w-72 ${isGame ? 'border-warning/50' : 'border-white/[0.08]'}`}>
         {/* Avatar animado com pulse */}
         <div className="relative">
           <div className="absolute inset-0 rounded-full animate-ping opacity-30" style={{ backgroundColor: color }} />

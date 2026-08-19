@@ -38,10 +38,10 @@ function NavRow({
       onClick={onClick}
       onContextMenu={onContextMenu}
       aria-current={active ? 'true' : undefined}
-      className={`w-full flex items-center gap-2.5 pl-2.5 pr-2 py-2 rounded-lg text-left transition-colors border-l-[3px] ${
+      className={`w-full flex items-center gap-2.5 pl-2.5 pr-2 py-2 rounded-xl text-left transition-colors border-l-[3px] ${
         active
           ? 'bg-accent-600/15 border-accent-500 text-surface-50'
-          : 'border-transparent text-surface-300 hover:bg-surface-800 hover:text-surface-100'
+          : 'border-transparent text-surface-300 hover:bg-white/[0.05] hover:text-surface-100'
       }`}
     >
       <span className="flex-shrink-0 flex items-center justify-center">{icon}</span>
@@ -80,8 +80,8 @@ function NavIconButton({
       onContextMenu={onContextMenu}
       title={title}
       aria-label={title}
-      className={`relative w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 font-bold transition-colors ${
-        active ? 'bg-accent-600 text-white' : 'bg-surface-800 text-surface-300 hover:bg-surface-700 hover:text-surface-100'
+      className={`relative w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 font-bold transition-all ${
+        active ? 'bg-accent-600 text-white shadow-glow-accent' : 'bg-white/[0.04] text-surface-300 hover:bg-white/[0.08] hover:text-surface-100'
       }`}
       style={color ? { backgroundColor: color } : undefined}
     >
@@ -223,7 +223,7 @@ export function NavBar() {
 
   return (
     <>
-      <nav className={`${collapsed ? 'w-14' : 'w-60'} bg-surface-950 flex flex-col flex-shrink-0 border-r border-surface-800 overflow-hidden transition-all duration-150`}>
+      <nav className={`${collapsed ? 'w-14' : 'w-60'} zk-surface shadow-panel rounded-2xl flex flex-col flex-shrink-0 overflow-hidden transition-all duration-150`}>
         {collapsed ? (
           <>
             <div className="flex-1 overflow-y-auto py-3 flex flex-col items-center gap-1.5">
@@ -231,7 +231,7 @@ export function NavBar() {
                 onClick={() => setCollapsed(false)}
                 title="Expandir menu"
                 aria-label="Expandir menu"
-                className="w-8 h-8 mb-1 flex items-center justify-center text-surface-500 hover:text-surface-200 hover:bg-surface-800 rounded-lg transition-colors flex-shrink-0"
+                className="w-8 h-8 mb-1 flex items-center justify-center text-surface-500 hover:text-surface-200 hover:bg-white/[0.06] rounded-lg transition-colors flex-shrink-0"
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <polyline points="9 18 15 12 9 6" />
@@ -244,7 +244,7 @@ export function NavBar() {
                 </svg>
               </NavIconButton>
 
-              <div className="w-6 h-px bg-surface-800 flex-shrink-0 my-1" />
+              <div className="w-6 h-px bg-white/[0.08] flex-shrink-0 my-1" />
 
               {isLoadingGroups && groups.length === 0 && <GroupRailSkeleton collapsed />}
 
@@ -266,7 +266,7 @@ export function NavBar() {
                     onClick={() => handleSelectGroup(g.id)}
                     onContextMenu={(e) => handleGroupContextMenu(e, g)}
                     title={g.name}
-                    color={getUserColor(g.name)}
+                    color="#c40d2e"
                   >
                     <span className="text-[10px]">{g.name.slice(0, 2).toUpperCase()}</span>
                   </NavIconButton>
@@ -280,7 +280,7 @@ export function NavBar() {
                 onClick={() => setShowCreateGroup(true)}
                 title="Criar grupo"
                 aria-label="Criar grupo"
-                className="w-9 h-9 rounded-xl flex items-center justify-center text-surface-500 hover:text-success hover:bg-surface-800 transition-colors flex-shrink-0"
+                className="w-9 h-9 rounded-xl flex items-center justify-center text-surface-500 hover:text-success hover:bg-white/[0.06] transition-colors flex-shrink-0"
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
                   <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
@@ -288,7 +288,7 @@ export function NavBar() {
               </button>
             </div>
 
-            <div className="flex-shrink-0 border-t border-surface-800 py-2 flex flex-col items-center gap-1.5">
+            <div className="flex-shrink-0 border-t border-white/[0.06] py-2 flex flex-col items-center gap-1.5">
               <NavIconButton active={view === 'settings'} onClick={() => setView('settings')} title="Configurações">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <circle cx="12" cy="12" r="3" />
@@ -330,7 +330,7 @@ export function NavBar() {
                   onClick={() => setCollapsed(true)}
                   title="Recolher menu"
                   aria-label="Recolher menu"
-                  className="w-6 h-6 flex items-center justify-center text-surface-500 hover:text-surface-200 hover:bg-surface-800 rounded transition-colors"
+                  className="w-6 h-6 flex items-center justify-center text-surface-500 hover:text-surface-200 hover:bg-white/[0.06] rounded transition-colors"
                 >
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <polyline points="15 18 9 12 15 6" />
@@ -389,10 +389,7 @@ export function NavBar() {
                         onClick={() => handleSelectGroup(g.id)}
                         onContextMenu={(e) => handleGroupContextMenu(e, g)}
                         icon={
-                          <span
-                            className="w-6 h-6 rounded-md flex items-center justify-center text-white text-[10px] font-bold"
-                            style={{ backgroundColor: getUserColor(g.name) }}
-                          >
+                          <span className="w-6 h-6 rounded-lg bg-accent-600 flex items-center justify-center text-white text-[10px] font-bold">
                             {g.name.slice(0, 2).toUpperCase()}
                           </span>
                         }
@@ -418,7 +415,7 @@ export function NavBar() {
             </div>
 
             {/* Rodapé — conta + configurações, sempre visíveis (nada escondido atrás de hover) */}
-            <div className="flex-shrink-0 border-t border-surface-800 p-2 space-y-0.5">
+            <div className="flex-shrink-0 border-t border-white/[0.06] p-2 space-y-0.5">
               <NavRow
                 active={view === 'settings'}
                 onClick={() => setView('settings')}

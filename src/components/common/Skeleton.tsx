@@ -80,7 +80,7 @@ export function FriendGridSkeleton() {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
       {Array.from({ length: 6 }).map((_, i) => (
-        <div key={i} className="rounded-xl border border-surface-700/70 bg-surface-800/60 p-3 flex items-center gap-3">
+        <div key={i} className="rounded-xl border border-white/[0.07] bg-surface-800/60 p-3 flex items-center gap-3">
           <Skeleton className="w-11 h-11 rounded-full flex-shrink-0" />
           <div className="flex-1 min-w-0 space-y-2">
             <Skeleton className="h-3.5 w-2/3 rounded" />
@@ -123,7 +123,7 @@ export function KanbanSkeleton() {
         <div key={col} className="flex-1 min-w-[240px] max-w-sm space-y-3">
           <Skeleton className="h-3 w-20 rounded" />
           {Array.from({ length: col === 1 ? 3 : 2 }).map((_, i) => (
-            <div key={i} className="rounded-lg border border-surface-700/60 bg-surface-800/60 p-3 space-y-2">
+            <div key={i} className="rounded-lg border border-white/[0.06] bg-surface-800/60 p-3 space-y-2">
               <Skeleton className="h-3.5 w-4/5 rounded" />
               <Skeleton className="h-2.5 w-1/2 rounded" />
             </div>
@@ -160,14 +160,14 @@ export function NotesSkeleton() {
 /** Casca do app inteiro — usada só no boot (antes de saber se está logado). */
 export function AppShellSkeleton() {
   return (
-    <div className="h-screen flex flex-col overflow-hidden bg-surface-900">
-      <div className="h-9 flex-shrink-0 bg-surface-900 border-b border-surface-700/50" />
-      <div className="flex-1 flex overflow-hidden">
-        <div className="w-60 bg-surface-950 flex flex-col flex-shrink-0 border-r border-surface-800 p-3">
+    <div className="h-screen flex flex-col overflow-hidden bg-surface-950">
+      <div className="h-9 flex-shrink-0 bg-surface-900 border-b border-white/[0.06]" />
+      <div className="flex-1 flex gap-2 p-2 overflow-hidden">
+        <div className="w-60 zk-surface shadow-panel rounded-2xl flex flex-col flex-shrink-0 p-3 overflow-hidden">
           <GroupRailSkeleton />
         </div>
-        <div className="flex-1 flex flex-col">
-          <div className="h-12 border-b border-surface-700/50 flex-shrink-0 flex items-center px-4">
+        <div className="flex-1 flex flex-col zk-surface shadow-panel rounded-2xl overflow-hidden">
+          <div className="h-12 border-b border-white/[0.06] flex-shrink-0 flex items-center px-4">
             <Skeleton className="h-4 w-32 rounded" />
           </div>
           <MessageListSkeleton />

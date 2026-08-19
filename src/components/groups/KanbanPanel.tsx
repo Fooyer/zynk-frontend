@@ -13,7 +13,7 @@ interface Props {
 }
 
 const COLUMNS: { id: KanbanCard['status']; label: string; accent: string; dot: string }[] = [
-  { id: 'todo',  label: 'A Fazer',       accent: 'border-surface-600', dot: 'bg-surface-500' },
+  { id: 'todo',  label: 'A Fazer',       accent: 'border-white/[0.14]', dot: 'bg-surface-500' },
   { id: 'doing', label: 'Em Progresso',  accent: 'border-yellow-500/60', dot: 'bg-yellow-400' },
   { id: 'done',  label: 'Concluído',     accent: 'border-green-500/60',  dot: 'bg-green-400' },
 ];
@@ -77,9 +77,9 @@ function CardDetail({ card, groupId, channelId, members, onUpdate, onDelete, onC
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50" onClick={onClose}>
       <div
-        className="bg-surface-800 border border-surface-700 rounded-xl w-[420px] p-5 flex flex-col gap-4"
+        className="zk-modal rounded-2xl w-[420px] p-5 flex flex-col gap-4"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Title */}
@@ -87,7 +87,7 @@ function CardDetail({ card, groupId, channelId, members, onUpdate, onDelete, onC
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           maxLength={255}
-          className="text-base font-semibold text-surface-100 bg-transparent border-b border-surface-700 pb-1 focus:outline-none focus:border-accent-500 transition-colors"
+          className="text-base font-semibold text-surface-100 bg-transparent border-b border-white/[0.08] pb-1 focus:outline-none focus:border-accent-500/60 transition-colors"
         />
 
         {/* Description */}
@@ -98,7 +98,7 @@ function CardDetail({ card, groupId, channelId, members, onUpdate, onDelete, onC
             onChange={(e) => setDescription(e.target.value)}
             placeholder="Adicione uma descrição..."
             rows={4}
-            className="w-full px-3 py-2 bg-surface-900 border border-surface-700 rounded-lg text-sm text-surface-200 placeholder-surface-600 focus:outline-none focus:border-accent-500 resize-none transition-colors"
+            className="zk-input w-full px-3 py-2 rounded-xl text-sm resize-none"
           />
         </div>
 
@@ -108,7 +108,7 @@ function CardDetail({ card, groupId, channelId, members, onUpdate, onDelete, onC
           <select
             value={assigneeId ?? ''}
             onChange={(e) => setAssigneeId(e.target.value ? Number(e.target.value) : null)}
-            className="w-full px-3 py-2 bg-surface-900 border border-surface-700 rounded-lg text-sm text-surface-200 focus:outline-none focus:border-accent-500 transition-colors"
+            className="zk-input w-full px-3 py-2 rounded-xl text-sm"
           >
             <option value="">Ninguém</option>
             {members.map((m) => (
@@ -138,7 +138,7 @@ function CardDetail({ card, groupId, channelId, members, onUpdate, onDelete, onC
             <button
               onClick={save}
               disabled={!title.trim() || isSaving}
-              className="px-4 py-1.5 bg-accent-600 hover:bg-accent-500 text-white text-sm font-medium rounded-lg disabled:opacity-50 transition-colors"
+              className="px-4 py-1.5 zk-btn-primary text-sm rounded-lg"
             >
               {isSaving ? 'Salvando...' : 'Salvar'}
             </button>
@@ -244,19 +244,19 @@ export function KanbanPanel({ groupId, channelId }: Props) {
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       {/* Add card bar */}
-      <form onSubmit={handleAddCard} className="flex gap-2 px-4 py-3 border-b border-surface-700/50 flex-shrink-0">
+      <form onSubmit={handleAddCard} className="flex gap-2 px-4 py-3 border-b border-white/[0.06] flex-shrink-0">
         <input
           type="text"
           value={newTitle}
           onChange={(e) => setNewTitle(e.target.value)}
           placeholder="Título da nova tarefa..."
           maxLength={255}
-          className="flex-1 px-3 py-1.5 bg-surface-900 border border-surface-700 rounded-lg text-sm text-surface-100 placeholder-surface-500 focus:outline-none focus:border-accent-500 transition-colors"
+          className="zk-input flex-1 px-3 py-1.5 rounded-xl text-sm"
         />
         <button
           type="submit"
           disabled={!newTitle.trim() || isAdding}
-          className="px-4 py-1.5 bg-accent-600 hover:bg-accent-500 text-white text-sm font-medium rounded-lg disabled:opacity-50 transition-colors"
+          className="px-4 py-1.5 zk-btn-primary text-sm rounded-lg"
         >
           Adicionar
         </button>
@@ -281,14 +281,14 @@ export function KanbanPanel({ groupId, channelId }: Props) {
               <div className={`flex items-center gap-2 pb-2 border-b-2 ${col.accent} transition-colors`}>
                 <span className={`w-2 h-2 rounded-full ${col.dot}`} />
                 <span className="text-xs font-bold text-surface-200 uppercase tracking-wider">{col.label}</span>
-                <span className="ml-auto text-xs font-semibold text-surface-500 bg-surface-800 px-1.5 py-0.5 rounded-full">
+                <span className="ml-auto text-xs font-semibold text-surface-500 bg-white/[0.06] px-1.5 py-0.5 rounded-full">
                   {colCards.length}
                 </span>
               </div>
 
               {/* Cards */}
               <div
-                className={`flex flex-col gap-2 flex-1 overflow-y-auto rounded-lg transition-colors ${
+                className={`flex flex-col gap-2 flex-1 overflow-y-auto rounded-xl transition-colors ${
                   isDragTarget ? 'bg-surface-800/60 ring-1 ring-accent-500/30' : ''
                 }`}
               >
@@ -299,7 +299,7 @@ export function KanbanPanel({ groupId, channelId }: Props) {
                     onDragStart={() => onDragStart(card)}
                     onDragEnd={onDragEnd}
                     onClick={() => setSelectedCard(card)}
-                    className="bg-surface-800 hover:bg-surface-700 border border-surface-700 hover:border-surface-600 rounded-lg p-3 cursor-grab active:cursor-grabbing active:opacity-60 transition-all group/card"
+                    className="bg-surface-800 hover:bg-white/[0.05] border border-white/[0.08] hover:border-white/[0.14] rounded-xl p-3 shadow-panel cursor-grab active:cursor-grabbing active:opacity-60 transition-all group/card"
                   >
                     <p className="text-sm font-medium text-surface-100 leading-snug">{card.title}</p>
 
@@ -338,8 +338,8 @@ export function KanbanPanel({ groupId, channelId }: Props) {
                 ))}
 
                 {colCards.length === 0 && (
-                  <div className={`flex-1 border-2 border-dashed rounded-lg flex items-center justify-center min-h-[100px] transition-colors ${
-                    isDragTarget ? 'border-accent-500/50 bg-accent-500/5' : 'border-surface-700/40'
+                  <div className={`flex-1 border-2 border-dashed rounded-xl flex items-center justify-center min-h-[100px] transition-colors ${
+                    isDragTarget ? 'border-accent-500/50 bg-accent-500/5' : 'border-white/[0.08]'
                   }`}>
                     <span className="text-xs text-surface-600">
                       {isDragTarget ? 'Soltar aqui' : 'Vazio'}

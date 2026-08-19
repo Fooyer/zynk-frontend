@@ -17,8 +17,8 @@ export function ContextMenuItem({
   return (
     <button
       onClick={onClick}
-      className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-[13px] transition-colors ${
-        danger ? 'text-danger hover:bg-danger/10' : 'text-surface-200 hover:bg-surface-700'
+      className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[13px] transition-colors ${
+        danger ? 'text-danger hover:bg-danger/10' : 'text-surface-200 hover:bg-white/[0.06]'
       }`}
     >
       {icon && <span className="flex-shrink-0 w-3.5 h-3.5 flex items-center justify-center">{icon}</span>}
@@ -29,7 +29,7 @@ export function ContextMenuItem({
 
 export function ContextMenuHeader({ children }: { children: React.ReactNode }) {
   return (
-    <div className="px-2 pt-1 pb-1.5 mb-1 border-b border-surface-700/50">
+    <div className="px-2.5 pt-1 pb-1.5 mb-1 border-b border-white/[0.06]">
       <p className="text-[12px] font-semibold text-surface-100 truncate">{children}</p>
     </div>
   );

@@ -74,7 +74,7 @@ export function NotesPanel({ groupId, channelId }: Props) {
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       {/* Toolbar */}
-      <div className="h-9 flex items-center px-4 gap-3 border-b border-surface-700/50 flex-shrink-0">
+      <div className="h-9 flex items-center px-4 gap-3 border-b border-white/[0.06] flex-shrink-0">
         <span className="text-xs text-surface-500">Notas compartilhadas — todos podem editar</span>
         <div className="ml-auto flex items-center gap-2 text-xs text-surface-500">
           {isSaving ? (

@@ -33,9 +33,9 @@ export function RenameGroupModal({ isOpen, onClose, groupId, currentName }: Prop
   };
 
   return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50" onClick={onClose}>
       <div
-        className="bg-surface-800 rounded-xl w-[380px] p-6 border border-surface-700"
+        className="zk-modal rounded-2xl w-[380px] p-6"
         onClick={(e) => e.stopPropagation()}
       >
         <h2 className="text-lg font-bold text-surface-100 mb-4">Renomear grupo</h2>
@@ -47,7 +47,7 @@ export function RenameGroupModal({ isOpen, onClose, groupId, currentName }: Prop
             onChange={(e) => setName(e.target.value)}
             maxLength={64}
             placeholder="Nome do grupo"
-            className="w-full px-3 py-2 bg-surface-900 border border-surface-700 rounded-lg text-surface-100 text-sm placeholder-surface-500 focus:outline-none focus:border-accent-500"
+            className="w-full px-3 py-2 zk-input rounded-xl text-sm"
           />
           {error && <p className="text-xs text-danger">{error}</p>}
           <div className="flex gap-3 justify-end">
@@ -61,7 +61,7 @@ export function RenameGroupModal({ isOpen, onClose, groupId, currentName }: Prop
             <button
               type="submit"
               disabled={!name.trim() || isSubmitting}
-              className="px-4 py-2 bg-accent-600 hover:bg-accent-500 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
+              className="px-4 py-2 zk-btn-primary text-sm rounded-xl"
             >
               {isSubmitting ? 'Salvando...' : 'Salvar'}
             </button>

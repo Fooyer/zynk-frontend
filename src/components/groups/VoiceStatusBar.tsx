@@ -43,9 +43,9 @@ export function VoiceStatusBar({ voice }: Props) {
 
   return (
     <>
-      <div className="flex-shrink-0 bg-surface-900 border-t border-surface-700/60 overflow-hidden flex flex-col max-h-[45vh]">
+      <div className="flex-shrink-0 bg-surface-900 border-t border-white/[0.06] overflow-hidden flex flex-col max-h-[45vh]">
         {/* Header — só status, não navega ao clicar */}
-        <div className="px-3 py-2.5 border-b border-surface-700/60 flex items-center gap-2 flex-shrink-0">
+        <div className="px-3 py-2.5 border-b border-white/[0.06] flex items-center gap-2 flex-shrink-0">
           <span className={`w-2 h-2 rounded-full animate-pulse flex-shrink-0 ${vc.mode === 'game' ? 'bg-warning' : 'bg-success'}`} />
           <div className="min-w-0 flex-1">
             <p className="text-xs font-semibold text-surface-100 truncate">{vc.name}</p>
@@ -74,12 +74,12 @@ export function VoiceStatusBar({ voice }: Props) {
         </div>
 
         {/* Controles */}
-        <div className="p-2 border-t border-surface-700/60 flex-shrink-0 flex items-center gap-1">
+        <div className="p-2 border-t border-white/[0.06] flex-shrink-0 flex items-center gap-1">
           <button
             onClick={voice.toggleMute}
             title={voice.isMuted ? 'Ativar microfone' : 'Silenciar'}
             className={`flex-1 py-2 rounded-lg transition-colors flex items-center justify-center ${
-              voice.isMuted ? 'bg-danger/20 text-danger hover:bg-danger/30' : 'bg-surface-700 text-surface-200 hover:bg-surface-600'
+              voice.isMuted ? 'bg-danger/20 text-danger hover:bg-danger/30' : 'bg-white/[0.06] text-surface-200 hover:bg-white/[0.12]'
             }`}
           >
             {voice.isMuted ? (
@@ -101,7 +101,7 @@ export function VoiceStatusBar({ voice }: Props) {
             onClick={handleScreenClick}
             title={voice.isScreenSharing ? 'Parar compartilhamento' : 'Compartilhar tela'}
             className={`flex-1 py-2 rounded-lg transition-colors flex items-center justify-center ${
-              voice.isScreenSharing ? 'bg-success text-white hover:bg-success-600' : 'bg-surface-700 text-surface-200 hover:bg-surface-600'
+              voice.isScreenSharing ? 'bg-success text-white hover:bg-success-600' : 'bg-white/[0.06] text-surface-200 hover:bg-white/[0.12]'
             }`}
           >
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

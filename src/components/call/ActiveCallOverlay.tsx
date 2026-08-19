@@ -37,7 +37,7 @@ export function ActiveCallOverlay() {
 
   return (
     <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[90]">
-      <div className={`bg-surface-800 border rounded-2xl px-5 py-4 flex items-center gap-4 shadow-2xl min-w-[320px] ${isGame ? 'border-warning/50' : 'border-surface-700'}`}>
+      <div className={`zk-corners bg-accent-900 border rounded-2xl px-5 py-4 flex items-center gap-4 shadow-elevated min-w-[320px] ${isGame ? 'border-warning/50' : 'border-white/[0.08]'}`}>
         {/* Avatar */}
         <div
           className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0"
@@ -68,7 +68,7 @@ export function ActiveCallOverlay() {
           onClick={onToggleMute}
           title={isMuted ? 'Ativar microfone' : 'Silenciar'}
           className={`w-9 h-9 rounded-full flex items-center justify-center transition-colors ${
-            isMuted ? 'bg-danger text-white' : 'bg-surface-700 text-surface-200 hover:bg-surface-600'
+            isMuted ? 'bg-danger text-white' : 'bg-white/[0.06] text-surface-200 hover:bg-white/[0.12]'
           }`}
         >
           {isMuted ? (
@@ -94,7 +94,7 @@ export function ActiveCallOverlay() {
           onClick={onScreenShare}
           title={isScreenSharing ? 'Parar compartilhamento' : 'Compartilhar tela'}
           className={`w-9 h-9 rounded-full flex items-center justify-center transition-colors ${
-            isScreenSharing ? 'bg-success text-white' : 'bg-surface-700 text-surface-200 hover:bg-surface-600'
+            isScreenSharing ? 'bg-success text-white' : 'bg-white/[0.06] text-surface-200 hover:bg-white/[0.12]'
           }`}
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

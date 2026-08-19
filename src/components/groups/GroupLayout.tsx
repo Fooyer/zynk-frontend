@@ -234,8 +234,8 @@ function ChannelSidebar({ group, voice, activeChannelId, onSelectChannel, onOpen
 
   if (!group) {
     return (
-      <div className="w-60 h-full bg-surface-800 border-r border-surface-700/50 flex flex-col flex-shrink-0">
-        <div className="h-12 border-b border-surface-700/50 flex items-center px-4">
+      <div className="w-60 h-full zk-surface shadow-panel rounded-2xl flex flex-col flex-shrink-0 overflow-hidden">
+        <div className="h-12 border-b border-white/[0.06] flex items-center px-4">
           <span className="text-sm font-semibold text-surface-500">Selecione um grupo</span>
         </div>
       </div>
@@ -243,9 +243,9 @@ function ChannelSidebar({ group, voice, activeChannelId, onSelectChannel, onOpen
   }
 
   return (
-    <div className="w-60 h-full bg-surface-800 border-r border-surface-700/50 flex flex-col flex-shrink-0 overflow-hidden">
+    <div className="w-60 h-full zk-surface shadow-panel rounded-2xl flex flex-col flex-shrink-0 overflow-hidden">
       {/* Group name header */}
-      <div className="h-12 border-b border-surface-700/50 flex items-center px-4 flex-shrink-0 shadow-sm">
+      <div className="h-12 border-b border-white/[0.06] flex items-center px-4 flex-shrink-0 shadow-sm">
         <h2 className="text-sm font-bold text-surface-100 truncate flex-1">{group.name}</h2>
       </div>
 
@@ -275,7 +275,7 @@ function ChannelSidebar({ group, voice, activeChannelId, onSelectChannel, onOpen
                     className={`flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
                       createType === 'text'
                         ? 'bg-accent-600/15 border-accent-500 text-accent-300'
-                        : 'bg-surface-700 border-surface-600 text-surface-300 hover:border-surface-500'
+                        : 'bg-white/[0.06] border-white/[0.08] text-surface-300 hover:border-white/[0.14]'
                     }`}
                   >
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
@@ -289,7 +289,7 @@ function ChannelSidebar({ group, voice, activeChannelId, onSelectChannel, onOpen
                     className={`flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
                       createType === 'voice'
                         ? 'bg-success/15 border-success text-success'
-                        : 'bg-surface-700 border-surface-600 text-surface-300 hover:border-surface-500'
+                        : 'bg-white/[0.06] border-white/[0.08] text-surface-300 hover:border-white/[0.14]'
                     }`}
                   >
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
@@ -306,7 +306,7 @@ function ChannelSidebar({ group, voice, activeChannelId, onSelectChannel, onOpen
                   <span className="text-[10px] font-semibold text-surface-500 uppercase tracking-widest px-0.5">
                     Modo de áudio
                   </span>
-                  <div className="flex items-center gap-0.5 p-0.5 bg-surface-900/60 border border-surface-600 rounded-lg">
+                  <div className="flex items-center gap-0.5 p-0.5 bg-surface-900/60 border border-white/[0.08] rounded-lg">
                     <button
                       type="button"
                       onClick={() => setCreateMode('normal')}
@@ -353,18 +353,18 @@ function ChannelSidebar({ group, voice, activeChannelId, onSelectChannel, onOpen
                 onChange={(e) => setNewName(e.target.value)}
                 placeholder="nome do canal"
                 maxLength={64}
-                className="w-full px-2 py-1 bg-surface-700 border border-surface-600 rounded text-xs text-surface-100 placeholder-surface-500 focus:outline-none focus:border-accent-500"
+                className="zk-input w-full px-2 py-1 rounded text-xs"
               />
               {error && <p className="text-[10px] text-danger px-0.5">{error}</p>}
               <div className="flex gap-1">
                 <button
                   type="submit"
                   disabled={!newName.trim()}
-                  className="flex-1 py-1 bg-accent-600 text-white text-xs rounded disabled:opacity-50 hover:bg-accent-500 transition-colors"
+                  className="flex-1 py-1 bg-accent-600 text-white text-xs rounded hover:bg-accent-500 hover:shadow-glow-accent disabled:opacity-50 disabled:shadow-none transition-all"
                 >
                   Criar
                 </button>
-                <button type="button" onClick={resetCreateForm} className="px-2 py-1 bg-surface-700 text-surface-400 text-xs rounded hover:bg-surface-600 transition-colors">
+                <button type="button" onClick={resetCreateForm} className="px-2 py-1 bg-white/[0.06] text-surface-400 text-xs rounded hover:bg-white/[0.12] transition-colors">
                   ✕
                 </button>
               </div>
@@ -404,7 +404,7 @@ function ChannelSidebar({ group, voice, activeChannelId, onSelectChannel, onOpen
                   onContextMenu={(e) => openChannelMenu(e, row)}
                   className={`group/vc rounded-lg transition-colors cursor-grab active:cursor-grabbing ${
                     isDragging ? 'opacity-40' : ''
-                  } ${isActive ? (vc.mode === 'game' ? 'bg-warning/10 ring-1 ring-inset ring-warning/30' : 'bg-success/10 ring-1 ring-inset ring-success/30') : ''}`}
+                  } ${isActive ? 'bg-accent-600/10 ring-1 ring-inset ring-accent-500/30' : ''}`}
                 >
                   {showDropBefore && <DropIndicator />}
                   {editingKey === rowKey(row) ? (
@@ -426,7 +426,7 @@ function ChannelSidebar({ group, voice, activeChannelId, onSelectChannel, onOpen
                           if (e.key === 'Escape') { e.preventDefault(); setEditingKey(null); }
                         }}
                         maxLength={64}
-                        className="flex-1 min-w-0 bg-surface-700 border border-accent-500 rounded px-1.5 py-0.5 text-sm text-surface-100 focus:outline-none"
+                        className="flex-1 min-w-0 bg-surface-900/70 border border-accent-500 rounded px-1.5 py-0.5 text-sm text-surface-100 focus:outline-none"
                       />
                     </div>
                   ) : (
@@ -436,11 +436,11 @@ function ChannelSidebar({ group, voice, activeChannelId, onSelectChannel, onOpen
                       title={isActive ? 'Abrir a chamada' : undefined}
                       className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-left transition-colors ${
                         isActive
-                          ? 'text-success'
-                          : 'text-surface-300 hover:bg-surface-700/60 hover:text-surface-100'
+                          ? 'text-accent-400'
+                          : 'text-surface-300 hover:bg-white/[0.06] hover:text-surface-100'
                       }`}
                     >
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className={`flex-shrink-0 ${isActive ? 'text-success' : 'text-surface-500'}`}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className={`flex-shrink-0 ${isActive ? 'text-accent-400' : 'text-surface-500'}`}>
                         <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
                         <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
                         <line x1="12" y1="19" x2="12" y2="23" />
@@ -475,7 +475,7 @@ function ChannelSidebar({ group, voice, activeChannelId, onSelectChannel, onOpen
                   {/* Participantes — linha conectora reforça que pertencem a este canal */}
                   {vc.participants.length > 0 && (
                     <div className="pb-2 pl-[27px] pr-2">
-                      <div className={`space-y-2 border-l-2 pl-3 ${isActive ? 'border-success/40' : 'border-surface-600'}`}>
+                      <div className={`space-y-2 border-l-2 pl-3 ${isActive ? 'border-accent-500/40' : 'border-white/[0.10]'}`}>
                         {vc.participants.map((p) => {
                           // Vem do roster (servidor), não do WebRTC — por
                           // isso aparece mesmo pra quem não está na call.
@@ -484,7 +484,7 @@ function ChannelSidebar({ group, voice, activeChannelId, onSelectChannel, onOpen
                             <div key={p.userId} className="flex items-center gap-2">
                               <div
                                 className={`w-5 h-5 rounded-full flex items-center justify-center text-white text-[8px] font-semibold flex-shrink-0 ring-2 ${
-                                  isActive ? 'ring-success/60' : 'ring-surface-600'
+                                  isActive ? 'ring-accent-500/60' : 'ring-white/[0.10]'
                                 }`}
                                 style={{ backgroundColor: getUserColor(p.username) }}
                               >
@@ -542,7 +542,7 @@ function ChannelSidebar({ group, voice, activeChannelId, onSelectChannel, onOpen
                         if (e.key === 'Escape') { e.preventDefault(); setEditingKey(null); }
                       }}
                       maxLength={64}
-                      className="flex-1 min-w-0 bg-surface-700 border border-accent-500 rounded px-1.5 py-0.5 text-sm text-surface-100 focus:outline-none"
+                      className="flex-1 min-w-0 bg-surface-900/70 border border-accent-500 rounded px-1.5 py-0.5 text-sm text-surface-100 focus:outline-none"
                     />
                   </div>
                 ) : (
@@ -551,7 +551,7 @@ function ChannelSidebar({ group, voice, activeChannelId, onSelectChannel, onOpen
                     className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-left transition-colors ${
                       isActive
                         ? 'text-accent-300 bg-accent-600/15'
-                        : 'text-surface-300 hover:bg-surface-700/60 hover:text-surface-100'
+                        : 'text-surface-300 hover:bg-white/[0.06] hover:text-surface-100'
                     }`}
                   >
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="flex-shrink-0">

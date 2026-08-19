@@ -65,7 +65,7 @@ export function GameSessionPanel({ groupId, channelId }: Props) {
   return (
     <div className="flex-1 flex flex-col items-center justify-center p-8">
       {activeSession?.id && activeSession.status !== 'ended' ? (
-        <div className="bg-surface-800 rounded-xl p-6 w-full max-w-md border border-surface-700">
+        <div className="zk-surface shadow-panel rounded-2xl p-6 w-full max-w-md">
           <div className="flex items-center gap-3 mb-4">
             <div className="w-10 h-10 bg-accent-600 rounded-lg flex items-center justify-center">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
@@ -116,7 +116,7 @@ export function GameSessionPanel({ groupId, channelId }: Props) {
             {isParticipant && (
               <button
                 onClick={() => setShowView(true)}
-                className="flex-1 px-4 py-2 bg-accent-600 hover:bg-accent-500 text-white text-sm font-medium rounded-lg transition-colors"
+                className="flex-1 px-4 py-2 zk-btn-primary text-sm rounded-lg"
               >
                 Abrir Sessao
               </button>
@@ -150,12 +150,12 @@ export function GameSessionPanel({ groupId, channelId }: Props) {
               onChange={(e) => setTitle(e.target.value)}
               placeholder="Nome da sessao (opcional)"
               maxLength={128}
-              className="w-full px-3 py-2 bg-surface-800 border border-surface-700 rounded-lg text-surface-100 text-sm placeholder-surface-500 focus:outline-none focus:border-accent-500"
+              className="w-full px-3 py-2 zk-input rounded-xl text-sm"
             />
             <button
               onClick={handleCreate}
               disabled={isCreating}
-              className="px-6 py-2.5 bg-accent-600 hover:bg-accent-500 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
+              className="px-6 py-2.5 zk-btn-primary text-sm rounded-lg"
             >
               {isCreating ? 'Criando...' : 'Iniciar Game Session'}
             </button>

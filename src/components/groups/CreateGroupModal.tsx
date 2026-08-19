@@ -99,9 +99,9 @@ export function CreateGroupModal({ isOpen, onClose }: Props) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50" onClick={onClose}>
       <div
-        className="bg-surface-800 rounded-xl w-[460px] p-6 border border-surface-700 max-h-[90vh] overflow-y-auto"
+        className="zk-modal rounded-2xl w-[460px] p-6 max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         <h2 className="text-lg font-bold text-surface-100 mb-4">Criar Grupo</h2>
@@ -115,7 +115,7 @@ export function CreateGroupModal({ isOpen, onClose }: Props) {
               onChange={(e) => setName(e.target.value)}
               maxLength={64}
               placeholder="Meu grupo de amigos"
-              className="w-full px-3 py-2 bg-surface-900 border border-surface-700 rounded-lg text-surface-100 text-sm placeholder-surface-500 focus:outline-none focus:border-accent-500"
+              className="w-full px-3 py-2 zk-input rounded-xl text-sm"
               autoFocus
             />
           </div>
@@ -132,13 +132,13 @@ export function CreateGroupModal({ isOpen, onClose }: Props) {
               onChange={(e) => setMaxMembers(Number(e.target.value))}
               className="w-full"
               style={{
-                background: `linear-gradient(to right, #00b4d8 ${((maxMembers - 2) / (32 - 2)) * 100}%, #313745 ${((maxMembers - 2) / (32 - 2)) * 100}%)`,
+                background: `linear-gradient(to right, #ff1339 ${((maxMembers - 2) / (32 - 2)) * 100}%, #2c2c30 ${((maxMembers - 2) / (32 - 2)) * 100}%)`,
               }}
             />
           </div>
 
           {/* Voz — sempre incluída, não dá pra desmarcar */}
-          <div className="flex items-start gap-3 px-4 py-3 rounded-lg border-2 bg-success/15 border-success">
+          <div className="flex items-start gap-3 px-4 py-3 rounded-xl border-2 bg-success/15 border-success">
             <span className="flex-shrink-0 mt-0.5 text-success">{VOICE_FEATURE.icon}</span>
             <span className="flex-1 min-w-0">
               <span className="flex items-center gap-2 flex-wrap">
@@ -167,7 +167,7 @@ export function CreateGroupModal({ isOpen, onClose }: Props) {
                 return (
                   <label
                     key={f.id}
-                    className="flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer hover:bg-surface-700/40 transition-colors"
+                    className="flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer hover:bg-white/[0.05] transition-colors"
                   >
                     <input
                       type="checkbox"
@@ -199,7 +199,7 @@ export function CreateGroupModal({ isOpen, onClose }: Props) {
             <button
               type="submit"
               disabled={!name.trim() || isSubmitting}
-              className="px-4 py-2 bg-accent-600 hover:bg-accent-500 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
+              className="px-4 py-2 zk-btn-primary text-sm rounded-xl"
             >
               {isSubmitting ? 'Criando...' : 'Criar'}
             </button>

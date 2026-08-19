@@ -109,7 +109,7 @@ export function MessageInput({ channelId, placeholder = 'Envie uma mensagem...' 
       {/* Banner de resposta */}
       {replyingTo && (
         <div
-          className="flex items-center gap-2 mb-2 px-3 py-2 rounded-lg bg-surface-700/60 border-l-2"
+          className="flex items-center gap-2 mb-2 px-3 py-2 rounded-xl bg-white/[0.04] border-l-2"
           style={{ borderColor: replyColor }}
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-surface-400 flex-shrink-0">
@@ -126,7 +126,7 @@ export function MessageInput({ channelId, placeholder = 'Envie uma mensagem...' 
           </div>
           <button
             onClick={() => setReplyingTo(null)}
-            className="p-1 rounded text-surface-500 hover:text-surface-200 hover:bg-surface-600/50 transition-all flex-shrink-0"
+            className="p-1 rounded-lg text-surface-500 hover:text-surface-200 hover:bg-white/[0.08] transition-all flex-shrink-0"
             aria-label="Cancelar resposta"
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -143,7 +143,7 @@ export function MessageInput({ channelId, placeholder = 'Envie uma mensagem...' 
           <img
             src={imagePreview}
             alt="Preview"
-            className="max-h-32 max-w-xs rounded-lg border border-surface-600 object-cover"
+            className="max-h-32 max-w-xs rounded-xl border border-white/[0.08] shadow-panel object-cover"
           />
           <button
             onClick={clearImage}
@@ -155,7 +155,7 @@ export function MessageInput({ channelId, placeholder = 'Envie uma mensagem...' 
         </div>
       )}
 
-      <div className="flex items-end gap-2 bg-surface-700 rounded-xl px-4 py-2 border border-surface-600 focus-within:border-accent-500/50 transition-colors">
+      <div className="flex items-end gap-2 bg-surface-800/70 rounded-2xl px-4 py-2 border border-white/[0.08] shadow-panel focus-within:border-accent-500/50 focus-within:shadow-elevated transition-all">
         {/* Botão de anexar imagem */}
         <button
           onClick={() => fileInputRef.current?.click()}

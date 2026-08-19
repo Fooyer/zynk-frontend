@@ -287,7 +287,7 @@ export function GameSessionView({ onBack }: Props) {
           <div className="absolute inset-0 flex items-center justify-center">
             <button
               onClick={startScreenShare}
-              className="px-6 py-3 bg-accent-600 hover:bg-accent-500 text-white font-medium rounded-lg transition-colors flex items-center gap-2"
+              className="px-6 py-3 zk-btn-primary rounded-xl flex items-center gap-2"
             >
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
                 <rect x="2" y="3" width="20" height="14" rx="2" />
@@ -319,7 +319,7 @@ export function GameSessionView({ onBack }: Props) {
       </div>
 
       {/* Controls */}
-      <div className="h-14 bg-surface-900 border-t border-surface-700/50 flex items-center px-4 gap-3">
+      <div className="h-14 bg-surface-900 border-t border-white/[0.06] flex items-center px-4 gap-3">
         <button
           onClick={onBack}
           className="text-surface-400 hover:text-surface-100 transition-colors text-sm"
@@ -342,7 +342,7 @@ export function GameSessionView({ onBack }: Props) {
             className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
               isGamepadActive
                 ? 'bg-success/20 text-success'
-                : 'bg-surface-700 text-surface-300 hover:bg-surface-600'
+                : 'bg-white/[0.06] text-surface-300 hover:bg-white/[0.12]'
             }`}
           >
             {isGamepadActive ? 'Gamepad Ativo' : 'Ativar Gamepad'}

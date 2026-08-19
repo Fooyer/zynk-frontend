@@ -103,7 +103,7 @@ export function GroupView({ channelId, onToggleCollapse, collapsed, voice, activ
 
   if (!group) {
     return (
-      <div className="flex-1 flex items-center justify-center bg-surface-900">
+      <div className="flex-1 flex items-center justify-center zk-surface shadow-panel rounded-2xl">
         <div className="text-center">
           <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="mx-auto text-surface-600 mb-3">
             <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
@@ -118,9 +118,9 @@ export function GroupView({ channelId, onToggleCollapse, collapsed, voice, activ
   }
 
   return (
-    <div className="flex-1 flex flex-col bg-surface-900 min-w-0 overflow-hidden">
+    <div className="flex-1 flex flex-col zk-surface shadow-panel rounded-2xl min-w-0 overflow-hidden">
       {/* Header */}
-      <div className="h-12 flex items-center px-4 border-b border-surface-700/50 gap-3 flex-shrink-0">
+      <div className="h-12 flex items-center px-4 border-b border-white/[0.06] gap-3 flex-shrink-0">
         <button
           onClick={onToggleCollapse}
           className="p-1.5 text-surface-500 hover:text-surface-200 rounded transition-colors flex-shrink-0"
@@ -144,14 +144,14 @@ export function GroupView({ channelId, onToggleCollapse, collapsed, voice, activ
               className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
                 activeTab === tab.id
                   ? 'bg-accent-600 text-white'
-                  : 'text-surface-400 hover:text-surface-100 hover:bg-surface-700'
+                  : 'text-surface-400 hover:text-surface-100 hover:bg-white/[0.08]'
               }`}
             >
               {TAB_LABELS[tab.id]}
             </button>
           ))}
 
-          <div className="w-px h-6 bg-surface-700 mx-1" />
+          <div className="w-px h-6 bg-white/[0.08] mx-1" />
 
           <button
             onClick={() => setShowInvite(true)}

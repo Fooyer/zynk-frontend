@@ -18,7 +18,7 @@ function ParticipantTile({ participant, isSelf, isMuted }: {
     <div className="flex flex-col items-center gap-2 w-28">
       <div className="relative">
         <div
-          className="w-20 h-20 rounded-full ring-2 ring-surface-700 flex items-center justify-center text-white text-2xl font-bold overflow-hidden"
+          className="w-20 h-20 rounded-full ring-2 ring-white/[0.10] flex items-center justify-center text-white text-2xl font-bold overflow-hidden"
           style={{ backgroundColor: getUserColor(participant.username) }}
         >
           {participant.avatarUrl ? (
@@ -57,7 +57,7 @@ function ParticipantChip({ participant, isSharing, isFocused, onClick }: {
     >
       <div
         className={`relative w-12 h-12 rounded-full flex items-center justify-center text-white text-xs font-semibold overflow-hidden ${
-          isFocused ? 'ring-2 ring-accent-500' : 'ring-1 ring-surface-700'
+          isFocused ? 'ring-2 ring-accent-500' : 'ring-1 ring-white/[0.10]'
         }`}
         style={{ backgroundColor: getUserColor(participant.username) }}
       >
@@ -96,7 +96,7 @@ function ControlButton({ onClick, title, danger, active, children }: {
           ? 'bg-danger text-white hover:bg-red-700'
           : active
           ? 'bg-success text-white hover:bg-success-600'
-          : 'bg-surface-800 text-surface-200 hover:bg-surface-700'
+          : 'bg-white/[0.06] text-surface-200 hover:bg-white/[0.12]'
       }`}
     >
       {children}
@@ -155,7 +155,7 @@ export function GroupCallView({ voice }: Props) {
       <div className="flex-1 overflow-hidden p-6 flex items-center justify-center min-h-0">
         {focusedStream ? (
           <div className="w-full h-full flex flex-col gap-4">
-            <div className="flex-1 min-h-0 rounded-xl overflow-hidden bg-black relative">
+            <div className="flex-1 min-h-0 rounded-2xl overflow-hidden bg-black relative">
               <video ref={focusedVideoRef} autoPlay muted className="w-full h-full object-contain" />
               <span className="absolute bottom-3 left-3 px-2.5 py-1 rounded-lg bg-black/60 text-white text-xs font-medium backdrop-blur-sm">
                 {Number(focusedUserId) === Number(currentUser?.id) ? 'Você' : nameFor(focusedUserId!)} — tela compartilhada
@@ -194,7 +194,7 @@ export function GroupCallView({ voice }: Props) {
       </div>
 
       {/* Controles */}
-      <div className="flex-shrink-0 border-t border-surface-800 py-4 flex items-center justify-center gap-3">
+      <div className="flex-shrink-0 border-t border-white/[0.06] py-4 flex items-center justify-center gap-3">
         <ControlButton onClick={voice.toggleMute} title={voice.isMuted ? 'Ativar microfone' : 'Silenciar'} active={voice.isMuted ? false : undefined}>
           {voice.isMuted ? (
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="text-danger">

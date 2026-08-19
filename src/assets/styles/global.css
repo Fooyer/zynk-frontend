@@ -14,6 +14,24 @@ body {
   font-family: 'IBM Plex Sans', system-ui, sans-serif;
   overflow: hidden;
   -webkit-font-smoothing: antialiased;
+  /* Gradiente radial com um sopro de vermelho no topo (glow "ligado") + textura
+     de scanline bem sutil — a identidade futurista mora no fundo, não só nos
+     detalhes, mas fica discreta o bastante pra não atrapalhar leitura. */
+  background:
+    repeating-linear-gradient(180deg, rgb(255 255 255 / 0.012) 0px, rgb(255 255 255 / 0.012) 1px, transparent 1px, transparent 3px),
+    radial-gradient(ellipse 120% 60% at 50% -10%, rgb(255 19 57 / 0.07) 0%, transparent 60%),
+    radial-gradient(ellipse 120% 100% at 50% -10%, #141416 0%, #0a0a0b 55%, #08080a 100%);
+}
+
+::selection {
+  background: rgb(255 19 57 / 0.35);
+  color: #f6f6f7;
+}
+
+:focus-visible {
+  outline: 2px solid rgb(255 19 57 / 0.65);
+  outline-offset: 2px;
+  border-radius: 4px;
 }
 
 /* ─── Bordas arredondadas da janela ──────────
@@ -37,12 +55,12 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #313745;
+  background: #2c2c30;
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #6b7280;
+  background: #c40d2e;
 }
 
 /* ─── Drag region for Electron title bar ──── */
@@ -73,7 +91,7 @@ input[type='range'] {
   appearance: none;
   height: 4px;
   border-radius: 9999px;
-  background: #313745;
+  background: #2c2c30;
   outline: none;
 }
 
@@ -92,11 +110,12 @@ input[type='range']::-webkit-slider-thumb {
   margin-top: -4px;
   cursor: pointer;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
-  transition: transform 0.12s ease;
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
 }
 
 input[type='range']:hover::-webkit-slider-thumb {
   transform: scale(1.2);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35), 0 0 0 4px rgb(255 19 57 / 0.25);
 }
 
 input[type='range']:active::-webkit-slider-thumb {
@@ -117,14 +136,81 @@ input[type='range']::-moz-range-thumb {
   background: #fff;
   cursor: pointer;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
-  transition: transform 0.12s ease;
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
 }
 
 input[type='range']:hover::-moz-range-thumb {
   transform: scale(1.2);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35), 0 0 0 4px rgb(255 19 57 / 0.25);
 }
 
 input[type='range']:disabled {
   opacity: 0.4;
   cursor: not-allowed;
+}
+
+/* ─── Recipes reutilizáveis de superfície ───
+   Em vez de repetir bg+border+shadow em cada modal/card, os pontos de
+   elevação do app inteiro passam por aqui — trocar o visual "flutuante"
+   do app é mudar isto, não cada componente. ──────────────────────── */
+
+@layer components {
+  /* Cartão/painel apoiado no fundo (sidebars, seções) — borda quase
+     invisível (branco bem translúcido) em vez de linha sólida cinza. */
+  .zk-surface {
+    @apply bg-surface-800 border border-white/[0.06];
+  }
+
+  /* Elemento flutuante acima do conteúdo (dropdown, menu de contexto, popover) */
+  .zk-elevated {
+    @apply bg-surface-800 border border-white/[0.08] shadow-elevated;
+  }
+
+  /* Modal / diálogo — o nível mais "no ar" da hierarquia */
+  .zk-modal {
+    @apply bg-surface-800 border border-white/[0.08] shadow-modal;
+  }
+
+  /* Campo de formulário padrão do app */
+  .zk-input {
+    @apply bg-surface-900/70 border border-white/[0.08] text-surface-100 placeholder-surface-500
+      transition-colors focus:outline-none focus:border-accent-500/60 focus:ring-1 focus:ring-accent-500/40;
+  }
+
+  /* Rótulo de seção estilo HUD — maiúsculas espaçadas, discreto. Usado em
+     cabeçalhos de lista ("MENSAGENS DIRETAS", "GRUPOS", etc.). */
+  .zk-label {
+    @apply text-[10px] font-semibold uppercase tracking-[0.14em] text-surface-500;
+  }
+
+  /* Botão de ação primária — preenchido em vermelho com glow no hover e texto
+     em versalete espaçado ("ENTRAR", "CRIAR", "SALVAR"...), a assinatura mais
+     visível do tema futurista nos CTAs. Só padding/raio ficam a cargo de quem usa. */
+  .zk-btn-primary {
+    @apply bg-accent-600 hover:bg-accent-500 hover:shadow-glow-accent
+      disabled:opacity-50 disabled:shadow-none disabled:cursor-not-allowed
+      text-white font-semibold uppercase tracking-wide transition-all;
+  }
+}
+
+/* ─── Cantos-guia estilo HUD ───────────────────────────────────────
+   Quatro traços em L nos cantos, desenhados só com background-image (sem
+   markup extra) — o toque "mira/reticle" de painel futurista. Combina com
+   raio de borda generoso: os traços ficam soltos perto da quina arredondada,
+   igual em dashboards sci-fi. Usar com moderação (poucos pontos de destaque). */
+.zk-corners {
+  position: relative;
+  background-image:
+    linear-gradient(to right, rgb(255 19 57 / 0.55) 2px, transparent 2px),
+    linear-gradient(to bottom, rgb(255 19 57 / 0.55) 2px, transparent 2px),
+    linear-gradient(to left, rgb(255 19 57 / 0.55) 2px, transparent 2px),
+    linear-gradient(to bottom, rgb(255 19 57 / 0.55) 2px, transparent 2px),
+    linear-gradient(to right, rgb(255 19 57 / 0.55) 2px, transparent 2px),
+    linear-gradient(to top, rgb(255 19 57 / 0.55) 2px, transparent 2px),
+    linear-gradient(to left, rgb(255 19 57 / 0.55) 2px, transparent 2px),
+    linear-gradient(to top, rgb(255 19 57 / 0.55) 2px, transparent 2px);
+  background-repeat: no-repeat;
+  background-size: 16px 2px, 2px 16px, 16px 2px, 2px 16px, 16px 2px, 2px 16px, 16px 2px, 2px 16px;
+  background-position: top -1px left -1px, top -1px left -1px, top -1px right -1px, top -1px right -1px,
+    bottom -1px right -1px, bottom -1px right -1px, bottom -1px left -1px, bottom -1px left -1px;
 }

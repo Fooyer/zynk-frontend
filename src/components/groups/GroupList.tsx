@@ -1,5 +1,5 @@
 import { useGroupStore } from '../../stores/groupStore';
-import { getInitials, getUserColor } from '../../utils/formatDate';
+import { getInitials } from '../../utils/formatDate';
 
 export function GroupList() {
   const groups = useGroupStore((s) => s.groups);
@@ -14,14 +14,11 @@ export function GroupList() {
           onClick={() => setActiveGroup(group.id)}
           className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left transition-colors ${
             activeGroupId === group.id
-              ? 'bg-surface-600 text-surface-100'
-              : 'text-surface-300 hover:bg-surface-700 hover:text-surface-100'
+              ? 'bg-white/[0.10] text-surface-100'
+              : 'text-surface-300 hover:bg-white/[0.08] hover:text-surface-100'
           }`}
         >
-          <div
-            className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
-            style={{ backgroundColor: getUserColor(group.name) }}
-          >
+          <div className="w-8 h-8 rounded-lg bg-accent-600 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
             {getInitials(group.name)}
           </div>
           <div className="flex-1 min-w-0">

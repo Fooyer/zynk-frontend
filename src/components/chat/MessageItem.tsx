@@ -77,7 +77,7 @@ function MessageContent({ content, imageUrl }: { content: string; imageUrl?: str
           src={`${API_URL}${imageUrl}`}
           alt="Imagem"
           onClick={() => setExpanded(!expanded)}
-          className={`rounded-lg border border-surface-600 cursor-pointer transition-all hover:brightness-110 ${
+          className={`rounded-xl border border-white/[0.08] shadow-panel cursor-pointer transition-all hover:brightness-110 ${
             expanded ? 'max-w-lg max-h-[500px]' : 'max-w-xs max-h-48'
           } object-cover mt-1`}
           loading="lazy"
@@ -120,7 +120,7 @@ function ReplyButton({ onClick }: { onClick: () => void }) {
   return (
     <button
       onClick={onClick}
-      className="p-1 rounded text-surface-500 hover:text-surface-200 hover:bg-surface-600/50 opacity-0 group-hover:opacity-100 transition-all"
+      className="p-1 rounded-lg text-surface-500 hover:text-surface-200 hover:bg-white/[0.08] opacity-0 group-hover:opacity-100 transition-all"
       aria-label="Responder"
     >
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -167,7 +167,7 @@ function EditForm({ initialValue, onSave, onCancel }: {
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={handleKeyDown}
         rows={1}
-        className="w-full bg-surface-900 border border-accent-500 rounded-lg px-2.5 py-1.5 text-sm text-surface-100 resize-none focus:outline-none"
+        className="w-full bg-surface-900/70 border border-accent-500/60 rounded-xl px-3 py-2 text-sm text-surface-100 resize-none focus:outline-none focus:ring-1 focus:ring-accent-500/40"
         onInput={(e) => {
           const el = e.currentTarget;
           el.style.height = 'auto';
@@ -226,7 +226,7 @@ export const MessageItem = memo(function MessageItem({ message, isGrouped, onRep
 
   if (isGrouped) {
     return (
-      <div className="group flex items-start gap-3 px-4 py-0.5 hover:bg-surface-800/30" onContextMenu={handleContextMenu}>
+      <div className="group flex items-start gap-3 mx-2 px-2 py-0.5 rounded-lg hover:bg-white/[0.03] transition-colors" onContextMenu={handleContextMenu}>
         <div className="w-10 flex-shrink-0 flex items-center justify-center">
           <span className="text-xs text-surface-500 opacity-0 group-hover:opacity-100 transition-opacity">
             {new Date(createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
@@ -246,7 +246,7 @@ export const MessageItem = memo(function MessageItem({ message, isGrouped, onRep
   }
 
   return (
-    <div className="group flex items-start gap-3 px-4 pt-3 pb-0.5 hover:bg-surface-800/30" onContextMenu={handleContextMenu}>
+    <div className="group flex items-start gap-3 mx-2 px-2 pt-3 pb-0.5 rounded-lg hover:bg-white/[0.03] transition-colors" onContextMenu={handleContextMenu}>
       <div
         className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 text-white text-sm font-semibold"
         style={{ backgroundColor: color }}

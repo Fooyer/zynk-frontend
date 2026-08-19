@@ -47,8 +47,8 @@ export function InviteFriendModal({ isOpen, onClose, groupId }: Props) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={onClose}>
-      <div className="bg-surface-800 rounded-xl w-96 p-6 border border-surface-700 max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50" onClick={onClose}>
+      <div className="zk-modal rounded-2xl w-96 p-6 max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
         <h2 className="text-lg font-bold text-surface-100 mb-1">Convidar para o grupo</h2>
         <p className="text-xs text-surface-500 mb-4">Apenas amigos que ainda não estão no grupo aparecem aqui.</p>
 
@@ -65,7 +65,7 @@ export function InviteFriendModal({ isOpen, onClose, groupId }: Props) {
             {availableFriends.map((f) => {
               const wasInvited = invited.has(Number(f.friend.id));
               return (
-                <div key={f.id} className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-surface-700/60 transition-colors">
+                <div key={f.id} className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-white/[0.05] transition-colors">
                   <div
                     className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-semibold flex-shrink-0"
                     style={{ backgroundColor: getUserColor(f.friend.username) }}
@@ -85,7 +85,7 @@ export function InviteFriendModal({ isOpen, onClose, groupId }: Props) {
                       <button
                         onClick={() => handleInvite(Number(f.friend.id))}
                         disabled={inviting === Number(f.friend.id)}
-                        className="px-3 py-1 text-xs bg-accent-600 hover:bg-accent-500 text-white rounded-md transition-colors disabled:opacity-50"
+                        className="px-3 py-1 zk-btn-primary text-xs rounded-lg"
                       >
                         {inviting === Number(f.friend.id) ? '...' : 'Convidar'}
                       </button>

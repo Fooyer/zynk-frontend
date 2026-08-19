@@ -25,11 +25,11 @@ export function DialogHost() {
 
   return (
     <div
-      className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70"
+      className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm"
       onClick={() => close(false)}
     >
       <div
-        className="bg-surface-800 rounded-xl w-[380px] p-6 border border-surface-700 shadow-2xl"
+        className="zk-modal rounded-2xl w-[380px] p-6"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start gap-3 mb-5">
@@ -70,10 +70,10 @@ export function DialogHost() {
           <button
             onClick={() => close(true)}
             autoFocus
-            className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+            className={`px-4 py-2 text-sm font-semibold uppercase tracking-wide rounded-xl transition-all ${
               request.danger
                 ? 'bg-danger hover:bg-red-700 text-white'
-                : 'bg-accent-600 hover:bg-accent-500 text-white'
+                : 'zk-btn-primary'
             }`}
           >
             {request.confirmLabel}
