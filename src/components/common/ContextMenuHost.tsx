@@ -27,7 +27,7 @@ export function ContextMenuHost() {
   return (
     <div
       style={{ top: request.pos.y, left: request.pos.x }}
-      className="fixed z-50 bg-surface-900 border border-surface-700 rounded-lg shadow-2xl py-1 min-w-[170px]"
+      className="fixed z-50 bg-surface-900 border border-surface-700/80 rounded-md shadow-xl p-1 min-w-[160px]"
       onClick={(e) => e.stopPropagation()}
     >
       {request.content}

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useFriendStore } from '../../stores/friendStore';
 import { getInitials, getUserColor } from '../../utils/formatDate';
+import { FriendGridSkeleton } from '../common/Skeleton';
 
 type Tab = 'online' | 'all' | 'requests' | 'add';
 
@@ -136,9 +137,7 @@ export function FriendsPage() {
           </div>
         ) : tab === 'requests' ? (
           isLoading ? (
-            <div className="flex justify-center py-12">
-              <div className="w-6 h-6 border-2 border-accent-500 border-t-transparent rounded-full animate-spin" />
-            </div>
+            <FriendGridSkeleton />
           ) : requests.length === 0 ? (
             <div className="text-center py-16">
               <p className="text-surface-400">Nenhuma solicitação pendente</p>
@@ -187,9 +186,7 @@ export function FriendsPage() {
             </div>
           )
         ) : isLoading ? (
-          <div className="flex justify-center py-12">
-            <div className="w-6 h-6 border-2 border-accent-500 border-t-transparent rounded-full animate-spin" />
-          </div>
+          <FriendGridSkeleton />
         ) : displayFriends.length === 0 ? (
           <div className="text-center py-16">
             <p className="text-surface-400">

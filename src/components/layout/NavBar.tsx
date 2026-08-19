@@ -1,16 +1,17 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useUiStore } from '../../stores/uiStore';
 import { useFriendStore } from '../../stores/friendStore';
 import { useGroupStore } from '../../stores/groupStore';
 import { useAuthStore } from '../../stores/authStore';
 import { confirmDialog } from '../../stores/dialogStore';
 import { useContextMenuStore } from '../../stores/contextMenuStore';
+import { applyGroupOrder, useLayoutStore } from '../../stores/layoutStore';
 import { CreateGroupModal } from '../groups/CreateGroupModal';
 import { RenameGroupModal } from '../groups/RenameGroupModal';
 import { InviteFriendModal } from '../groups/InviteFriendModal';
-import { VoiceStatusBar } from '../groups/VoiceStatusBar';
+import { GroupRailSkeleton } from '../common/Skeleton';
+import { ContextMenuItem, ContextMenuHeader } from '../common/ContextMenuItem';
 import { getInitials, getUserColor } from '../../utils/formatDate';
-import type { useVoiceRoom } from '../../hooks/useVoiceRoom';
 import type { Group } from '../../types';
 
 // ─── Linha do rail: ícone + rótulo em texto (em vez do círculo mudo do
@@ -94,14 +95,11 @@ function NavIconButton({
   );
 }
 
-interface NavBarProps {
-  voice: ReturnType<typeof useVoiceRoom>;
-}
-
-export function NavBar({ voice }: NavBarProps) {
+export function NavBar() {
   const { view, setView } = useUiStore();
   const pendingRequests = useFriendStore((s) => s.requests.length);
   const groups = useGroupStore((s) => s.groups);
+  const isLoadingGroups = useGroupStore((s) => s.isLoading);
   const activeGroupId = useGroupStore((s) => s.activeGroupId);
   const setActiveGroup = useGroupStore((s) => s.setActiveGroup);
   const loadMembers = useGroupStore((s) => s.loadMembers);
@@ -110,10 +108,36 @@ export function NavBar({ voice }: NavBarProps) {
   const currentUser = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
 
+  const collapsed = useLayoutStore((s) => s.navCollapsed);
+  const setCollapsed = useLayoutStore((s) => s.setNavCollapsed);
+  const groupOrder = useLayoutStore((s) => s.groupOrder);
+  const moveGroup = useLayoutStore((s) => s.moveGroup);
+
   const [showCreateGroup, setShowCreateGroup] = useState(false);
-  const [collapsed, setCollapsed] = useState(false);
   const [renameTarget, setRenameTarget] = useState<Group | null>(null);
   const [inviteGroupId, setInviteGroupId] = useState<number | null>(null);
+
+  // ─── Reordenar servidores (grupos) por arrastar-e-soltar — ordem fica
+  // salva localmente (zynk-layout) e é aplicada em cima da lista vinda do backend. ──
+  const orderedGroups = useMemo(() => applyGroupOrder(groups, groupOrder), [groups, groupOrder]);
+  const [draggedGroupId, setDraggedGroupId] = useState<number | null>(null);
+  const [dragOverInfo, setDragOverInfo] = useState<{ id: number; position: 'before' | 'after' } | null>(null);
+
+  const handleGroupDragOver = (e: React.DragEvent<HTMLElement>, targetId: number) => {
+    e.preventDefault();
+    const rect = e.currentTarget.getBoundingClientRect();
+    const position: 'before' | 'after' = e.clientY < rect.top + rect.height / 2 ? 'before' : 'after';
+    setDragOverInfo((prev) => (prev?.id === targetId && prev.position === position ? prev : { id: targetId, position }));
+  };
+
+  const handleGroupDrop = (targetId: number) => {
+    const info = dragOverInfo;
+    const draggedId = draggedGroupId;
+    setDraggedGroupId(null);
+    setDragOverInfo(null);
+    if (draggedId == null || !info) return;
+    moveGroup(draggedId, targetId, info.position, groups.map((g) => g.id));
+  };
 
   const handleSelectGroup = (groupId: number) => {
     setActiveGroup(groupId);
@@ -144,56 +168,55 @@ export function NavBar({ voice }: NavBarProps) {
     const isOwner = Number(group.ownerId) === Number(currentUser?.id);
     useContextMenuStore.getState().open({ x: e.clientX, y: e.clientY }, (
       <>
-        <div className="px-3 py-2 border-b border-surface-700/50">
-          <p className="text-sm font-semibold text-surface-100 truncate">{group.name}</p>
-        </div>
+        <ContextMenuHeader>{group.name}</ContextMenuHeader>
 
         {isOwner && (
-          <button
+          <ContextMenuItem
             onClick={() => { useContextMenuStore.getState().close(); setRenameTarget(group); }}
-            className="w-full text-left px-3 py-2 text-sm text-surface-200 hover:bg-surface-700 transition-colors flex items-center gap-2"
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4z" />
-            </svg>
-            Renomear grupo
-          </button>
+            icon={
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4z" />
+              </svg>
+            }
+            label="Renomear grupo"
+          />
         )}
 
-        <button
+        <ContextMenuItem
           onClick={() => handleInviteClick(group)}
-          className="w-full text-left px-3 py-2 text-sm text-surface-200 hover:bg-surface-700 transition-colors flex items-center gap-2"
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-            <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-            <circle cx="8.5" cy="7" r="4" />
-            <line x1="20" y1="8" x2="20" y2="14" />
-            <line x1="23" y1="11" x2="17" y2="11" />
-          </svg>
-          Convidar amigo
-        </button>
+          icon={
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+              <circle cx="8.5" cy="7" r="4" />
+              <line x1="20" y1="8" x2="20" y2="14" />
+              <line x1="23" y1="11" x2="17" y2="11" />
+            </svg>
+          }
+          label="Convidar amigo"
+        />
 
-        <button
+        <ContextMenuItem
           onClick={() => handleLeaveOrDelete(group)}
-          className="w-full text-left px-3 py-2 text-sm text-danger hover:bg-surface-700 transition-colors flex items-center gap-2"
-        >
-          {isOwner ? (
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="3 6 5 6 21 6" />
-              <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-              <path d="M10 11v6" /><path d="M14 11v6" />
-              <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
-            </svg>
-          ) : (
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-              <polyline points="16 17 21 12 16 7" />
-              <line x1="21" y1="12" x2="9" y2="12" />
-            </svg>
-          )}
-          {isOwner ? 'Excluir grupo' : 'Sair do grupo'}
-        </button>
+          danger
+          icon={
+            isOwner ? (
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="3 6 5 6 21 6" />
+                <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                <path d="M10 11v6" /><path d="M14 11v6" />
+                <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+              </svg>
+            ) : (
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                <polyline points="16 17 21 12 16 7" />
+                <line x1="21" y1="12" x2="9" y2="12" />
+              </svg>
+            )
+          }
+          label={isOwner ? 'Excluir grupo' : 'Sair do grupo'}
+        />
       </>
     ));
   };
@@ -223,17 +246,34 @@ export function NavBar({ voice }: NavBarProps) {
 
               <div className="w-6 h-px bg-surface-800 flex-shrink-0 my-1" />
 
-              {groups.map((g) => (
-                <NavIconButton
+              {isLoadingGroups && groups.length === 0 && <GroupRailSkeleton collapsed />}
+
+              {orderedGroups.map((g) => (
+                <div
                   key={g.id}
-                  active={view === 'group' && g.id === activeGroupId}
-                  onClick={() => handleSelectGroup(g.id)}
-                  onContextMenu={(e) => handleGroupContextMenu(e, g)}
-                  title={g.name}
-                  color={getUserColor(g.name)}
+                  draggable
+                  onDragStart={() => setDraggedGroupId(g.id)}
+                  onDragEnd={() => { setDraggedGroupId(null); setDragOverInfo(null); }}
+                  onDragOver={(e) => handleGroupDragOver(e, g.id)}
+                  onDrop={(e) => { e.preventDefault(); handleGroupDrop(g.id); }}
+                  className={`flex flex-col items-center gap-1.5 w-full ${draggedGroupId === g.id ? 'opacity-40' : ''}`}
                 >
-                  <span className="text-[10px]">{g.name.slice(0, 2).toUpperCase()}</span>
-                </NavIconButton>
+                  {dragOverInfo?.id === g.id && dragOverInfo.position === 'before' && draggedGroupId !== g.id && (
+                    <div className="w-6 h-0.5 rounded-full bg-accent-400" />
+                  )}
+                  <NavIconButton
+                    active={view === 'group' && g.id === activeGroupId}
+                    onClick={() => handleSelectGroup(g.id)}
+                    onContextMenu={(e) => handleGroupContextMenu(e, g)}
+                    title={g.name}
+                    color={getUserColor(g.name)}
+                  >
+                    <span className="text-[10px]">{g.name.slice(0, 2).toUpperCase()}</span>
+                  </NavIconButton>
+                  {dragOverInfo?.id === g.id && dragOverInfo.position === 'after' && draggedGroupId !== g.id && (
+                    <div className="w-6 h-0.5 rounded-full bg-accent-400" />
+                  )}
+                </div>
               ))}
 
               <button
@@ -247,8 +287,6 @@ export function NavBar({ voice }: NavBarProps) {
                 </svg>
               </button>
             </div>
-
-            <VoiceStatusBar voice={voice} collapsed />
 
             <div className="flex-shrink-0 border-t border-surface-800 py-2 flex flex-col items-center gap-1.5">
               <NavIconButton active={view === 'settings'} onClick={() => setView('settings')} title="Configurações">
@@ -329,23 +367,41 @@ export function NavBar({ voice }: NavBarProps) {
                   </button>
                 </div>
 
+                {isLoadingGroups && groups.length === 0 ? (
+                  <GroupRailSkeleton />
+                ) : (
                 <div className="space-y-0.5">
-                  {groups.map((g) => (
-                    <NavRow
+                  {orderedGroups.map((g) => (
+                    <div
                       key={g.id}
-                      active={view === 'group' && g.id === activeGroupId}
-                      onClick={() => handleSelectGroup(g.id)}
-                      onContextMenu={(e) => handleGroupContextMenu(e, g)}
-                      icon={
-                        <span
-                          className="w-6 h-6 rounded-md flex items-center justify-center text-white text-[10px] font-bold"
-                          style={{ backgroundColor: getUserColor(g.name) }}
-                        >
-                          {g.name.slice(0, 2).toUpperCase()}
-                        </span>
-                      }
-                      label={g.name}
-                    />
+                      draggable
+                      onDragStart={() => setDraggedGroupId(g.id)}
+                      onDragEnd={() => { setDraggedGroupId(null); setDragOverInfo(null); }}
+                      onDragOver={(e) => handleGroupDragOver(e, g.id)}
+                      onDrop={(e) => { e.preventDefault(); handleGroupDrop(g.id); }}
+                      className={`cursor-grab active:cursor-grabbing ${draggedGroupId === g.id ? 'opacity-40' : ''}`}
+                    >
+                      {dragOverInfo?.id === g.id && dragOverInfo.position === 'before' && draggedGroupId !== g.id && (
+                        <div className="h-0.5 mx-1 rounded-full bg-accent-400" />
+                      )}
+                      <NavRow
+                        active={view === 'group' && g.id === activeGroupId}
+                        onClick={() => handleSelectGroup(g.id)}
+                        onContextMenu={(e) => handleGroupContextMenu(e, g)}
+                        icon={
+                          <span
+                            className="w-6 h-6 rounded-md flex items-center justify-center text-white text-[10px] font-bold"
+                            style={{ backgroundColor: getUserColor(g.name) }}
+                          >
+                            {g.name.slice(0, 2).toUpperCase()}
+                          </span>
+                        }
+                        label={g.name}
+                      />
+                      {dragOverInfo?.id === g.id && dragOverInfo.position === 'after' && draggedGroupId !== g.id && (
+                        <div className="h-0.5 mx-1 rounded-full bg-accent-400" />
+                      )}
+                    </div>
                   ))}
 
                   {groups.length === 0 && (
@@ -357,13 +413,9 @@ export function NavBar({ voice }: NavBarProps) {
                     </button>
                   )}
                 </div>
+                )}
               </div>
             </div>
-
-            {/* Call de voz em andamento — encaixada aqui embaixo (não flutua sobre
-                o conteúdo), então aparece em toda página num único lugar fixo.
-                O componente já retorna null sozinho quando não há call ativa. */}
-            <VoiceStatusBar voice={voice} />
 
             {/* Rodapé — conta + configurações, sempre visíveis (nada escondido atrás de hover) */}
             <div className="flex-shrink-0 border-t border-surface-800 p-2 space-y-0.5">

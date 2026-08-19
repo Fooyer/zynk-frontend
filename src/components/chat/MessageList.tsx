@@ -1,6 +1,7 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { useChatStore } from '../../stores/chatStore';
 import { MessageItem } from './MessageItem';
+import { MessageListSkeleton } from '../common/Skeleton';
 
 interface Props {
   channelId: number;
@@ -41,6 +42,10 @@ export function MessageList({ channelId }: Props) {
       });
     }
   }, [hasMore, isLoading, channelId, loadMore]);
+
+  if (isLoading && messages.length === 0) {
+    return <MessageListSkeleton />;
+  }
 
   return (
     <div ref={containerRef} onScroll={handleScroll} className="flex-1 overflow-y-auto">

@@ -16,6 +16,7 @@ import { SettingsPage } from './components/settings/SettingsPage';
 import { GroupLayout } from './components/groups/GroupLayout';
 import { DialogHost } from './components/common/DialogHost';
 import { ContextMenuHost } from './components/common/ContextMenuHost';
+import { AppShellSkeleton } from './components/common/Skeleton';
 
 
 function TitleBar() {
@@ -90,11 +91,11 @@ function AppLayout() {
     callStatus !== 'idle' && !(view === 'home' && activeDmChannelId === callChannelId);
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden">
+    <div className="window-shell h-screen flex flex-col overflow-hidden bg-surface-900">
       <TitleBar />
       <div className="flex-1 flex overflow-hidden">
-        <NavBar voice={voice} />
-        {view === 'settings' ? <SettingsPage /> : view === 'group' ? <GroupLayout voice={voice} /> : <HomeLayout />}
+        <NavBar />
+        {view === 'settings' ? <SettingsPage /> : view === 'group' ? <GroupLayout voice={voice} /> : <HomeLayout voice={voice} />}
       </div>
       <CallManager />
       {showFloatingCall && <ActiveCallOverlay />}
@@ -107,7 +108,7 @@ function AppLayout() {
 function AuthScreen() {
   const [isLogin, setIsLogin] = useState(true);
   return (
-    <div className="h-screen flex flex-col bg-surface-950">
+    <div className="window-shell h-screen flex flex-col bg-surface-950">
       <TitleBar />
       <div className="flex-1 flex items-center justify-center">
         {isLogin ? (
@@ -139,14 +140,8 @@ export default function App() {
 
   if (isLoading) {
     return (
-      <div className="h-screen flex flex-col bg-surface-950">
-        <TitleBar />
-        <div className="flex-1 flex items-center justify-center">
-          <div className="flex flex-col items-center gap-3">
-            <div className="w-8 h-8 border-2 border-accent-500 border-t-transparent rounded-full animate-spin" />
-            <p className="text-surface-400 text-sm">Carregando...</p>
-          </div>
-        </div>
+      <div className="window-shell">
+        <AppShellSkeleton />
       </div>
     );
   }

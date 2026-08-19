@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { ScreenPickerSkeleton } from '../common/Skeleton';
 import type { ScreenSource } from '../../types';
 
 interface Props {
@@ -10,19 +11,27 @@ export function ScreenPicker({ onSelect, onCancel }: Props) {
   const [sources, setSources] = useState<ScreenSource[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'screens' | 'windows'>('screens');
 
   useEffect(() => {
     window.electronAPI?.getScreenSources().then((s) => {
       setSources(s);
       setLoading(false);
-      // Auto-seleciona a primeira tela inteira
+      // Auto-seleciona a primeira tela inteira; se não houver nenhuma, cai
+      // pra aba de janelas e seleciona a primeira janela.
       const firstScreen = s.find((src) => src.isScreen);
-      if (firstScreen) setSelected(firstScreen.id);
+      if (firstScreen) {
+        setSelected(firstScreen.id);
+      } else if (s.length > 0) {
+        setSelected(s[0].id);
+        setActiveTab('windows');
+      }
     }).catch(() => setLoading(false));
   }, []);
 
   const screens = sources.filter((s) => s.isScreen);
   const windows = sources.filter((s) => !s.isScreen);
+  const activeSources = activeTab === 'screens' ? screens : windows;
 
   const handleConfirm = () => {
     const source = sources.find((s) => s.id === selected);
@@ -49,52 +58,53 @@ export function ScreenPicker({ onSelect, onCancel }: Props) {
           </button>
         </div>
 
+        {/* Abas */}
+        {!loading && sources.length > 0 && (
+          <div className="px-5 pt-3 flex items-center gap-1 border-b border-surface-700/50 flex-shrink-0">
+            <button
+              onClick={() => setActiveTab('screens')}
+              className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                activeTab === 'screens'
+                  ? 'border-accent-500 text-surface-100'
+                  : 'border-transparent text-surface-400 hover:text-surface-200'
+              }`}
+            >
+              Telas{screens.length > 0 ? ` (${screens.length})` : ''}
+            </button>
+            <button
+              onClick={() => setActiveTab('windows')}
+              className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                activeTab === 'windows'
+                  ? 'border-accent-500 text-surface-100'
+                  : 'border-transparent text-surface-400 hover:text-surface-200'
+              }`}
+            >
+              Janelas{windows.length > 0 ? ` (${windows.length})` : ''}
+            </button>
+          </div>
+        )}
+
         {/* Content */}
-        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
+        <div className="flex-1 overflow-y-auto px-5 py-4">
           {loading ? (
-            <div className="flex items-center justify-center py-12">
-              <div className="w-6 h-6 border-2 border-accent-500 border-t-transparent rounded-full animate-spin" />
-            </div>
+            <ScreenPickerSkeleton />
+          ) : sources.length === 0 ? (
+            <p className="text-center text-surface-400 py-8">Nenhuma fonte disponível</p>
+          ) : activeSources.length === 0 ? (
+            <p className="text-center text-surface-400 py-8">
+              {activeTab === 'screens' ? 'Nenhuma tela disponível' : 'Nenhuma janela disponível'}
+            </p>
           ) : (
-            <>
-              {/* Telas */}
-              {screens.length > 0 && (
-                <div>
-                  <h3 className="text-xs font-semibold text-surface-400 uppercase tracking-wider mb-3">Telas</h3>
-                  <div className="grid grid-cols-2 gap-3">
-                    {screens.map((source) => (
-                      <SourceCard
-                        key={source.id}
-                        source={source}
-                        isSelected={selected === source.id}
-                        onClick={() => setSelected(source.id)}
-                      />
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Janelas */}
-              {windows.length > 0 && (
-                <div>
-                  <h3 className="text-xs font-semibold text-surface-400 uppercase tracking-wider mb-3">Janelas</h3>
-                  <div className="grid grid-cols-2 gap-3">
-                    {windows.map((source) => (
-                      <SourceCard
-                        key={source.id}
-                        source={source}
-                        isSelected={selected === source.id}
-                        onClick={() => setSelected(source.id)}
-                      />
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {sources.length === 0 && (
-                <p className="text-center text-surface-400 py-8">Nenhuma fonte disponível</p>
-              )}
-            </>
+            <div className="grid grid-cols-2 gap-3">
+              {activeSources.map((source) => (
+                <SourceCard
+                  key={source.id}
+                  source={source}
+                  isSelected={selected === source.id}
+                  onClick={() => setSelected(source.id)}
+                />
+              ))}
+            </div>
           )}
         </div>
 

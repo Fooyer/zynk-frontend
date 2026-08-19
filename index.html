@@ -13,6 +13,9 @@
     />
     <title>Zynk</title>
     <style>
+      html, body {
+        background: transparent;
+      }
       #splash {
         position: fixed;
         inset: 0;
@@ -21,6 +24,7 @@
         align-items: center;
         justify-content: center;
         background: #0c0d1a;
+        border-radius: 10px;
         z-index: 9999;
         transition: opacity 0.3s ease;
       }
@@ -44,7 +48,7 @@
       @keyframes spin { to { transform: rotate(360deg); } }
     </style>
   </head>
-  <body class="bg-surface-900 text-surface-100">
+  <body class="text-surface-100">
     <div id="splash">
       <div class="logo">Zynk</div>
       <div class="spinner"></div>

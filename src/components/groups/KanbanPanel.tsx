@@ -4,6 +4,7 @@ import { getSocket } from '../../services/socket';
 import { useAuthStore } from '../../stores/authStore';
 import { useGroupStore } from '../../stores/groupStore';
 import { confirmDialog } from '../../stores/dialogStore';
+import { KanbanSkeleton } from '../common/Skeleton';
 import type { KanbanCard } from '../../types';
 
 interface Props {
@@ -154,6 +155,7 @@ export function KanbanPanel({ groupId, channelId }: Props) {
   const members = groupMembers.map((m) => ({ id: m.user.id, username: m.user.username, avatarUrl: m.user.avatarUrl }));
 
   const [cards, setCards] = useState<KanbanCard[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [newTitle, setNewTitle] = useState('');
   const [isAdding, setIsAdding] = useState(false);
   const [selectedCard, setSelectedCard] = useState<KanbanCard | null>(null);
@@ -161,7 +163,10 @@ export function KanbanPanel({ groupId, channelId }: Props) {
   const [dragOverCol, setDragOverCol] = useState<KanbanCard['status'] | null>(null);
 
   useEffect(() => {
-    groupsAPI.getKanban(groupId).then(({ data }) => setCards(data));
+    setIsLoading(true);
+    groupsAPI.getKanban(groupId)
+      .then(({ data }) => setCards(data))
+      .finally(() => setIsLoading(false));
   }, [groupId]);
 
   // Real-time sync
@@ -258,6 +263,7 @@ export function KanbanPanel({ groupId, channelId }: Props) {
       </form>
 
       {/* Board */}
+      {isLoading ? <KanbanSkeleton /> : (
       <div className="flex-1 flex gap-4 p-4 overflow-x-auto overflow-y-hidden">
         {COLUMNS.map((col) => {
           const colCards = cards.filter((c) => c.status === col.id);
@@ -345,6 +351,7 @@ export function KanbanPanel({ groupId, channelId }: Props) {
           );
         })}
       </div>
+      )}
 
       {/* Card detail modal */}
       {selectedCard && (

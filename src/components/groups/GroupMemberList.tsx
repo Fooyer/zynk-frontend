@@ -1,15 +1,25 @@
-import { useState } from 'react';
 import { useGroupStore } from '../../stores/groupStore';
+import { useLayoutStore } from '../../stores/layoutStore';
 import { getInitials, getUserColor } from '../../utils/formatDate';
+import { MemberListSkeleton } from '../common/Skeleton';
 
 export function GroupMemberList() {
   const members = useGroupStore((s) => s.members);
-  const [collapsed, setCollapsed] = useState(false);
+  const isLoadingMembers = useGroupStore((s) => s.isLoadingMembers);
+  const collapsed = useLayoutStore((s) => s.memberListCollapsed);
+  const setCollapsed = useLayoutStore((s) => s.setMemberListCollapsed);
 
   const online = members.filter((m) => m.user.status !== 'offline');
   const offline = members.filter((m) => m.user.status === 'offline');
 
-  if (members.length === 0) return null;
+  if (members.length === 0) {
+    if (!isLoadingMembers) return null;
+    return (
+      <aside className="w-48 bg-surface-800 border-l border-surface-700/50 flex flex-col flex-shrink-0 overflow-y-auto">
+        <MemberListSkeleton />
+      </aside>
+    );
+  }
 
   if (collapsed) {
     return (

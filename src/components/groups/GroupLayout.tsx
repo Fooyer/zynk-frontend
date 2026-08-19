@@ -2,9 +2,13 @@ import { useEffect, useMemo, useState } from 'react';
 import { useGroupStore } from '../../stores/groupStore';
 import { useAuthStore } from '../../stores/authStore';
 import { useContextMenuStore } from '../../stores/contextMenuStore';
+import { useLayoutStore } from '../../stores/layoutStore';
 import { useVoiceRoom } from '../../hooks/useVoiceRoom';
 import { GroupView } from './GroupView';
 import { GroupMemberList } from './GroupMemberList';
+import { VoiceStatusBar } from './VoiceStatusBar';
+import { ChannelListSkeleton } from '../common/Skeleton';
+import { ContextMenuItem, ContextMenuHeader, ContextMenuHint } from '../common/ContextMenuItem';
 import { groupsAPI } from '../../services/api';
 import { getSocket } from '../../services/socket';
 import { getInitials, getUserColor } from '../../utils/formatDate';
@@ -35,6 +39,7 @@ function ChannelSidebar({ group, voice, activeChannelId, onSelectChannel }: Chan
   const currentUser = useAuthStore((s) => s.user);
 
   const [textChannels, setTextChannels] = useState<GroupTextChannel[]>([]);
+  const [isLoadingChannels, setIsLoadingChannels] = useState(true);
   const [draggedKey, setDraggedKey] = useState<string | null>(null);
   const [dragOverInfo, setDragOverInfo] = useState<{ key: string; position: 'before' | 'after' } | null>(null);
   const [editingKey, setEditingKey] = useState<string | null>(null);
@@ -51,7 +56,10 @@ function ChannelSidebar({ group, voice, activeChannelId, onSelectChannel }: Chan
   // Carrega os canais de texto (principal + adicionais) quando o grupo muda
   useEffect(() => {
     if (!group) { setTextChannels([]); return; }
-    groupsAPI.getTextChannels(group.id).then(({ data }) => setTextChannels(data));
+    setIsLoadingChannels(true);
+    groupsAPI.getTextChannels(group.id)
+      .then(({ data }) => setTextChannels(data))
+      .finally(() => setIsLoadingChannels(false));
   }, [group?.id]);
 
   // Escuta novos canais de texto criados por outros membros
@@ -183,41 +191,40 @@ function ChannelSidebar({ group, voice, activeChannelId, onSelectChannel }: Chan
 
     useContextMenuStore.getState().open({ x: e.clientX, y: e.clientY }, (
       <>
-        <div className="px-3 py-2 border-b border-surface-700/50">
-          <p className="text-sm font-semibold text-surface-100 truncate">{displayName}</p>
-        </div>
+        <ContextMenuHeader>{displayName}</ContextMenuHeader>
 
         {canManage ? (
           <>
-            <button
+            <ContextMenuItem
               onClick={() => { useContextMenuStore.getState().close(); startEdit(row); }}
-              className="w-full text-left px-3 py-2 text-sm text-surface-200 hover:bg-surface-700 transition-colors flex items-center gap-2"
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4z" />
-              </svg>
-              Renomear
-            </button>
-            <button
+              icon={
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4z" />
+                </svg>
+              }
+              label="Renomear"
+            />
+            <ContextMenuItem
               onClick={() => {
                 useContextMenuStore.getState().close();
                 if (row.type === 'voice') voice.deleteChannel(row.channel.id);
                 else handleTextDelete(row.channel);
               }}
-              className="w-full text-left px-3 py-2 text-sm text-danger hover:bg-surface-700 transition-colors flex items-center gap-2"
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="3 6 5 6 21 6" />
-                <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-                <path d="M10 11v6" /><path d="M14 11v6" />
-                <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
-              </svg>
-              Excluir
-            </button>
+              danger
+              icon={
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="3 6 5 6 21 6" />
+                  <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                  <path d="M10 11v6" /><path d="M14 11v6" />
+                  <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+                </svg>
+              }
+              label="Excluir"
+            />
           </>
         ) : (
-          <p className="px-3 py-2 text-xs text-surface-500">Sem permissão para gerenciar este canal</p>
+          <ContextMenuHint>Sem permissão para gerenciar este canal</ContextMenuHint>
         )}
       </>
     ));
@@ -293,37 +300,48 @@ function ChannelSidebar({ group, voice, activeChannelId, onSelectChannel }: Chan
                 </div>
               )}
               {hasVoice && createType === 'voice' && (
-                <div className="grid grid-cols-2 gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => setCreateMode('normal')}
-                    title="Processamento normal de áudio — melhor pra conversar"
-                    className={`flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
-                      createMode === 'normal'
-                        ? 'bg-accent-600/15 border-accent-500 text-accent-300'
-                        : 'bg-surface-700 border-surface-600 text-surface-300 hover:border-surface-500'
-                    }`}
-                  >
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-                    </svg>
-                    Conversa
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setCreateMode('game')}
-                    title="Sem processamento de áudio — menor delay possível, pensado pra call durante partida"
-                    className={`flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
-                      createMode === 'game'
-                        ? 'bg-warning/15 border-warning text-warning'
-                        : 'bg-surface-700 border-surface-600 text-surface-300 hover:border-surface-500'
-                    }`}
-                  >
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M13 2 3 14h7l-1 8 10-12h-7l1-8z" />
-                    </svg>
-                    Jogos
-                  </button>
+                <div className="space-y-1">
+                  <span className="text-[10px] font-semibold text-surface-500 uppercase tracking-widest px-0.5">
+                    Modo de áudio
+                  </span>
+                  <div className="flex items-center gap-0.5 p-0.5 bg-surface-900/60 border border-surface-600 rounded-lg">
+                    <button
+                      type="button"
+                      onClick={() => setCreateMode('normal')}
+                      className={`flex-1 flex items-center justify-center gap-1.5 py-1 rounded-md text-xs font-medium transition-colors ${
+                        createMode === 'normal'
+                          ? 'bg-accent-600/20 text-accent-300'
+                          : 'text-surface-400 hover:text-surface-200'
+                      }`}
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                        <line x1="4" y1="10" x2="4" y2="14" />
+                        <line x1="9" y1="6" x2="9" y2="18" />
+                        <line x1="14" y1="3" x2="14" y2="21" />
+                        <line x1="19" y1="8" x2="19" y2="16" />
+                      </svg>
+                      Normal
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCreateMode('game')}
+                      className={`flex-1 flex items-center justify-center gap-1.5 py-1 rounded-md text-xs font-medium transition-colors ${
+                        createMode === 'game'
+                          ? 'bg-warning/20 text-warning'
+                          : 'text-surface-400 hover:text-surface-200'
+                      }`}
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M13 2 3 14h7l-1 8 10-12h-7l1-8z" />
+                      </svg>
+                      Jogos
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-surface-500 px-0.5 leading-tight">
+                    {createMode === 'normal'
+                      ? 'Processamento normal de áudio — melhor pra conversar.'
+                      : 'Sem processamento de áudio — menor delay possível, pensado pra call durante partida.'}
+                  </p>
                 </div>
               )}
               <input
@@ -353,6 +371,7 @@ function ChannelSidebar({ group, voice, activeChannelId, onSelectChannel }: Chan
         </div>
 
         {/* Voz e texto juntos numa lista só, na ordem que cada um arrastou */}
+        {isLoadingChannels ? <ChannelListSkeleton /> : (
         <div className="px-2 space-y-1">
           {merged.map((row) => {
             const isDragging = draggedKey === rowKey(row);
@@ -552,7 +571,12 @@ function ChannelSidebar({ group, voice, activeChannelId, onSelectChannel }: Chan
             );
           })}
         </div>
+        )}
       </div>
+
+      {/* Call de voz em andamento — colada no rodapé da seção de canais,
+          mesma posição do Discord. Some sozinha quando não há call ativa. */}
+      <VoiceStatusBar voice={voice} />
     </div>
   );
 }
@@ -562,7 +586,8 @@ function ChannelSidebar({ group, voice, activeChannelId, onSelectChannel }: Chan
 export function GroupLayout({ voice }: { voice: ReturnType<typeof useVoiceRoom> }) {
   const groups = useGroupStore((s) => s.groups);
   const activeGroupId = useGroupStore((s) => s.activeGroupId);
-  const [collapsed, setCollapsed] = useState(false);
+  const collapsed = useLayoutStore((s) => s.channelSidebarCollapsed);
+  const setCollapsed = useLayoutStore((s) => s.setChannelSidebarCollapsed);
   const [activeChannelId, setActiveChannelId] = useState<number | null>(null);
 
   const activeGroup = groups.find((g) => g.id === activeGroupId) ?? null;
@@ -591,7 +616,7 @@ export function GroupLayout({ voice }: { voice: ReturnType<typeof useVoiceRoom> 
       {/* ── Col 2: Main content ───────────────────────────── */}
       <GroupView
         channelId={activeChannelId}
-        onToggleCollapse={() => setCollapsed((c) => !c)}
+        onToggleCollapse={() => setCollapsed(!collapsed)}
         collapsed={collapsed}
       />
 

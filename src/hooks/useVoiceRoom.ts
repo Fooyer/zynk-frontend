@@ -164,6 +164,25 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
     };
   }, [activeVcId, user?.id]);
 
+  // Socket: servidor recusou a entrada (sala já no limite de participantes)
+  // — desfaz o estado otimista que `join()` já tinha setado e libera o mic.
+  // Efeito próprio (não o de signaling) pra garantir que o listener já
+  // esteja registrado antes da resposta do servidor chegar.
+  useEffect(() => {
+    const socket = getSocket();
+    const onJoinRejected = (data: { voiceChannelId: number; reason: string; max: number }) => {
+      if (data.voiceChannelId !== activeVcIdRef.current) return;
+      localStream.current?.getTracks().forEach((t) => t.stop());
+      localStream.current = null;
+      connectedGroupChannelIdRef.current = null;
+      setActiveVcId(null);
+      setConnectedVc(null);
+      alertDialog(`Essa sala já está com o máximo de ${data.max} pessoas — tente outro canal.`, { title: 'Sala cheia' });
+    };
+    socket.on('voice:join-rejected', onJoinRejected);
+    return () => { socket.off('voice:join-rejected', onJoinRejected); };
+  }, []);
+
   // Cleanup on unmount — usa uma ref pra sempre pegar a versão mais recente
   // de _leave/activeVcId (o callback de cleanup de um efeito com deps [] fica
   // "congelado" na primeira renderização, então referenciar as variáveis

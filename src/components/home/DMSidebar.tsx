@@ -1,10 +1,17 @@
 import { useEffect } from 'react';
 import { useFriendStore } from '../../stores/friendStore';
 import { useCallStore } from '../../stores/callStore';
+import { VoiceStatusBar } from '../groups/VoiceStatusBar';
+import { DMListSkeleton } from '../common/Skeleton';
 import { getInitials, getUserColor } from '../../utils/formatDate';
+import type { useVoiceRoom } from '../../hooks/useVoiceRoom';
 
-export function DMSidebar() {
-  const { friends, dmChannels, activeDmChannelId, loadDmChannels, openDm, closeDm, setActiveDm } =
+interface DMSidebarProps {
+  voice: ReturnType<typeof useVoiceRoom>;
+}
+
+export function DMSidebar({ voice }: DMSidebarProps) {
+  const { friends, dmChannels, activeDmChannelId, loadDmChannels, openDm, closeDm, setActiveDm, isDmLoading, isLoading } =
     useFriendStore();
 
   const callStatus = useCallStore((s) => s.status);
@@ -59,7 +66,11 @@ export function DMSidebar() {
         </div>
 
         {dmChannels.length === 0 ? (
-          <p className="text-xs text-surface-500 px-5 py-2">Nenhum chat ainda</p>
+          isDmLoading ? (
+            <DMListSkeleton />
+          ) : (
+            <p className="text-xs text-surface-500 px-5 py-2">Nenhum chat ainda</p>
+          )
         ) : (
           <div className="px-2 space-y-0.5">
             {dmChannels.map((dm) => {
@@ -130,6 +141,12 @@ export function DMSidebar() {
         )}
 
         {/* Amigos online */}
+        {isLoading && friends.length === 0 && (
+          <div className="mt-4">
+            <h3 className="text-xs font-semibold text-surface-400 uppercase tracking-wider px-5 py-1.5">Online</h3>
+            <DMListSkeleton />
+          </div>
+        )}
         {onlineFriends.length > 0 && (
           <div className="mt-4">
             <h3 className="text-xs font-semibold text-surface-400 uppercase tracking-wider px-5 py-1.5">
@@ -164,7 +181,11 @@ export function DMSidebar() {
         )}
       </div>
 
-      {/* Indicador mínimo de chamada ativa (controles completos ficam acima do chat) */}
+      {/* Call de voz de grupo em andamento — colada no rodapé, mesma posição
+          usada na seção de canais. Some sozinha quando não há call ativa. */}
+      <VoiceStatusBar voice={voice} />
+
+      {/* Indicador mínimo de chamada 1:1 ativa (controles completos ficam acima do chat) */}
       {callStatus !== 'idle' && (
         <div className="px-3 py-2 bg-surface-900 border-t border-surface-700/50">
           <div className="flex items-center gap-2">

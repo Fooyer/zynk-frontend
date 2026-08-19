@@ -48,12 +48,16 @@ function createWindow() {
       symbolColor: '#8b91a7',
       height: 36,
     },
+    // roundedCorners é nativo no macOS e Windows 11 com frame:false, mas no
+    // Linux não existe — por isso a janela fica transparente e o arredondado
+    // vem do CSS (.window-shell), que também cobre o Linux.
+    roundedCorners: true,
+    transparent: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
     },
-    backgroundColor: '#131524',
     show: false,
   });
 

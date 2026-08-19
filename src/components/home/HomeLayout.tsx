@@ -2,8 +2,13 @@ import { useFriendStore } from '../../stores/friendStore';
 import { DMSidebar } from './DMSidebar';
 import { FriendsPage } from './FriendsPage';
 import { DMChatArea } from './DMChatArea';
+import type { useVoiceRoom } from '../../hooks/useVoiceRoom';
 
-export function HomeLayout() {
+interface HomeLayoutProps {
+  voice: ReturnType<typeof useVoiceRoom>;
+}
+
+export function HomeLayout({ voice }: HomeLayoutProps) {
   const activeDmChannelId = useFriendStore((s) => s.activeDmChannelId);
   const dmChannels = useFriendStore((s) => s.dmChannels);
 
@@ -13,7 +18,7 @@ export function HomeLayout() {
 
   return (
     <div className="flex-1 flex overflow-hidden">
-      <DMSidebar />
+      <DMSidebar voice={voice} />
       {activeDm ? <DMChatArea dm={activeDm} /> : <FriendsPage />}
     </div>
   );

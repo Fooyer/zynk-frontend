@@ -7,6 +7,7 @@ interface GroupState {
   activeGroupId: number | null;
   members: GroupMemberEntry[];
   isLoading: boolean;
+  isLoadingMembers: boolean;
 
   loadGroups: () => Promise<void>;
   createGroup: (name: string, maxMembers?: number, features?: string[]) => Promise<Group>;
@@ -26,6 +27,7 @@ export const useGroupStore = create<GroupState>((set, get) => ({
   activeGroupId: null,
   members: [],
   isLoading: false,
+  isLoadingMembers: false,
 
   loadGroups: async () => {
     set({ isLoading: true });
@@ -79,8 +81,13 @@ export const useGroupStore = create<GroupState>((set, get) => ({
   },
 
   loadMembers: async (groupId) => {
-    const { data } = await groupsAPI.getMembers(groupId);
-    set({ members: data });
+    set({ isLoadingMembers: true });
+    try {
+      const { data } = await groupsAPI.getMembers(groupId);
+      set({ members: data });
+    } finally {
+      set({ isLoadingMembers: false });
+    }
   },
 
   getActiveGroup: () => {

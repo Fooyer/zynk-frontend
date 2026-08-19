@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { groupsAPI } from '../../services/api';
 import { getSocket } from '../../services/socket';
 import { useAuthStore } from '../../stores/authStore';
+import { NotesSkeleton } from '../common/Skeleton';
 import type { GroupNote } from '../../types';
 
 interface Props {
@@ -13,18 +14,20 @@ export function NotesPanel({ groupId, channelId }: Props) {
   const user = useAuthStore((s) => s.user);
   const [note, setNote] = useState<GroupNote | null>(null);
   const [content, setContent] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isRemoteUpdate = useRef(false);
 
   useEffect(() => {
+    setIsLoading(true);
     groupsAPI.getNote(groupId).then(({ data }) => {
       if (data) {
         setNote(data);
         setContent(data.content ?? '');
       }
-    });
+    }).finally(() => setIsLoading(false));
   }, [groupId]);
 
   // Real-time sync via socket
@@ -86,13 +89,15 @@ export function NotesPanel({ groupId, channelId }: Props) {
       </div>
 
       {/* Editor */}
-      <textarea
-        value={content}
-        onChange={(e) => handleChange(e.target.value)}
-        placeholder="Escreva aqui... markdown é suportado. Todos no grupo veem em tempo real."
-        className="flex-1 resize-none bg-surface-900 text-surface-100 text-sm p-4 focus:outline-none font-mono leading-relaxed placeholder-surface-600"
-        spellCheck={false}
-      />
+      {isLoading ? <NotesSkeleton /> : (
+        <textarea
+          value={content}
+          onChange={(e) => handleChange(e.target.value)}
+          placeholder="Escreva aqui... markdown é suportado. Todos no grupo veem em tempo real."
+          className="flex-1 resize-none bg-surface-900 text-surface-100 text-sm p-4 focus:outline-none font-mono leading-relaxed placeholder-surface-600"
+          spellCheck={false}
+        />
+      )}
     </div>
   );
 }
