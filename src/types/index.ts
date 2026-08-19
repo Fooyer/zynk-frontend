@@ -139,6 +139,9 @@ export interface VoiceParticipant {
   userId: number;
   username: string;
   avatarUrl: string | null;
+  /** Vem do servidor (roster), não do WebRTC — por isso funciona mesmo pra
+   *  quem não está conectado nessa call. */
+  isSharing?: boolean;
 }
 
 export type CallMode = 'normal' | 'game';

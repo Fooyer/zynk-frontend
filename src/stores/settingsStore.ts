@@ -1,8 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
-export type NoiseSuppression = 'off' | 'low' | 'medium' | 'high';
-
 interface SettingsState {
   // Dispositivos
   inputDeviceId: string;   // '' = padrão do sistema
@@ -10,7 +8,7 @@ interface SettingsState {
 
   // Áudio
   inputVolume: number;       // 0–2 (0–200%)
-  noiseSuppression: NoiseSuppression;
+  noiseSuppression: boolean; // liga/desliga só — RNNoise contínuo, sem níveis
   echoCancellation: boolean;
   autoGainControl: boolean;
 
@@ -23,7 +21,7 @@ interface SettingsState {
   setInputDevice: (id: string) => void;
   setOutputDevice: (id: string) => void;
   setInputVolume: (v: number) => void;
-  setNoiseSuppression: (v: NoiseSuppression) => void;
+  setNoiseSuppression: (v: boolean) => void;
   setEchoCancellation: (v: boolean) => void;
   setAutoGainControl: (v: boolean) => void;
   setNotifSound: (v: boolean) => void;
@@ -37,7 +35,7 @@ export const useSettingsStore = create<SettingsState>()(
       inputDeviceId: '',
       outputDeviceId: '',
       inputVolume: 1,
-      noiseSuppression: 'high',
+      noiseSuppression: true,
       echoCancellation: true,
       autoGainControl: true,
 
@@ -55,6 +53,16 @@ export const useSettingsStore = create<SettingsState>()(
       setNotifPush: (notifPush) => set({ notifPush }),
       setNotifVolume: (notifVolume) => set({ notifVolume }),
     }),
-    { name: 'zynk-audio-settings' },
+    {
+      name: 'zynk-audio-settings',
+      version: 1,
+      // v0 guardava 'off'|'low'|'medium'|'high' — converte pro liga/desliga novo.
+      migrate: (persisted: any, version) => {
+        if (version === 0 && persisted && typeof persisted.noiseSuppression === 'string') {
+          persisted.noiseSuppression = persisted.noiseSuppression !== 'off';
+        }
+        return persisted;
+      },
+    },
   ),
 );

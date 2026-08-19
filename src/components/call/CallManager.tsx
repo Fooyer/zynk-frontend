@@ -6,143 +6,19 @@ import { getSocket } from '../../services/socket';
 import { remoteScreenStreamRef, localScreenStreamRef, localAnalyserRef, remoteAnalyserRef } from '../../services/callStream';
 import { captureScreen } from '../../services/screenCapture';
 import { ICE_SERVERS } from '../../services/iceServers';
-import { LOW_LATENCY_AUDIO_CONSTRAINTS, applyLowLatencySenderParams, withLowLatencyOpus } from '../../services/lowLatencyAudio';
+import { applyLowLatencySenderParams, withLowLatencyOpus } from '../../services/lowLatencyAudio';
+import { getProcessedStream } from '../../services/audioProcessing';
+import {
+  playJoinCallSound,
+  playLeaveCallSound,
+  playMuteSound,
+  playUnmuteSound,
+  playScreenShareStartSound,
+  playScreenShareStopSound,
+} from '../../services/callSounds';
 import { IncomingCallModal } from './IncomingCallModal';
 import { ScreenPicker } from './ScreenPicker';
 import type { CallMode, ScreenSource } from '../../types';
-
-async function getProcessedStream(mode: CallMode): Promise<MediaStream> {
-  const settings = useSettingsStore.getState();
-
-  // Call de jogo: ignora as preferências de processamento do usuário e vai
-  // sempre de áudio cru — é o próprio propósito desse modo (menor delay
-  // possível, abre mão de eco/ruído em troca disso).
-  if (mode === 'game') {
-    const deviceConstraints: MediaTrackConstraints = {
-      ...LOW_LATENCY_AUDIO_CONSTRAINTS,
-      channelCount: 1,
-      sampleRate: 48000,
-    };
-    if (settings.inputDeviceId) deviceConstraints.deviceId = { exact: settings.inputDeviceId };
-    const rawStream = await navigator.mediaDevices.getUserMedia({ audio: deviceConstraints });
-    try {
-      const ctx = new AudioContext({ sampleRate: 48000 });
-      const src = ctx.createMediaStreamSource(rawStream);
-      const analyser = ctx.createAnalyser();
-      analyser.fftSize = 256;
-      src.connect(analyser);
-      localAnalyserRef.current = analyser;
-    } catch { /* */ }
-    return rawStream;
-  }
-
-  const deviceConstraints: MediaTrackConstraints = {
-    noiseSuppression: settings.echoCancellation,
-    echoCancellation: settings.echoCancellation,
-    autoGainControl: settings.autoGainControl,
-    channelCount: 1,
-    sampleRate: 48000,
-  };
-  if (settings.inputDeviceId) {
-    deviceConstraints.deviceId = { exact: settings.inputDeviceId };
-  }
-
-  const rawStream = await navigator.mediaDevices.getUserMedia({ audio: deviceConstraints });
-
-  // Nível 'off' — retorna stream cru sem processamento
-  if (settings.noiseSuppression === 'off') {
-    try {
-      const ctx = new AudioContext({ sampleRate: 48000 });
-      const src = ctx.createMediaStreamSource(rawStream);
-      const analyser = ctx.createAnalyser();
-      analyser.fftSize = 256;
-      src.connect(analyser);
-      localAnalyserRef.current = analyser;
-    } catch { /* */ }
-    return rawStream;
-  }
-
-  try {
-    const audioCtx = new AudioContext({ sampleRate: 48000 });
-    const source = audioCtx.createMediaStreamSource(rawStream);
-    const destination = audioCtx.createMediaStreamDestination();
-
-    const inputGain = audioCtx.createGain();
-    inputGain.gain.value = settings.inputVolume;
-
-    const isLow = settings.noiseSuppression === 'low';
-    const isMediumOrHigh = settings.noiseSuppression === 'medium' || settings.noiseSuppression === 'high';
-    const isHigh = settings.noiseSuppression === 'high';
-
-    const highPass = audioCtx.createBiquadFilter();
-    highPass.type = 'highpass';
-    highPass.frequency.value = isHigh ? 100 : 80;
-    highPass.Q.value = 0.71;
-
-    const lowPass = audioCtx.createBiquadFilter();
-    lowPass.type = 'lowpass';
-    lowPass.frequency.value = isHigh ? 8000 : 12000;
-    lowPass.Q.value = 0.71;
-
-    source.connect(inputGain);
-    inputGain.connect(highPass);
-    highPass.connect(lowPass);
-
-    let lastNode: AudioNode = lowPass;
-
-    if (isHigh) {
-      const presence = audioCtx.createBiquadFilter();
-      presence.type = 'peaking';
-      presence.frequency.value = 2500;
-      presence.Q.value = 1.2;
-      presence.gain.value = 3;
-      lastNode.connect(presence);
-      lastNode = presence;
-
-      const deesser = audioCtx.createBiquadFilter();
-      deesser.type = 'peaking';
-      deesser.frequency.value = 6000;
-      deesser.Q.value = 2;
-      deesser.gain.value = -3;
-      lastNode.connect(deesser);
-      lastNode = deesser;
-    }
-
-    if (isMediumOrHigh) {
-      await audioCtx.audioWorklet.addModule('/noise-gate-processor.js');
-      const noiseGate = new AudioWorkletNode(audioCtx, 'noise-gate-processor');
-      lastNode.connect(noiseGate);
-      lastNode = noiseGate;
-    }
-
-    const compressor = audioCtx.createDynamicsCompressor();
-    compressor.threshold.value = isHigh ? -28 : -20;
-    compressor.knee.value = isHigh ? 12 : 15;
-    compressor.ratio.value = isHigh ? 6 : 4;
-    compressor.attack.value = 0.003;
-    compressor.release.value = isLow ? 0.1 : 0.15;
-    lastNode.connect(compressor);
-    lastNode = compressor;
-
-    if (isMediumOrHigh) {
-      const makeupGain = audioCtx.createGain();
-      makeupGain.gain.value = isHigh ? 1.4 : 1.2;
-      lastNode.connect(makeupGain);
-      lastNode = makeupGain;
-    }
-
-    // Analyser para detecção de fala (speaking indicator)
-    const analyser = audioCtx.createAnalyser();
-    analyser.fftSize = 256;
-    lastNode.connect(analyser);
-    localAnalyserRef.current = analyser;
-
-    lastNode.connect(destination);
-    return new MediaStream([...destination.stream.getAudioTracks()]);
-  } catch {
-    return rawStream;
-  }
-}
 
 async function applyScreenVideoParams(sender: RTCRtpSender) {
   try {
@@ -348,8 +224,9 @@ export function CallManager() {
 
     (async () => {
       try {
-        const stream = await getProcessedStream(mode);
+        const { stream, analyser } = await getProcessedStream(mode);
         localStreamRef.current = stream;
+        localAnalyserRef.current = analyser;
 
         const pc = createPC(currentPeerId);
         stream.getTracks().forEach((track) => {
@@ -399,6 +276,7 @@ export function CallManager() {
       setActive();
       const { channelId } = useCallStore.getState();
       if (channelId) useChatStore.getState().addSystemMessage(channelId, 'Chamada iniciada');
+      playJoinCallSound();
       getSocket()?.emit('call:status_update', { inCall: true });
     };
 
@@ -420,6 +298,7 @@ export function CallManager() {
       const { status: currentStatus, channelId } = useCallStore.getState();
       if (currentStatus === 'active' && channelId) {
         useChatStore.getState().addSystemMessage(channelId, 'Chamada encerrada');
+        playLeaveCallSound();
       }
       getSocket()?.emit('call:status_update', { inCall: false });
       cleanup();
@@ -470,6 +349,7 @@ export function CallManager() {
       const newMuted = !useCallStore.getState().isMuted;
       localStreamRef.current?.getAudioTracks().forEach((t) => { t.enabled = !newMuted; });
       setMuted(newMuted);
+      if (newMuted) playMuteSound(); else playUnmuteSound();
     };
 
     const onHangupEvent = () => {
@@ -477,6 +357,7 @@ export function CallManager() {
       if (peerId) getSocket()?.emit('call:hangup', { targetUserId: peerId });
       if (currentStatus === 'active' && channelId) {
         useChatStore.getState().addSystemMessage(channelId, 'Chamada encerrada');
+        playLeaveCallSound();
       }
       getSocket()?.emit('call:status_update', { inCall: false });
       cleanup();
@@ -508,6 +389,7 @@ export function CallManager() {
       localScreenStreamRef.current?.getTracks().forEach((t) => t.stop());
       localScreenStreamRef.current = null;
       setScreenSharing(false);
+      playScreenShareStopSound();
       notifyScreenStop(targetPeerId);
       await renegotiate(targetPeerId);
     };
@@ -549,6 +431,7 @@ export function CallManager() {
         }
 
         setScreenSharing(true);
+        playScreenShareStartSound();
         await renegotiate(pid);
 
         videoTrack.onended = async () => {
@@ -599,8 +482,9 @@ export function CallManager() {
     const currentPeerId = peerId;
 
     try {
-      const stream = await getProcessedStream(mode);
+      const { stream, analyser } = await getProcessedStream(mode);
       localStreamRef.current = stream;
+      localAnalyserRef.current = analyser;
 
       const pc = createPC(currentPeerId);
       stream.getTracks().forEach((track) => {
@@ -628,6 +512,7 @@ export function CallManager() {
       setActive();
       const { channelId } = useCallStore.getState();
       if (channelId) useChatStore.getState().addSystemMessage(channelId, 'Chamada iniciada');
+      playJoinCallSound();
       getSocket()?.emit('call:status_update', { inCall: true });
     } catch {
       cleanup();

@@ -5,7 +5,16 @@ import { useAuthStore } from '../stores/authStore';
 import { captureScreen } from '../services/screenCapture';
 import { alertDialog } from '../stores/dialogStore';
 import { ICE_SERVERS } from '../services/iceServers';
-import { LOW_LATENCY_AUDIO_CONSTRAINTS, applyLowLatencySenderParams, withLowLatencyOpus } from '../services/lowLatencyAudio';
+import { applyLowLatencySenderParams, withLowLatencyOpus } from '../services/lowLatencyAudio';
+import { getProcessedStream } from '../services/audioProcessing';
+import {
+  playJoinCallSound,
+  playLeaveCallSound,
+  playMuteSound,
+  playUnmuteSound,
+  playScreenShareStartSound,
+  playScreenShareStopSound,
+} from '../services/callSounds';
 import type { CallMode, VoiceChannel, VoiceParticipant } from '../types';
 
 interface ScreenSenders {
@@ -53,6 +62,18 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
     groupsAPI.getVoiceChannels(groupId).then(({ data }) => setVoiceChannels(data));
   }, [groupId]);
 
+  // Socket: canal de voz novo criado por outro membro — sem isso, só quem
+  // criou via essa aba (update otimista local) via até recarregar a página.
+  useEffect(() => {
+    const socket = getSocket();
+    const onCreated = (channel: VoiceChannel) => {
+      if (channel.groupId !== groupId) return;
+      setVoiceChannels((prev) => (prev.some((vc) => vc.id === channel.id) ? prev : [...prev, channel]));
+    };
+    socket.on('group-voice-channel:created', onCreated);
+    return () => { socket.off('group-voice-channel:created', onCreated); };
+  }, [groupId]);
+
   // Socket: presence updates — mantém a lista lateral do grupo visualizado em dia.
   useEffect(() => {
     if (!groupChannelId) return;
@@ -78,6 +99,23 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
     socket.on('voice:channel-updated', onChannelUpdated);
     return () => { socket.off('voice:channel-updated', onChannelUpdated); };
   }, []);
+
+  // Limpa telas "fantasma" com base no roster (fonte confiável), não no
+  // WebRTC — `track.onended` não dispara de forma consistente quando o
+  // outro lado só dá removeTrack()+renegocia, o que deixava o último frame
+  // congelado na tela em vez de sumir quando alguém parava de compartilhar.
+  useEffect(() => {
+    if (!connectedVc) return;
+    const sharingIds = new Set(connectedVc.participants.filter((p) => p.isSharing).map((p) => p.userId));
+    setScreenStreams((prev) => {
+      let changed = false;
+      const next = new Map(prev);
+      for (const uid of next.keys()) {
+        if (!sharingIds.has(uid)) { next.delete(uid); changed = true; }
+      }
+      return changed ? next : prev;
+    });
+  }, [connectedVc?.participants]);
 
   // Socket: renomeação de canal de voz por outro membro do grupo.
   useEffect(() => {
@@ -136,12 +174,22 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
     const onOffer = async (data: { from: number; offer: RTCSessionDescriptionInit; voiceChannelId: number }) => {
       if (data.voiceChannelId !== activeVcId) return;
       let pc = peers.current.get(data.from);
+      const isNewPeer = !pc;
       if (!pc) pc = createPeer(data.from);
       await pc.setRemoteDescription(data.offer);
       const answer = await pc.createAnswer();
       if (activeModeRef.current === 'game' && answer.sdp) answer.sdp = withLowLatencyOpus(answer.sdp);
       await pc.setLocalDescription(answer);
       socket.emit('voice:answer', { targetUserId: data.from, answer, voiceChannelId: activeVcId });
+
+      // createPeer() já tinha adicionado os tracks da minha tela (se eu
+      // estiver compartilhando), mas uma resposta não pode introduzir
+      // m-lines que não vieram no offer de quem acabou de entrar — sem
+      // essa renegociação extra, a tela nunca chegava pra quem chegou
+      // depois que o compartilhamento já tinha começado.
+      if (isNewPeer && localScreenStream.current) {
+        await renegotiate(data.from, pc);
+      }
     };
     const onAnswer = async (data: { from: number; answer: RTCSessionDescriptionInit }) => {
       const pc = peers.current.get(data.from);
@@ -245,6 +293,7 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
   };
 
   const _leave = (vcId: number) => {
+    playLeaveCallSound();
     getSocket().emit('voice:leave', { voiceChannelId: vcId, groupChannelId: connectedGroupChannelIdRef.current });
     connectedGroupChannelIdRef.current = null;
     localStream.current?.getTracks().forEach((t) => t.stop());
@@ -267,10 +316,10 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
     setIsConnecting(true);
     activeModeRef.current = vc.mode;
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: vc.mode === 'game' ? LOW_LATENCY_AUDIO_CONSTRAINTS : true,
-        video: false,
-      });
+      // Mesmo pipeline de áudio da call 1:1 (RNNoise + noise gate nos
+      // níveis médio/alto) — antes, canal de voz de grupo pegava o
+      // microfone cru, sem nenhum filtro de ruído.
+      const { stream } = await getProcessedStream(vc.mode);
       localStream.current = stream;
       // Fixa o grupo/canal de texto do momento da entrada — se o usuário
       // navegar pra outro grupo depois, a saída ainda usa o grupo certo.
@@ -278,6 +327,7 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
       getSocket().emit('voice:join', { voiceChannelId: vc.id, groupChannelId, avatarUrl: user?.avatarUrl });
       setActiveVcId(vc.id);
       setConnectedVc(vc);
+      playJoinCallSound();
     } catch {
       alertDialog('Não foi possível acessar o microfone. Verifique as permissões do sistema.', { title: 'Erro de microfone' });
     } finally {
@@ -290,7 +340,11 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
   const toggleMute = () => {
     if (!localStream.current) return;
     localStream.current.getAudioTracks().forEach((t) => { t.enabled = !t.enabled; });
-    setIsMuted((m) => !m);
+    setIsMuted((m) => {
+      const next = !m;
+      if (next) playMuteSound(); else playUnmuteSound();
+      return next;
+    });
   };
 
   const startScreenShare = async (sourceId?: string) => {
@@ -315,7 +369,15 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
       // WebRTC (os outros participantes, via `ontrack`) conseguia ver.
       if (user?.id) addScreenStream(user.id, screenStream);
 
+      // Avisa o roster (não é sinal WebRTC) — é o que faz o ícone de
+      // compartilhamento aparecer até pra quem não está na call.
+      getSocket().emit('voice:screen-start', {
+        voiceChannelId: activeVcIdRef.current,
+        groupChannelId: connectedGroupChannelIdRef.current,
+      });
+
       setIsScreenSharing(true);
+      playScreenShareStartSound();
 
       videoTrack.onended = () => { stopScreenShare(); };
     } catch (e) {
@@ -339,7 +401,16 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
     localScreenStream.current.getTracks().forEach((t) => t.stop());
     localScreenStream.current = null;
     if (user?.id) removeScreenStream(user.id);
+
+    if (activeVcIdRef.current) {
+      getSocket().emit('voice:screen-stop', {
+        voiceChannelId: activeVcIdRef.current,
+        groupChannelId: connectedGroupChannelIdRef.current,
+      });
+    }
+
     setIsScreenSharing(false);
+    playScreenShareStopSound();
   };
 
   const createChannel = async (name: string, mode: CallMode = 'normal') => {

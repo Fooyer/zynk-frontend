@@ -477,7 +477,9 @@ function ChannelSidebar({ group, voice, activeChannelId, onSelectChannel, onOpen
                     <div className="pb-2 pl-[27px] pr-2">
                       <div className={`space-y-2 border-l-2 pl-3 ${isActive ? 'border-success/40' : 'border-surface-600'}`}>
                         {vc.participants.map((p) => {
-                          const isSharing = isActive && voice.screenStreams.has(p.userId);
+                          // Vem do roster (servidor), não do WebRTC — por
+                          // isso aparece mesmo pra quem não está na call.
+                          const isSharing = !!p.isSharing;
                           return (
                             <div key={p.userId} className="flex items-center gap-2">
                               <div

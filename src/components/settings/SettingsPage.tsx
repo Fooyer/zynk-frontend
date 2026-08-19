@@ -1,7 +1,8 @@
 import { useEffect, useState, useCallback } from 'react';
-import { useSettingsStore, type NoiseSuppression } from '../../stores/settingsStore';
+import { useSettingsStore } from '../../stores/settingsStore';
 import { useUiStore } from '../../stores/uiStore';
 import { useAuthStore } from '../../stores/authStore';
+import { getProcessedStream } from '../../services/audioProcessing';
 
 interface DeviceInfo {
   deviceId: string;
@@ -51,20 +52,24 @@ function MicTest({ deviceId }: { deviceId: string }) {
     if (!testing) return;
 
     let animId: number;
-    let stream: MediaStream | null = null;
-    let ctx: AudioContext | null = null;
+    let stopFn: (() => void) | null = null;
+    let cancelled = false;
 
     (async () => {
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({
-          audio: deviceId ? { deviceId: { exact: deviceId } } : true,
-        });
-        ctx = new AudioContext();
-        const source = ctx.createMediaStreamSource(stream);
-        const analyser = ctx.createAnalyser();
-        analyser.fftSize = 256;
-        source.connect(analyser);
+      // Mesmo pipeline de uma call de verdade (RNNoise, gate, filtros,
+      // volume), com monitor:true — toca de volta o resultado direto pelo
+      // destino nativo do Web Audio, não via MediaStream/<audio> (um
+      // MediaStreamTrack mono tocado por <audio> às vezes sai só no canal
+      // esquerdo). É pra ouvir exatamente o que os amigos ouvem.
+      const result = await getProcessedStream('normal', { monitor: true }).catch(() => null);
+      if (cancelled || !result) {
+        setTesting(false);
+        return;
+      }
+      stopFn = result.stop;
+      const { analyser } = result;
 
+      if (analyser) {
         const data = new Float32Array(analyser.fftSize);
         const tick = () => {
           analyser.getFloatTimeDomainData(data);
@@ -75,49 +80,47 @@ function MicTest({ deviceId }: { deviceId: string }) {
           animId = requestAnimationFrame(tick);
         };
         tick();
-      } catch {
-        setTesting(false);
       }
     })();
 
     return () => {
+      cancelled = true;
       cancelAnimationFrame(animId);
-      stream?.getTracks().forEach((t) => t.stop());
-      ctx?.close();
+      stopFn?.();
       setLevel(0);
     };
   }, [testing, deviceId]);
 
   return (
-    <div className="flex items-center gap-3">
-      <button
-        onClick={() => setTesting(!testing)}
-        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-          testing
-            ? 'bg-danger/20 text-danger hover:bg-danger/30'
-            : 'bg-surface-700 text-surface-200 hover:bg-surface-600'
-        }`}
-      >
-        {testing ? 'Parar teste' : 'Testar microfone'}
-      </button>
+    <div className="space-y-1.5">
+      <div className="flex items-center gap-3">
+        <button
+          onClick={() => setTesting(!testing)}
+          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+            testing
+              ? 'bg-danger/20 text-danger hover:bg-danger/30'
+              : 'bg-surface-700 text-surface-200 hover:bg-surface-600'
+          }`}
+        >
+          {testing ? 'Parar teste' : 'Testar microfone'}
+        </button>
+        {testing && (
+          <div className="flex-1 h-2 bg-surface-700 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-success rounded-full transition-all duration-75"
+              style={{ width: `${level * 100}%` }}
+            />
+          </div>
+        )}
+      </div>
       {testing && (
-        <div className="flex-1 h-2 bg-surface-700 rounded-full overflow-hidden">
-          <div
-            className="h-full bg-success rounded-full transition-all duration-75"
-            style={{ width: `${level * 100}%` }}
-          />
-        </div>
+        <p className="text-[11px] text-surface-500">
+          Você vai se ouvir com o mesmo processamento da call — use fone de ouvido pra evitar eco.
+        </p>
       )}
     </div>
   );
 }
-
-const NOISE_OPTIONS: { value: NoiseSuppression; label: string; desc: string }[] = [
-  { value: 'off', label: 'Desligado', desc: 'Sem processamento — microfone cru' },
-  { value: 'low', label: 'Baixo', desc: 'Apenas filtros básicos — para ambientes silenciosos' },
-  { value: 'medium', label: 'Médio', desc: 'Noise gate + filtros — equilíbrio entre qualidade e supressão' },
-  { value: 'high', label: 'Alto', desc: 'Processamento completo — melhor para ambientes ruidosos' },
-];
 
 function SelectField({ label, value, onChange, options }: {
   label: string;
@@ -433,30 +436,12 @@ function ProcessingSection() {
       />
 
       <div className="bg-surface-800 rounded-xl p-5 space-y-5 border border-surface-700/50">
-        {/* Nível de supressão */}
-        <div className="space-y-3">
-          <label className="text-sm font-medium text-surface-300">Supressão de ruído</label>
-          <div className="grid grid-cols-2 gap-2">
-            {NOISE_OPTIONS.map((opt) => (
-              <button
-                key={opt.value}
-                onClick={() => setNoiseSuppression(opt.value)}
-                className={`p-3 rounded-lg border text-left transition-all ${
-                  noiseSuppression === opt.value
-                    ? 'border-accent-500 bg-accent-600/10'
-                    : 'border-surface-600 bg-surface-900 hover:border-surface-500'
-                }`}
-              >
-                <p className={`text-sm font-medium ${
-                  noiseSuppression === opt.value ? 'text-accent-400' : 'text-surface-200'
-                }`}>
-                  {opt.label}
-                </p>
-                <p className="text-[11px] text-surface-500 mt-0.5 leading-snug">{opt.desc}</p>
-              </button>
-            ))}
-          </div>
-        </div>
+        <Toggle
+          label="Supressão de ruído"
+          description="RNNoise (IA) remove ruído de fundo (mouse, teclado etc.) de forma contínua, sem cortar sua voz"
+          checked={noiseSuppression}
+          onChange={setNoiseSuppression}
+        />
 
         <div className="h-px bg-surface-700" />
 
@@ -536,7 +521,7 @@ function InfoNote() {
         </svg>
         <p className="text-xs text-surface-500 leading-relaxed">
           As configurações são salvas automaticamente e aplicadas na próxima chamada.
-          O teste de microfone mostra o nível sem processamento de áudio.
+          O teste de microfone toca de volta o áudio já processado — o mesmo que os amigos ouvem.
         </p>
       </div>
     </div>
