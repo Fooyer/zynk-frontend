@@ -1,8 +1,9 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useUiStore } from '../../stores/uiStore';
 import { useAuthStore } from '../../stores/authStore';
 import { getProcessedStream } from '../../services/audioProcessing';
+import { useEditableContextMenu } from '../../hooks/useEditableContextMenu';
 
 interface DeviceInfo {
   deviceId: string;
@@ -221,6 +222,10 @@ function AccountSection() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [copied, setCopied] = useState(false);
+  const usernameRef = useRef<HTMLInputElement>(null);
+  const handleUsernameContextMenu = useEditableContextMenu(usernameRef);
+  const tagRef = useRef<HTMLInputElement>(null);
+  const handleTagContextMenu = useEditableContextMenu(tagRef);
 
   useEffect(() => { setUsername(user?.username ?? ''); setTag(user?.tag ?? ''); }, [user?.username, user?.tag]);
 
@@ -307,17 +312,21 @@ function AccountSection() {
           <label className="text-sm font-medium text-surface-300">Editar nome e tag</label>
           <div className="flex items-center gap-1.5">
             <input
+              ref={usernameRef}
               type="text"
               value={username}
               onChange={(e) => { setUsername(e.target.value); setError(null); }}
+              onContextMenu={handleUsernameContextMenu}
               maxLength={32}
               className="flex-1 min-w-0 px-3 py-2 rounded-xl text-sm zk-input"
             />
             <span className="text-surface-500 font-medium flex-shrink-0">#</span>
             <input
+              ref={tagRef}
               type="text"
               value={tag}
               onChange={(e) => { setTag(e.target.value.slice(0, 5)); setError(null); }}
+              onContextMenu={handleTagContextMenu}
               maxLength={5}
               className="w-20 flex-shrink-0 px-2.5 py-2 rounded-xl text-sm uppercase zk-input"
             />
@@ -582,6 +591,8 @@ export function SettingsPage() {
   const setView = useUiStore((s) => s.setView);
   const [activeTab, setActiveTab] = useState<TabId>('account');
   const [query, setQuery] = useState('');
+  const queryRef = useRef<HTMLInputElement>(null);
+  const handleQueryContextMenu = useEditableContextMenu(queryRef);
 
   const { inputs, outputs } = useMediaDevices();
 
@@ -626,9 +637,11 @@ export function SettingsPage() {
             <line x1="21" y1="21" x2="16.65" y2="16.65" />
           </svg>
           <input
+            ref={queryRef}
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
+            onContextMenu={handleQueryContextMenu}
             placeholder="Buscar configurações..."
             className="w-full pl-8 pr-7 py-1.5 rounded-xl text-xs zk-input"
           />

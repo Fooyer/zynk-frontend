@@ -211,6 +211,13 @@ declare global {
       onUpdateProgress: (callback: (percent: number) => void) => void;
       onUpdateDownloaded: (callback: (version: string) => void) => void;
       restartToUpdate: () => void;
+      // Edit commands
+      editUndo: () => void;
+      editRedo: () => void;
+      editCut: () => void;
+      editCopy: () => void;
+      editPaste: () => void;
+      editSelectAll: () => void;
       getScreenSources: () => Promise<ScreenSource[]>;
       selectScreenSource: (sourceId: string) => Promise<boolean>;
       gamepadIsAvailable: () => Promise<boolean>;

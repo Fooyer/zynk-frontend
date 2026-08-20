@@ -5,6 +5,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { useGroupStore } from '../../stores/groupStore';
 import { confirmDialog } from '../../stores/dialogStore';
 import { KanbanSkeleton } from '../common/Skeleton';
+import { useEditableContextMenu } from '../../hooks/useEditableContextMenu';
 import type { KanbanCard } from '../../types';
 
 interface Props {
@@ -45,6 +46,10 @@ function CardDetail({ card, groupId, channelId, members, onUpdate, onDelete, onC
   const [assigneeId, setAssigneeId] = useState<number | null>(card.assignee?.id ?? null);
   const [isSaving, setIsSaving] = useState(false);
   const isOwner = Number(card.creator.id) === Number(user?.id);
+  const titleRef = useRef<HTMLInputElement>(null);
+  const handleTitleContextMenu = useEditableContextMenu(titleRef);
+  const descriptionRef = useRef<HTMLTextAreaElement>(null);
+  const handleDescriptionContextMenu = useEditableContextMenu(descriptionRef);
 
   const save = async () => {
     if (!title.trim()) return;
@@ -84,8 +89,10 @@ function CardDetail({ card, groupId, channelId, members, onUpdate, onDelete, onC
       >
         {/* Title */}
         <input
+          ref={titleRef}
           value={title}
           onChange={(e) => setTitle(e.target.value)}
+          onContextMenu={handleTitleContextMenu}
           maxLength={255}
           className="text-base font-semibold text-surface-100 bg-transparent border-b border-white/[0.08] pb-1 focus:outline-none focus:border-accent-500/60 transition-colors"
         />
@@ -94,8 +101,10 @@ function CardDetail({ card, groupId, channelId, members, onUpdate, onDelete, onC
         <div>
           <label className="text-xs font-medium text-surface-500 mb-1 block">Descrição</label>
           <textarea
+            ref={descriptionRef}
             value={description}
             onChange={(e) => setDescription(e.target.value)}
+            onContextMenu={handleDescriptionContextMenu}
             placeholder="Adicione uma descrição..."
             rows={4}
             className="zk-input w-full px-3 py-2 rounded-xl text-sm resize-none"
@@ -161,6 +170,8 @@ export function KanbanPanel({ groupId, channelId }: Props) {
   const [selectedCard, setSelectedCard] = useState<KanbanCard | null>(null);
   const draggingCard = useRef<KanbanCard | null>(null);
   const [dragOverCol, setDragOverCol] = useState<KanbanCard['status'] | null>(null);
+  const newTitleRef = useRef<HTMLInputElement>(null);
+  const handleNewTitleContextMenu = useEditableContextMenu(newTitleRef);
 
   useEffect(() => {
     setIsLoading(true);
@@ -246,9 +257,11 @@ export function KanbanPanel({ groupId, channelId }: Props) {
       {/* Add card bar */}
       <form onSubmit={handleAddCard} className="flex gap-2 px-4 py-3 border-b border-white/[0.06] flex-shrink-0">
         <input
+          ref={newTitleRef}
           type="text"
           value={newTitle}
           onChange={(e) => setNewTitle(e.target.value)}
+          onContextMenu={handleNewTitleContextMenu}
           placeholder="Título da nova tarefa..."
           maxLength={255}
           className="zk-input flex-1 px-3 py-1.5 rounded-xl text-sm"

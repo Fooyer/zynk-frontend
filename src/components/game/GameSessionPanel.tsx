@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useGameSessionStore } from '../../stores/gameSessionStore';
 import { useAuthStore } from '../../stores/authStore';
 import { getSocket } from '../../services/socket';
 import { getInitials, getUserColor } from '../../utils/formatDate';
 import { GameSessionView } from './GameSessionView';
+import { useEditableContextMenu } from '../../hooks/useEditableContextMenu';
 
 interface Props {
   groupId: number;
@@ -16,6 +17,8 @@ export function GameSessionPanel({ groupId, channelId }: Props) {
   const [title, setTitle] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const [showView, setShowView] = useState(false);
+  const titleRef = useRef<HTMLInputElement>(null);
+  const handleTitleContextMenu = useEditableContextMenu(titleRef);
 
   const isHost = activeSession?.id && user && Number(activeSession.hostId) === Number(user.id);
   const isParticipant = activeSession?.participants?.some((p) => Number(p.userId) === Number(user?.id));
@@ -145,9 +148,11 @@ export function GameSessionPanel({ groupId, channelId }: Props) {
 
           <div className="flex flex-col gap-3">
             <input
+              ref={titleRef}
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
+              onContextMenu={handleTitleContextMenu}
               placeholder="Nome da sessao (opcional)"
               maxLength={128}
               className="w-full px-3 py-2 zk-input rounded-xl text-sm"

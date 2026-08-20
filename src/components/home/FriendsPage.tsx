@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useFriendStore } from '../../stores/friendStore';
 import { getInitials, getUserColor } from '../../utils/formatDate';
 import { FriendGridSkeleton } from '../common/Skeleton';
+import { useEditableContextMenu } from '../../hooks/useEditableContextMenu';
 
 type Tab = 'online' | 'all' | 'requests' | 'add';
 
@@ -19,6 +20,8 @@ export function FriendsPage() {
   const [tab, setTab] = useState<Tab>('online');
   const [handle, setHandle] = useState('');
   const [sendSuccess, setSendSuccess] = useState(false);
+  const handleRef = useRef<HTMLInputElement>(null);
+  const handleHandleContextMenu = useEditableContextMenu(handleRef);
 
   const { friends, requests, isLoading, error, loadAll, sendRequest, accept, reject, remove, openDm, clearError } =
     useFriendStore();
@@ -112,6 +115,7 @@ export function FriendsPage() {
             <form onSubmit={handleSendRequest} className="space-y-3 text-left">
               <div className="flex gap-2">
                 <input
+                  ref={handleRef}
                   type="text"
                   value={handle}
                   onChange={(e) => {
@@ -119,6 +123,7 @@ export function FriendsPage() {
                     setSendSuccess(false);
                     clearError();
                   }}
+                  onContextMenu={handleHandleContextMenu}
                   placeholder="Usuário#TAG"
                   autoFocus
                   className="flex-1 zk-input rounded-xl px-3 py-2 text-sm"

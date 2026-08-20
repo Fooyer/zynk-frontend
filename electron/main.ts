@@ -130,6 +130,19 @@ ipcMain.on('window:maximize', () => {
 });
 ipcMain.on('window:close', () => mainWindow?.close());
 
+// ─── Edit commands (undo/redo/cut/copy/paste/selectAll) ───────
+// Usado pelo menu de contexto customizado (React) dos campos de texto, no
+// lugar do menu nativo do Electron — webContents.cut()/copy()/etc já operam
+// sobre o elemento focado no momento da chamada, então funciona mesmo tendo
+// clicado num botão do nosso próprio menu flutuante entre o meio do caminho
+// (o campo original recupera o foco antes do IPC ser enviado).
+ipcMain.on('edit:undo', () => mainWindow?.webContents.undo());
+ipcMain.on('edit:redo', () => mainWindow?.webContents.redo());
+ipcMain.on('edit:cut', () => mainWindow?.webContents.cut());
+ipcMain.on('edit:copy', () => mainWindow?.webContents.copy());
+ipcMain.on('edit:paste', () => mainWindow?.webContents.paste());
+ipcMain.on('edit:selectAll', () => mainWindow?.webContents.selectAll());
+
 // ─── Auto-update (electron-updater + GitHub Releases) ─────────
 // Cada instalação já sabe seu próprio SO — o Windows só olha pro
 // latest.yml do NSIS, o Linux só pro latest-linux.yml do AppImage — então

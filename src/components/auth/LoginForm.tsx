@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useAuthStore } from '../../stores/authStore';
+import { useEditableContextMenu } from '../../hooks/useEditableContextMenu';
 
 interface Props {
   onSwitch: () => void;
@@ -9,6 +10,10 @@ export function LoginForm({ onSwitch }: Props) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const { login, isLoading, error, clearError } = useAuthStore();
+  const emailRef = useRef<HTMLInputElement>(null);
+  const passwordRef = useRef<HTMLInputElement>(null);
+  const handleEmailContextMenu = useEditableContextMenu(emailRef);
+  const handlePasswordContextMenu = useEditableContextMenu(passwordRef);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -35,9 +40,11 @@ export function LoginForm({ onSwitch }: Props) {
           <div>
             <label className="block text-sm font-medium text-surface-300 mb-1.5">Email</label>
             <input
+              ref={emailRef}
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              onContextMenu={handleEmailContextMenu}
               className="w-full px-4 py-3 zk-input rounded-xl"
               placeholder="seu@email.com"
               autoFocus
@@ -47,9 +54,11 @@ export function LoginForm({ onSwitch }: Props) {
           <div>
             <label className="block text-sm font-medium text-surface-300 mb-1.5">Senha</label>
             <input
+              ref={passwordRef}
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              onContextMenu={handlePasswordContextMenu}
               className="w-full px-4 py-3 zk-input rounded-xl"
               placeholder="Sua senha"
             />

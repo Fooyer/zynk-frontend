@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useGroupStore } from '../../stores/groupStore';
+import { useEditableContextMenu } from '../../hooks/useEditableContextMenu';
 
 interface Props {
   isOpen: boolean;
@@ -13,6 +14,8 @@ export function RenameGroupModal({ isOpen, onClose, groupId, currentName }: Prop
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const renameGroup = useGroupStore((s) => s.renameGroup);
+  const nameRef = useRef<HTMLInputElement>(null);
+  const handleNameContextMenu = useEditableContextMenu(nameRef);
 
   if (!isOpen) return null;
 
@@ -41,10 +44,12 @@ export function RenameGroupModal({ isOpen, onClose, groupId, currentName }: Prop
         <h2 className="text-lg font-bold text-surface-100 mb-4">Renomear grupo</h2>
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <input
+            ref={nameRef}
             autoFocus
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
+            onContextMenu={handleNameContextMenu}
             maxLength={64}
             placeholder="Nome do grupo"
             className="w-full px-3 py-2 zk-input rounded-xl text-sm"

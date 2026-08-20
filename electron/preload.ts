@@ -18,6 +18,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   restartToUpdate: () => ipcRenderer.send('update:restart'),
 
+  // Edit commands — usados pelo menu de contexto customizado dos campos de texto
+  editUndo: () => ipcRenderer.send('edit:undo'),
+  editRedo: () => ipcRenderer.send('edit:redo'),
+  editCut: () => ipcRenderer.send('edit:cut'),
+  editCopy: () => ipcRenderer.send('edit:copy'),
+  editPaste: () => ipcRenderer.send('edit:paste'),
+  editSelectAll: () => ipcRenderer.send('edit:selectAll'),
+
   // Screen sharing
   getScreenSources: () => ipcRenderer.invoke('screen:get-sources') as Promise<
     Array<{ id: string; name: string; thumbnail: string; isScreen: boolean }>

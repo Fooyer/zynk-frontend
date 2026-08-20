@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useAuthStore } from '../../stores/authStore';
+import { useEditableContextMenu } from '../../hooks/useEditableContextMenu';
 
 interface Props {
   onSwitch: () => void;
@@ -11,6 +12,14 @@ export function RegisterForm({ onSwitch }: Props) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const { register, isLoading, error, clearError } = useAuthStore();
+  const usernameRef = useRef<HTMLInputElement>(null);
+  const tagRef = useRef<HTMLInputElement>(null);
+  const emailRef = useRef<HTMLInputElement>(null);
+  const passwordRef = useRef<HTMLInputElement>(null);
+  const handleUsernameContextMenu = useEditableContextMenu(usernameRef);
+  const handleTagContextMenu = useEditableContextMenu(tagRef);
+  const handleEmailContextMenu = useEditableContextMenu(emailRef);
+  const handlePasswordContextMenu = useEditableContextMenu(passwordRef);
 
   const isTagValid = /^[a-zA-Z0-9]{3,5}$/.test(tag);
 
@@ -40,18 +49,22 @@ export function RegisterForm({ onSwitch }: Props) {
             <label className="block text-sm font-medium text-surface-300 mb-1.5">Usuário</label>
             <div className="flex items-stretch gap-1.5">
               <input
+                ref={usernameRef}
                 type="text"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
+                onContextMenu={handleUsernameContextMenu}
                 className="flex-1 min-w-0 px-4 py-3 zk-input rounded-xl"
                 placeholder="Escolha um nome"
                 autoFocus
               />
               <div className="flex items-center flex-shrink-0 pl-1 text-surface-500 font-medium">#</div>
               <input
+                ref={tagRef}
                 type="text"
                 value={tag}
                 onChange={(e) => setTag(e.target.value.slice(0, 5))}
+                onContextMenu={handleTagContextMenu}
                 maxLength={5}
                 className="w-20 flex-shrink-0 px-3 py-3 zk-input rounded-xl uppercase"
                 placeholder="TAG"
@@ -65,9 +78,11 @@ export function RegisterForm({ onSwitch }: Props) {
           <div>
             <label className="block text-sm font-medium text-surface-300 mb-1.5">Email</label>
             <input
+              ref={emailRef}
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              onContextMenu={handleEmailContextMenu}
               className="w-full px-4 py-3 zk-input rounded-xl"
               placeholder="seu@email.com"
             />
@@ -76,9 +91,11 @@ export function RegisterForm({ onSwitch }: Props) {
           <div>
             <label className="block text-sm font-medium text-surface-300 mb-1.5">Senha</label>
             <input
+              ref={passwordRef}
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              onContextMenu={handlePasswordContextMenu}
               className="w-full px-4 py-3 zk-input rounded-xl"
               placeholder="Mínimo 6 caracteres"
             />

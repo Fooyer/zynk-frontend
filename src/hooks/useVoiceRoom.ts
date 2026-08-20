@@ -41,11 +41,17 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
   const [isConnecting, setIsConnecting] = useState(false);
   const [isScreenSharing, setIsScreenSharing] = useState(false);
   const [screenStreams, setScreenStreams] = useState<Map<number, MediaStream>>(new Map());
+  // "Silenciar localmente" — só afeta o que EU escuto de alguém, não é
+  // broadcast pro roster (diferente do isMuted, que é o próprio participante
+  // se mutando pra todo mundo).
+  const [locallyMutedIds, setLocallyMutedIds] = useState<Set<number>>(new Set());
 
   const localStream = useRef<MediaStream | null>(null);
   const localScreenStream = useRef<MediaStream | null>(null);
   const peers = useRef<Map<number, RTCPeerConnection>>(new Map());
   const audioRefs = useRef<Map<number, HTMLAudioElement>>(new Map());
+  const locallyMutedIdsRef = useRef<Set<number>>(new Set());
+  locallyMutedIdsRef.current = locallyMutedIds;
   const screenSenders = useRef<Map<number, ScreenSenders>>(new Map());
   const activeVcIdRef = useRef<number | null>(null);
   activeVcIdRef.current = activeVcId;
@@ -275,6 +281,7 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
         if (!audio) {
           audio = new Audio();
           audio.autoplay = true;
+          audio.muted = locallyMutedIdsRef.current.has(targetUserId);
           audioRefs.current.set(targetUserId, audio);
           const outputId = useSettingsStore.getState().outputDeviceId;
           if (outputId && typeof audio.setSinkId === 'function') {
@@ -342,6 +349,7 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
     setActiveVcId(null);
     setConnectedVc(null);
     setIsMuted(false);
+    setLocallyMutedIds(new Set());
     activeModeRef.current = 'normal';
   };
 
@@ -374,6 +382,16 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
   };
 
   const leave = () => { if (activeVcId !== null) _leave(activeVcId); };
+
+  /** Mudo local — só afeta o que EU escuto dessa pessoa, não é broadcast. */
+  const toggleLocalMute = (userId: number) => {
+    const nowMuted = !locallyMutedIds.has(userId);
+    const next = new Set(locallyMutedIds);
+    if (nowMuted) next.add(userId); else next.delete(userId);
+    setLocallyMutedIds(next);
+    const audio = audioRefs.current.get(userId);
+    if (audio) audio.muted = nowMuted;
+  };
 
   const toggleMute = () => {
     if (!localStream.current) return;
@@ -488,9 +506,11 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
     isConnecting,
     isScreenSharing,
     screenStreams,
+    locallyMutedIds,
     join,
     leave,
     toggleMute,
+    toggleLocalMute,
     startScreenShare,
     stopScreenShare,
     createChannel,

@@ -3,6 +3,7 @@ import { groupsAPI } from '../../services/api';
 import { getSocket } from '../../services/socket';
 import { useAuthStore } from '../../stores/authStore';
 import { NotesSkeleton } from '../common/Skeleton';
+import { useEditableContextMenu } from '../../hooks/useEditableContextMenu';
 import type { GroupNote } from '../../types';
 
 interface Props {
@@ -19,6 +20,8 @@ export function NotesPanel({ groupId, channelId }: Props) {
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isRemoteUpdate = useRef(false);
+  const contentRef = useRef<HTMLTextAreaElement>(null);
+  const handleContentContextMenu = useEditableContextMenu(contentRef);
 
   useEffect(() => {
     setIsLoading(true);
@@ -91,8 +94,10 @@ export function NotesPanel({ groupId, channelId }: Props) {
       {/* Editor */}
       {isLoading ? <NotesSkeleton /> : (
         <textarea
+          ref={contentRef}
           value={content}
           onChange={(e) => handleChange(e.target.value)}
+          onContextMenu={handleContentContextMenu}
           placeholder="Escreva aqui... markdown é suportado. Todos no grupo veem em tempo real."
           className="flex-1 resize-none bg-surface-900 text-surface-100 text-sm p-4 focus:outline-none font-mono leading-relaxed placeholder-surface-600"
           spellCheck={false}

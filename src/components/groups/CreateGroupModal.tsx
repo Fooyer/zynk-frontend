@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useGroupStore } from '../../stores/groupStore';
 import type { GroupFeature } from '../../types';
+import { useEditableContextMenu } from '../../hooks/useEditableContextMenu';
 
 interface Props {
   isOpen: boolean;
@@ -72,6 +73,8 @@ export function CreateGroupModal({ isOpen, onClose }: Props) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const createGroup = useGroupStore((s) => s.createGroup);
   const setActiveGroup = useGroupStore((s) => s.setActiveGroup);
+  const nameRef = useRef<HTMLInputElement>(null);
+  const handleNameContextMenu = useEditableContextMenu(nameRef);
 
   if (!isOpen) return null;
 
@@ -110,9 +113,11 @@ export function CreateGroupModal({ isOpen, onClose }: Props) {
           <div>
             <label className="block text-sm font-medium text-surface-300 mb-1.5">Nome do grupo</label>
             <input
+              ref={nameRef}
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
+              onContextMenu={handleNameContextMenu}
               maxLength={64}
               placeholder="Meu grupo de amigos"
               className="w-full px-3 py-2 zk-input rounded-xl text-sm"

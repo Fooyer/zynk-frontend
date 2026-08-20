@@ -4,6 +4,7 @@ import { messagesAPI } from '../../services/api';
 import { useChatStore } from '../../stores/chatStore';
 import { alertDialog } from '../../stores/dialogStore';
 import { getUserColor } from '../../utils/formatDate';
+import { useEditableContextMenu } from '../../hooks/useEditableContextMenu';
 
 interface Props {
   channelId: number;
@@ -21,6 +22,7 @@ export function MessageInput({ channelId, placeholder = 'Envie uma mensagem...' 
   const lastTypingEmit = useRef(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const handleEditContextMenu = useEditableContextMenu(textareaRef);
 
   const replyingTo = useChatStore((s) => s.replyingTo);
   const setReplyingTo = useChatStore((s) => s.setReplyingTo);
@@ -182,6 +184,7 @@ export function MessageInput({ channelId, placeholder = 'Envie uma mensagem...' 
           value={content}
           onChange={handleChange}
           onKeyDown={handleKeyDown}
+          onContextMenu={handleEditContextMenu}
           rows={1}
           placeholder={replyingTo ? `Responder a ${replyingTo.sender.username}...` : placeholder}
           className="flex-1 bg-transparent text-surface-100 placeholder-surface-500 resize-none focus:outline-none text-sm leading-relaxed max-h-32 py-1.5"

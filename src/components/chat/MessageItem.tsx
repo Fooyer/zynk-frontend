@@ -5,6 +5,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { confirmDialog } from '../../stores/dialogStore';
 import { useContextMenuStore } from '../../stores/contextMenuStore';
 import { ContextMenuItem } from '../common/ContextMenuItem';
+import { useEditableContextMenu } from '../../hooks/useEditableContextMenu';
 import type { Message } from '../../types';
 
 const API_URL = 'https://zynk.fooyer.com';
@@ -153,6 +154,7 @@ function EditForm({ initialValue, onSave, onCancel }: {
 }) {
   const [value, setValue] = useState(initialValue);
   const ref = useRef<HTMLTextAreaElement>(null);
+  const handleEditContextMenu = useEditableContextMenu(ref);
 
   useEffect(() => {
     const el = ref.current;
@@ -181,6 +183,7 @@ function EditForm({ initialValue, onSave, onCancel }: {
         value={value}
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={handleKeyDown}
+        onContextMenu={handleEditContextMenu}
         rows={1}
         className="w-full bg-surface-900/70 border border-accent-500/60 rounded-xl px-3 py-2 text-sm text-surface-100 resize-none focus:outline-none focus:ring-1 focus:ring-accent-500/40"
         onInput={(e) => {

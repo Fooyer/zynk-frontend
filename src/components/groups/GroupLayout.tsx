@@ -1,14 +1,15 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useGroupStore } from '../../stores/groupStore';
 import { useAuthStore } from '../../stores/authStore';
 import { useContextMenuStore } from '../../stores/contextMenuStore';
 import { useVoiceRoom } from '../../hooks/useVoiceRoom';
+import { useEditableContextMenu } from '../../hooks/useEditableContextMenu';
 import { GroupView } from './GroupView';
 import type { Tab } from './GroupView';
 import { GroupMemberList } from './GroupMemberList';
 import { VoiceStatusBar } from './VoiceStatusBar';
 import { ChannelListSkeleton } from '../common/Skeleton';
-import { ContextMenuItem, ContextMenuHeader, ContextMenuHint } from '../common/ContextMenuItem';
+import { ContextMenuItem, ContextMenuHeader, ContextMenuHint, ContextMenuSeparator } from '../common/ContextMenuItem';
 import { groupsAPI } from '../../services/api';
 import { getSocket } from '../../services/socket';
 import { getInitials, getUserColor } from '../../utils/formatDate';
@@ -51,6 +52,12 @@ function ChannelSidebar({ group, voice, activeChannelId, onSelectChannel, onOpen
   const [createMode, setCreateMode] = useState<CallMode>('normal');
   const [newName, setNewName] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const newNameRef = useRef<HTMLInputElement>(null);
+  const handleNewNameContextMenu = useEditableContextMenu(newNameRef);
+  const voiceEditRef = useRef<HTMLInputElement>(null);
+  const handleVoiceEditContextMenu = useEditableContextMenu(voiceEditRef);
+  const textEditRef = useRef<HTMLInputElement>(null);
+  const handleTextEditContextMenu = useEditableContextMenu(textEditRef);
 
   const hasVoice = group?.features.includes('voice') ?? false;
 
@@ -189,10 +196,37 @@ function ChannelSidebar({ group, voice, activeChannelId, onSelectChannel, onOpen
     const isVoice = row.type === 'voice';
     const canManage = isVoice || Number((row.channel as GroupTextChannel).ownerId) === Number(currentUser?.id);
     const displayName = row.type === 'text' && row.channel.id === group?.channelId ? 'geral' : row.channel.name;
+    const isConnected = isVoice && voice.activeVcId === row.channel.id;
 
     useContextMenuStore.getState().open({ x: e.clientX, y: e.clientY }, (
       <>
         <ContextMenuHeader>{displayName}</ContextMenuHeader>
+
+        {isVoice && (
+          <>
+            <ContextMenuItem
+              onClick={() => {
+                useContextMenuStore.getState().close();
+                if (isConnected) voice.leave();
+                else voice.join(row.channel as VoiceChannel);
+              }}
+              danger={isConnected}
+              icon={
+                isConnected ? (
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1-9.4 0-17-7.6-17-17 0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.3 0 .7-.2 1L6.6 10.8z" />
+                  </svg>
+                ) : (
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 13a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.62 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 9.91a16 16 0 0 0 6.29 6.29l.97-.97a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z" />
+                  </svg>
+                )
+              }
+              label={isConnected ? 'Desconectar' : 'Conectar'}
+            />
+            <ContextMenuSeparator />
+          </>
+        )}
 
         {canManage ? (
           <>
@@ -227,6 +261,49 @@ function ChannelSidebar({ group, voice, activeChannelId, onSelectChannel, onOpen
         ) : (
           <ContextMenuHint>Sem permissão para gerenciar este canal</ContextMenuHint>
         )}
+      </>
+    ));
+  };
+
+  /** Menu de opções de um participante da call (silenciar localmente/copiar nome). */
+  const openParticipantMenu = (e: React.MouseEvent, p: VoiceChannel['participants'][number], isConnectedHere: boolean) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const isSelf = Number(p.userId) === Number(currentUser?.id);
+    const isLocallyMuted = voice.locallyMutedIds.has(p.userId);
+
+    useContextMenuStore.getState().open({ x: e.clientX, y: e.clientY }, (
+      <>
+        <ContextMenuHeader>{p.username}</ContextMenuHeader>
+
+        {!isSelf && isConnectedHere && (
+          <ContextMenuItem
+            onClick={() => { useContextMenuStore.getState().close(); voice.toggleLocalMute(p.userId); }}
+            icon={
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                {isLocallyMuted ? (
+                  <path d="M11 5 6 9H2v6h4l5 4V5z" />
+                ) : (
+                  <>
+                    <path d="M11 5 6 9H2v6h4l5 4V5z" />
+                    <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07" />
+                  </>
+                )}
+              </svg>
+            }
+            label={isLocallyMuted ? 'Dessilenciar localmente' : 'Silenciar localmente'}
+          />
+        )}
+        <ContextMenuItem
+          onClick={() => { useContextMenuStore.getState().close(); navigator.clipboard.writeText(p.username).catch(() => {}); }}
+          icon={
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="9" y="9" width="13" height="13" rx="2" />
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+            </svg>
+          }
+          label="Copiar nome de usuário"
+        />
       </>
     ));
   };
@@ -346,10 +423,12 @@ function ChannelSidebar({ group, voice, activeChannelId, onSelectChannel, onOpen
                 </div>
               )}
               <input
+                ref={newNameRef}
                 autoFocus
                 type="text"
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
+                onContextMenu={handleNewNameContextMenu}
                 placeholder="nome do canal"
                 maxLength={64}
                 className="zk-input w-full px-2 py-1 rounded text-xs"
@@ -415,6 +494,7 @@ function ChannelSidebar({ group, voice, activeChannelId, onSelectChannel, onOpen
                         <line x1="8" y1="23" x2="16" y2="23" />
                       </svg>
                       <input
+                        ref={voiceEditRef}
                         autoFocus
                         value={editValue}
                         onChange={(e) => setEditValue(e.target.value)}
@@ -424,6 +504,7 @@ function ChannelSidebar({ group, voice, activeChannelId, onSelectChannel, onOpen
                           if (e.key === 'Enter') { e.preventDefault(); commitEdit(row); }
                           if (e.key === 'Escape') { e.preventDefault(); setEditingKey(null); }
                         }}
+                        onContextMenu={handleVoiceEditContextMenu}
                         maxLength={64}
                         className="flex-1 min-w-0 bg-surface-900/70 border border-accent-500 rounded px-1.5 py-0.5 text-sm text-surface-100 focus:outline-none"
                       />
@@ -481,7 +562,11 @@ function ChannelSidebar({ group, voice, activeChannelId, onSelectChannel, onOpen
                           const isSharing = !!p.isSharing;
                           const isMuted = !!p.isMuted;
                           return (
-                            <div key={p.userId} className="flex items-center gap-2">
+                            <div
+                              key={p.userId}
+                              className="flex items-center gap-2"
+                              onContextMenu={(e) => openParticipantMenu(e, p, isActive)}
+                            >
                               <div
                                 className={`w-5 h-5 rounded-full flex items-center justify-center text-white text-[8px] font-semibold flex-shrink-0 ring-2 ${
                                   isActive ? 'ring-accent-500/60' : 'ring-white/[0.10]'
@@ -542,6 +627,7 @@ function ChannelSidebar({ group, voice, activeChannelId, onSelectChannel, onOpen
                       <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
                     </svg>
                     <input
+                      ref={textEditRef}
                       autoFocus
                       value={editValue}
                       onChange={(e) => setEditValue(e.target.value)}
@@ -551,6 +637,7 @@ function ChannelSidebar({ group, voice, activeChannelId, onSelectChannel, onOpen
                         if (e.key === 'Enter') { e.preventDefault(); commitEdit(row); }
                         if (e.key === 'Escape') { e.preventDefault(); setEditingKey(null); }
                       }}
+                      onContextMenu={handleTextEditContextMenu}
                       maxLength={64}
                       className="flex-1 min-w-0 bg-surface-900/70 border border-accent-500 rounded px-1.5 py-0.5 text-sm text-surface-100 focus:outline-none"
                     />
