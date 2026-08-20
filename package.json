@@ -1,13 +1,16 @@
 {
   "name": "zynk",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Zynk — Electron + Vite + React",
   "main": "dist-electron/main.js",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build && electron-builder",
-    "build:linux": "tsc && vite build && electron-builder --linux",
-    "build:win": "tsc && vite build && electron-builder --win",
+    "build": "tsc && vite build && electron-builder --publish never",
+    "build:linux": "tsc && vite build && electron-builder --linux --publish never",
+    "build:win": "tsc && vite build && electron-builder --win --publish never",
+    "release": "tsc && vite build && electron-builder -wl --publish always",
+    "release:linux": "tsc && vite build && electron-builder --linux --publish always",
+    "release:win": "tsc && vite build && electron-builder --win --publish always",
     "preview": "vite preview",
     "electron:dev": "vite build && electron ."
   },
@@ -15,6 +18,7 @@
     "@monaco-editor/react": "^4.7.0",
     "@sapphi-red/web-noise-suppressor": "^0.4.0",
     "axios": "^1.6.7",
+    "electron-updater": "^6.8.9",
     "monaco-editor": "^0.55.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",

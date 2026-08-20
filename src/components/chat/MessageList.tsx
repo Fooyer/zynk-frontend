@@ -17,12 +17,25 @@ export function MessageList({ channelId }: Props) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const wasAtBottom = useRef(true);
+  // Evita a "descida animada" ao abrir um canal com muitas mensagens: o
+  // primeiro scroll até o fim de cada canal é instantâneo (behavior:'auto');
+  // só as mensagens novas chegando depois disso (usuário já no fim) ganham
+  // a animação suave.
+  const lastChannelId = useRef<number | null>(null);
+  const scrolledInitially = useRef(false);
 
   useEffect(() => {
-    if (wasAtBottom.current) {
-      bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (lastChannelId.current !== channelId) {
+      lastChannelId.current = channelId;
+      scrolledInitially.current = false;
+      wasAtBottom.current = true;
     }
-  }, [messages.length]);
+
+    if (!wasAtBottom.current || messages.length === 0) return;
+
+    bottomRef.current?.scrollIntoView({ behavior: scrolledInitially.current ? 'smooth' : 'auto' });
+    scrolledInitially.current = true;
+  }, [channelId, messages.length]);
 
   const handleScroll = useCallback(() => {
     const el = containerRef.current;

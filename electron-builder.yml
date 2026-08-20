@@ -11,6 +11,15 @@ extraResources:
   - from: build/icon.png
     to: icon.png
 afterPack: ./scripts/set-icon.js
+# Autoupdate via electron-updater — cada instalação já sabe seu SO (Windows,
+# Linux) e só baixa o arquivo de update do próprio, sem precisar de nenhum
+# redirecionamento manual. Publicar (`npm run release`) sobe os instaladores
+# + os arquivos latest*.yml pra uma GitHub Release; o app rodando verifica
+# esses arquivos periodicamente.
+publish:
+  provider: github
+  owner: Fooyer
+  repo: zynk-frontend
 win:
   target: nsis
   icon: build/icon.ico

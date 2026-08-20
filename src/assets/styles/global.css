@@ -35,13 +35,20 @@ body {
 }
 
 /* ─── Bordas arredondadas da janela ──────────
-   O Electron roda com transparent:true (sem cantos nativos no Linux), então
+   No Linux o Electron roda com transparent:true (sem cantos nativos), então
    quem desenha o arredondado de verdade é este wrapper — precisa envolver
-   todo conteúdo opaco da janela (a #root nunca deve ficar sem ele). ──── */
+   todo conteúdo opaco da janela (a #root nunca deve ficar sem ele). Em
+   Windows/macOS a janela já é opaca com roundedCorners nativo (ver main.ts),
+   então esse raio extra é zerado (classe .native-frame, setada em
+   index.html) pra não duplicar o arredondado. ──── */
 
 .window-shell {
   border-radius: 10px;
   overflow: hidden;
+}
+
+html.native-frame .window-shell {
+  border-radius: 0;
 }
 
 /* ─── Scrollbar customizada (estilo Discord) ── */

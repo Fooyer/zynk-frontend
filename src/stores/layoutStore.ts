@@ -4,14 +4,12 @@ import { persist } from 'zustand/middleware';
 interface LayoutState {
   // Menus recolhíveis — cada um lembra o último estado escolhido pelo usuário
   navCollapsed: boolean;
-  channelSidebarCollapsed: boolean;
   memberListCollapsed: boolean;
 
   // Ordem dos servidores (grupos) na barra da esquerda, escolhida por arrastar-e-soltar
   groupOrder: number[];
 
   setNavCollapsed: (v: boolean) => void;
-  setChannelSidebarCollapsed: (v: boolean) => void;
   setMemberListCollapsed: (v: boolean) => void;
   moveGroup: (groupId: number, targetId: number, position: 'before' | 'after', allIds: number[]) => void;
 }
@@ -20,12 +18,10 @@ export const useLayoutStore = create<LayoutState>()(
   persist(
     (set, get) => ({
       navCollapsed: false,
-      channelSidebarCollapsed: false,
       memberListCollapsed: false,
       groupOrder: [],
 
       setNavCollapsed: (navCollapsed) => set({ navCollapsed }),
-      setChannelSidebarCollapsed: (channelSidebarCollapsed) => set({ channelSidebarCollapsed }),
       setMemberListCollapsed: (memberListCollapsed) => set({ memberListCollapsed }),
 
       moveGroup: (groupId, targetId, position, allIds) => {

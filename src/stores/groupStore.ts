@@ -20,6 +20,12 @@ interface GroupState {
   loadMembers: (groupId: number) => Promise<void>;
   getActiveGroup: () => Group | null;
   removeGroupFromState: (groupId: number) => void;
+  /** Presença (online/offline/in_call) vem só do socket `user:status` — sem
+   *  isso um membro ficava com o status de quando a lista foi carregada. */
+  updateMemberStatus: (userId: number, status: GroupMemberEntry['user']['status']) => void;
+  /** Username mudou nas Configurações de outro membro — reflete em todo
+   *  lugar que guarda uma cópia (lista de membros ativa + grupos carregados). */
+  updateMemberIdentity: (userId: number, username: string) => void;
 }
 
 export const useGroupStore = create<GroupState>((set, get) => ({
@@ -99,6 +105,35 @@ export const useGroupStore = create<GroupState>((set, get) => ({
     set((s) => ({
       groups: s.groups.filter((g) => g.id !== groupId),
       activeGroupId: s.activeGroupId === groupId ? null : s.activeGroupId,
+    }));
+  },
+
+  updateMemberStatus: (userId, status) => {
+    set((s) => ({
+      members: s.members.map((m) =>
+        Number(m.user.id) === Number(userId) ? { ...m, user: { ...m.user, status } } : m,
+      ),
+      groups: s.groups.map((g) => ({
+        ...g,
+        members: g.members?.map((m) =>
+          Number(m.user.id) === Number(userId) ? { ...m, user: { ...m.user, status } } : m,
+        ),
+      })),
+    }));
+  },
+
+  updateMemberIdentity: (userId, username) => {
+    set((s) => ({
+      members: s.members.map((m) =>
+        Number(m.user.id) === Number(userId) ? { ...m, user: { ...m.user, username } } : m,
+      ),
+      groups: s.groups.map((g) => ({
+        ...g,
+        owner: Number(g.owner.id) === Number(userId) ? { ...g.owner, username } : g.owner,
+        members: g.members?.map((m) =>
+          Number(m.user.id) === Number(userId) ? { ...m, user: { ...m.user, username } } : m,
+        ),
+      })),
     }));
   },
 }));

@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { useGroupStore } from '../../stores/groupStore';
 import { useAuthStore } from '../../stores/authStore';
 import { useContextMenuStore } from '../../stores/contextMenuStore';
-import { useLayoutStore } from '../../stores/layoutStore';
 import { useVoiceRoom } from '../../hooks/useVoiceRoom';
 import { GroupView } from './GroupView';
 import type { Tab } from './GroupView';
@@ -480,6 +479,7 @@ function ChannelSidebar({ group, voice, activeChannelId, onSelectChannel, onOpen
                           // Vem do roster (servidor), não do WebRTC — por
                           // isso aparece mesmo pra quem não está na call.
                           const isSharing = !!p.isSharing;
+                          const isMuted = !!p.isMuted;
                           return (
                             <div key={p.userId} className="flex items-center gap-2">
                               <div
@@ -495,6 +495,16 @@ function ChannelSidebar({ group, voice, activeChannelId, onSelectChannel, onOpen
                                 )}
                               </div>
                               <span className="text-xs text-surface-100 font-medium truncate flex-1">{p.username}</span>
+                              {isMuted && (
+                                <span title="Sem microfone" className="flex-shrink-0 text-danger">
+                                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <line x1="1" y1="1" x2="23" y2="23" />
+                                    <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6" />
+                                    <path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23" />
+                                    <line x1="12" y1="19" x2="12" y2="23" />
+                                  </svg>
+                                </span>
+                              )}
                               {isSharing && (
                                 <span title="Compartilhando tela" className="flex-shrink-0 text-success">
                                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -591,8 +601,6 @@ function ChannelSidebar({ group, voice, activeChannelId, onSelectChannel, onOpen
 export function GroupLayout({ voice }: { voice: ReturnType<typeof useVoiceRoom> }) {
   const groups = useGroupStore((s) => s.groups);
   const activeGroupId = useGroupStore((s) => s.activeGroupId);
-  const collapsed = useLayoutStore((s) => s.channelSidebarCollapsed);
-  const setCollapsed = useLayoutStore((s) => s.setChannelSidebarCollapsed);
   const [activeChannelId, setActiveChannelId] = useState<number | null>(null);
   // Vive aqui (não dentro de GroupView) porque o clique no canal de voz já
   // conectado, na sidebar, precisa poder trocar pra aba "Chamada".
@@ -607,12 +615,8 @@ export function GroupLayout({ voice }: { voice: ReturnType<typeof useVoiceRoom> 
 
   return (
     <>
-      {/* ── Col 1: Channel sidebar (recolhível) ─────────────── */}
-      <div
-        className={`h-full flex flex-col flex-shrink-0 overflow-hidden transition-all duration-200 ${
-          collapsed ? 'w-0' : 'w-60'
-        }`}
-      >
+      {/* ── Col 1: Channel sidebar ───────────────────────────── */}
+      <div className="h-full w-60 flex flex-col flex-shrink-0 overflow-hidden">
         <ChannelSidebar
           group={activeGroup}
           voice={voice}
@@ -625,8 +629,6 @@ export function GroupLayout({ voice }: { voice: ReturnType<typeof useVoiceRoom> 
       {/* ── Col 2: Main content ───────────────────────────── */}
       <GroupView
         channelId={activeChannelId}
-        onToggleCollapse={() => setCollapsed(!collapsed)}
-        collapsed={collapsed}
         voice={voice}
         activeTab={activeTab}
         setActiveTab={setActiveTab}

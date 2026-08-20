@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { groupsAPI } from '../services/api';
 import { getSocket } from '../services/socket';
 import { useAuthStore } from '../stores/authStore';
+import { useSettingsStore } from '../stores/settingsStore';
 import { captureScreen } from '../services/screenCapture';
 import { alertDialog } from '../stores/dialogStore';
 import { ICE_SERVERS } from '../services/iceServers';
@@ -48,6 +49,9 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
   const screenSenders = useRef<Map<number, ScreenSenders>>(new Map());
   const activeVcIdRef = useRef<number | null>(null);
   activeVcIdRef.current = activeVcId;
+  // Ids dos outros participantes da call conectada — usado só pra decidir
+  // quando tocar som de entrar/sair de gente que não sou eu.
+  const connectedParticipantIds = useRef<Set<number>>(new Set());
   // Modo do canal conectado no momento — usado pelo signaling (offer/answer)
   // pra saber se aplica o tuning de baixa latência nessa negociação.
   const activeModeRef = useRef<CallMode>('normal');
@@ -90,15 +94,31 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
   }, [groupChannelId]);
 
   // Socket: mantém o canal em que estou conectado atualizado sempre —
-  // mesmo enquanto navego por outro grupo ou pela Home.
+  // mesmo enquanto navego por outro grupo ou pela Home. Também toca o som de
+  // entrar/sair pra quando OUTROS participantes (não eu) entram ou saem da
+  // call em que estou — comparando o roster novo com o anterior via ref
+  // (seedado em join()/_leave(), pra não confundir "acabei de entrar numa
+  // sala que já tinha gente" com "todo mundo entrou agora").
   useEffect(() => {
     const socket = getSocket();
     const onChannelUpdated = (data: { voiceChannelId: number; participants: VoiceParticipant[] }) => {
+      if (activeVcIdRef.current !== data.voiceChannelId) return;
+
+      const prevIds = connectedParticipantIds.current;
+      const nextIds = new Set(data.participants.filter((p) => p.userId !== user?.id).map((p) => p.userId));
+      let joined = false;
+      let left = false;
+      for (const id of nextIds) if (!prevIds.has(id)) joined = true;
+      for (const id of prevIds) if (!nextIds.has(id)) left = true;
+      connectedParticipantIds.current = nextIds;
+      if (joined) playJoinCallSound();
+      else if (left) playLeaveCallSound();
+
       setConnectedVc((prev) => (prev && prev.id === data.voiceChannelId ? { ...prev, participants: data.participants } : prev));
     };
     socket.on('voice:channel-updated', onChannelUpdated);
     return () => { socket.off('voice:channel-updated', onChannelUpdated); };
-  }, []);
+  }, [user?.id]);
 
   // Limpa telas "fantasma" com base no roster (fonte confiável), não no
   // WebRTC — `track.onended` não dispara de forma consistente quando o
@@ -252,8 +272,22 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
       const track = e.track;
       if (track.kind === 'audio') {
         let audio = audioRefs.current.get(targetUserId);
-        if (!audio) { audio = new Audio(); audio.autoplay = true; audioRefs.current.set(targetUserId, audio); }
+        if (!audio) {
+          audio = new Audio();
+          audio.autoplay = true;
+          audioRefs.current.set(targetUserId, audio);
+          const outputId = useSettingsStore.getState().outputDeviceId;
+          if (outputId && typeof audio.setSinkId === 'function') {
+            audio.setSinkId(outputId).catch(() => {});
+          }
+        }
         audio.srcObject = e.streams[0];
+        // `autoplay` sozinho não é confiável (política de autoplay do
+        // Chromium/Electron pode bloquear silenciosamente) — era por isso
+        // que só dava pra ouvir o outro depois de interagir com o picker de
+        // tela (o clique ali "destravava" autoplay por acidente). Chamar
+        // .play() explicitamente é o padrão que já funciona na call 1:1.
+        audio.play().catch(() => {});
       } else if (track.kind === 'video') {
         const stream = e.streams[0] ?? new MediaStream([track]);
         addScreenStream(targetUserId, stream);
@@ -296,6 +330,7 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
     playLeaveCallSound();
     getSocket().emit('voice:leave', { voiceChannelId: vcId, groupChannelId: connectedGroupChannelIdRef.current });
     connectedGroupChannelIdRef.current = null;
+    connectedParticipantIds.current = new Set();
     localStream.current?.getTracks().forEach((t) => t.stop());
     localStream.current = null;
     localScreenStream.current?.getTracks().forEach((t) => t.stop());
@@ -324,6 +359,9 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
       // Fixa o grupo/canal de texto do momento da entrada — se o usuário
       // navegar pra outro grupo depois, a saída ainda usa o grupo certo.
       connectedGroupChannelIdRef.current = groupChannelId;
+      // Seed com quem já está na sala — sem isso, a primeira atualização do
+      // roster (me incluindo) seria lida como "todo mundo entrou agora".
+      connectedParticipantIds.current = new Set(vc.participants.filter((p) => p.userId !== user?.id).map((p) => p.userId));
       getSocket().emit('voice:join', { voiceChannelId: vc.id, groupChannelId, avatarUrl: user?.avatarUrl });
       setActiveVcId(vc.id);
       setConnectedVc(vc);
@@ -339,12 +377,19 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
 
   const toggleMute = () => {
     if (!localStream.current) return;
+    const next = !isMuted;
     localStream.current.getAudioTracks().forEach((t) => { t.enabled = !t.enabled; });
-    setIsMuted((m) => {
-      const next = !m;
-      if (next) playMuteSound(); else playUnmuteSound();
-      return next;
-    });
+    setIsMuted(next);
+    if (next) playMuteSound(); else playUnmuteSound();
+
+    // Avisa o roster (igual ao compartilhamento de tela) — é o que faz o
+    // ícone de mudo aparecer na lista de participantes.
+    if (activeVcIdRef.current) {
+      getSocket().emit(next ? 'voice:mute-start' : 'voice:mute-stop', {
+        voiceChannelId: activeVcIdRef.current,
+        groupChannelId: connectedGroupChannelIdRef.current,
+      });
+    }
   };
 
   const startScreenShare = async (sourceId?: string) => {

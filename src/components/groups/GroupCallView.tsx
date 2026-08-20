@@ -115,7 +115,9 @@ export function GroupCallView({ voice }: Props) {
   const currentUser = useAuthStore((s) => s.user);
   const [focusedUserId, setFocusedUserId] = useState<number | null>(null);
   const [showPicker, setShowPicker] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const focusedVideoRef = useRef<HTMLVideoElement>(null);
+  const focusedContainerRef = useRef<HTMLDivElement>(null);
 
   // Foca automaticamente a primeira tela compartilhada disponível; troca
   // sozinho se quem estava em foco parar de compartilhar.
@@ -133,6 +135,30 @@ export function GroupCallView({ voice }: Props) {
       focusedVideoRef.current.play().catch(() => {});
     }
   }, [focusedStream]);
+
+  // Tela cheia de verdade (Fullscreen API), não só um overlay dentro do
+  // app — cobre o monitor inteiro. Sincroniza com Esc/F11 nativos também.
+  useEffect(() => {
+    const onFsChange = () => setIsFullscreen(document.fullscreenElement === focusedContainerRef.current);
+    document.addEventListener('fullscreenchange', onFsChange);
+    return () => document.removeEventListener('fullscreenchange', onFsChange);
+  }, []);
+
+  // Sai da tela cheia sozinho se a tela em foco parar de ser compartilhada
+  // (senão ficava preso em tela cheia mostrando um vídeo parado/preto).
+  useEffect(() => {
+    if (!focusedStream && document.fullscreenElement === focusedContainerRef.current) {
+      document.exitFullscreen().catch(() => {});
+    }
+  }, [focusedStream]);
+
+  const toggleFullscreen = () => {
+    if (document.fullscreenElement) {
+      document.exitFullscreen().catch(() => {});
+    } else {
+      focusedContainerRef.current?.requestFullscreen().catch(() => {});
+    }
+  };
 
   if (!vc) return null;
 
@@ -155,11 +181,37 @@ export function GroupCallView({ voice }: Props) {
       <div className="flex-1 overflow-hidden p-6 flex items-center justify-center min-h-0">
         {focusedStream ? (
           <div className="w-full h-full flex flex-col gap-4">
-            <div className="flex-1 min-h-0 rounded-2xl overflow-hidden bg-black relative">
-              <video ref={focusedVideoRef} autoPlay muted className="w-full h-full object-contain" />
+            <div
+              ref={focusedContainerRef}
+              className={`flex-1 min-h-0 overflow-hidden bg-black relative group/screen ${isFullscreen ? '' : 'rounded-2xl'}`}
+            >
+              <video
+                ref={focusedVideoRef}
+                autoPlay
+                muted
+                className="w-full h-full object-contain cursor-pointer"
+                onDoubleClick={toggleFullscreen}
+              />
               <span className="absolute bottom-3 left-3 px-2.5 py-1 rounded-lg bg-black/60 text-white text-xs font-medium backdrop-blur-sm">
                 {Number(focusedUserId) === Number(currentUser?.id) ? 'Você' : nameFor(focusedUserId!)} — tela compartilhada
               </span>
+              <button
+                onClick={toggleFullscreen}
+                title={isFullscreen ? 'Sair da tela cheia (Esc)' : 'Tela cheia'}
+                className="absolute bottom-3 right-3 p-2 rounded-lg bg-black/60 text-white opacity-0 group-hover/screen:opacity-100 hover:bg-black/80 backdrop-blur-sm transition-opacity"
+              >
+                {isFullscreen ? (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="4 14 10 14 10 20" /><polyline points="20 10 14 10 14 4" />
+                    <line x1="14" y1="10" x2="21" y2="3" /><line x1="3" y1="21" x2="10" y2="14" />
+                  </svg>
+                ) : (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="15 3 21 3 21 9" /><polyline points="9 21 3 21 3 15" />
+                    <line x1="21" y1="3" x2="14" y2="10" /><line x1="3" y1="21" x2="10" y2="14" />
+                  </svg>
+                )}
+              </button>
             </div>
 
             {vc.participants.length > 1 && (

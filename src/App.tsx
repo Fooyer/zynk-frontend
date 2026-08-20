@@ -16,17 +16,25 @@ import { SettingsPage } from './components/settings/SettingsPage';
 import { GroupLayout } from './components/groups/GroupLayout';
 import { DialogHost } from './components/common/DialogHost';
 import { ContextMenuHost } from './components/common/ContextMenuHost';
+import { UpdateToast } from './components/common/UpdateToast';
 import { AppShellSkeleton } from './components/common/Skeleton';
 
 
 function TitleBar() {
-  const isLinux = window.electronAPI?.platform === 'linux';
+  // Botões de controle da janela são sempre os nossos (React + IPC) em vez do
+  // overlay nativo do Electron — funcionam igual em Windows e Linux e evitam
+  // o titleBarOverlay nativo, que fica pouco confiável combinado com a
+  // transparência que o Linux precisa para o arredondado via CSS. No macOS os
+  // "traffic lights" nativos já aparecem sozinhos (titleBarStyle:'hidden'),
+  // então não duplicamos botões lá.
+  const platform = window.electronAPI?.platform;
+  const showWindowControls = !!window.electronAPI && platform !== 'darwin';
 
   return (
     <div className="h-9 flex-shrink-0 bg-surface-900 drag-region flex items-center gap-2 px-4 border-b border-white/[0.06]">
       <span className="w-1.5 h-1.5 rounded-full bg-accent-500 shadow-glow-accent-sm animate-pulse no-drag select-none" />
       <span className="text-xs font-semibold text-surface-400 uppercase tracking-[0.2em] no-drag select-none">Zynk</span>
-      {isLinux && (
+      {showWindowControls && (
         <div className="ml-auto flex items-center no-drag">
           <button
             onClick={() => window.electronAPI?.windowMinimize()}
@@ -105,6 +113,7 @@ function AppLayout() {
       {showFloatingCall && <ActiveCallOverlay />}
       <DialogHost />
       <ContextMenuHost />
+      <UpdateToast />
     </div>
   );
 }

@@ -15,10 +15,12 @@ interface Props {
   onReply: (message: Message) => void;
 }
 
-function MessageMenuItems({ canEdit, canDelete, onReply, onEdit, onDelete }: {
+function MessageMenuItems({ canCopy, canEdit, canDelete, onReply, onCopy, onEdit, onDelete }: {
+  canCopy: boolean;
   canEdit: boolean;
   canDelete: boolean;
   onReply: () => void;
+  onCopy: () => void;
   onEdit: () => void;
   onDelete: () => void;
 }) {
@@ -34,6 +36,19 @@ function MessageMenuItems({ canEdit, canDelete, onReply, onEdit, onDelete }: {
         }
         label="Responder"
       />
+
+      {canCopy && (
+        <ContextMenuItem
+          onClick={onCopy}
+          icon={
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="9" y="9" width="13" height="13" rx="2" />
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+            </svg>
+          }
+          label="Copiar"
+        />
+      )}
 
       {canEdit && (
         <ContextMenuItem
@@ -189,6 +204,7 @@ export const MessageItem = memo(function MessageItem({ message, isGrouped, onRep
   const [isEditing, setIsEditing] = useState(false);
 
   const isOwn = Number(message.senderId) === Number(currentUser?.id);
+  const canCopy = !message.isSystem && !!content;
   const canEdit = isOwn && !message.isSystem && !!content;
   const canDelete = isOwn && !message.isSystem;
 
@@ -206,11 +222,19 @@ export const MessageItem = memo(function MessageItem({ message, isGrouped, onRep
   const handleContextMenu = (e: React.MouseEvent) => {
     if (message.isSystem) return;
     e.preventDefault();
+    // Captura a seleção de texto no momento em que o menu abre — clicar no
+    // item "Copiar" depois colapsaria a seleção antes de conseguirmos lê-la.
+    // Se houver algo selecionado, ele tem prioridade sobre a mensagem inteira.
+    const selectedText = window.getSelection()?.toString() ?? '';
+    const textToCopy = selectedText.trim() ? selectedText : content;
+
     useContextMenuStore.getState().open({ x: e.clientX, y: e.clientY }, (
       <MessageMenuItems
+        canCopy={canCopy}
         canEdit={canEdit}
         canDelete={canDelete}
         onReply={() => { useContextMenuStore.getState().close(); onReply(message); }}
+        onCopy={() => { useContextMenuStore.getState().close(); navigator.clipboard.writeText(textToCopy).catch(() => {}); }}
         onEdit={() => { useContextMenuStore.getState().close(); setIsEditing(true); }}
         onDelete={handleDelete}
       />

@@ -91,8 +91,13 @@ function monitorRawStream(rawStream: MediaStream, monitor: boolean): { analyser:
  * teclado. De propósito SEM gate: um gate liga/desliga o áudio (binário),
  * o que cortava pedaços da própria voz quando ela ficava mais baixa por um
  * instante. RNNoise processa de forma contínua — sempre atenuando o ruído,
- * nunca mutando o sinal — então a voz nunca é cortada, só o ruído é
- * reduzido.
+ * nunca mutando o sinal.
+ *
+ * A saída do RNNoise (85%) é misturada com uma fração do sinal só filtrado
+ * (15%, sem RNNoise) antes do compressor — em microfone ruim/muito ruidoso
+ * o RNNoise pode perder confiança de que existe voz num frame e atenuar
+ * ele quase inteiro, o que soava como a voz cortando junto com o ruído.
+ * Essa mistura garante um piso mínimo de sinal sempre presente.
  */
 export async function getProcessedStream(
   mode: CallMode,
@@ -164,19 +169,36 @@ export async function getProcessedStream(
     inputGain.connect(highPass);
     highPass.connect(lowPass);
 
-    let lastNode: AudioNode = lowPass;
-
     const [wasmBinary] = await Promise.all([
       getRnnoiseWasmBinary(),
       audioCtx.audioWorklet.addModule(rnnoiseWorkletPath),
     ]);
 
     const rnnoise = forceMono(new RnnoiseWorkletNode(audioCtx, { maxChannels: 1, wasmBinary }));
-    lastNode.connect(rnnoise);
-    lastNode = rnnoise;
+    lowPass.connect(rnnoise);
+
+    // Mistura wet (RNNoise) + um pouco de dry (sinal só filtrado, sem
+    // RNNoise) — em microfone ruim/muito ruidoso, o RNNoise pode perder a
+    // confiança de que existe voz ali e atenuar o frame quase inteiro,
+    // cortando a voz junto com o ruído (relatado: "não sai nada"). Manter
+    // uma fração do sinal original sempre passando garante que nunca fica
+    // em silêncio total, custando só um pouco do ruído de volta.
+    const wetGain = forceMono(audioCtx.createGain());
+    wetGain.gain.value = 0.85;
+    rnnoise.connect(wetGain);
+
+    const dryGain = forceMono(audioCtx.createGain());
+    dryGain.gain.value = 0.15;
+    lowPass.connect(dryGain);
+
+    const mixed = forceMono(audioCtx.createGain());
+    wetGain.connect(mixed);
+    dryGain.connect(mixed);
+
+    let lastNode: AudioNode = mixed;
 
     // Compressor suave — só pra nivelar volume, não faz parte da remoção
-    // de ruído (isso é 100% o RNNoise acima).
+    // de ruído (isso é o RNNoise acima).
     const compressor = forceMono(audioCtx.createDynamicsCompressor());
     compressor.threshold.value = -24;
     compressor.knee.value = 12;

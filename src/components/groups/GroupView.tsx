@@ -23,14 +23,12 @@ const TAB_LABELS: Record<Tab, string> = {
 
 interface Props {
   channelId: number | null;
-  onToggleCollapse: () => void;
-  collapsed: boolean;
   voice: ReturnType<typeof useVoiceRoom>;
   activeTab: Tab;
   setActiveTab: (tab: Tab) => void;
 }
 
-export function GroupView({ channelId, onToggleCollapse, collapsed, voice, activeTab, setActiveTab }: Props) {
+export function GroupView({ channelId, voice, activeTab, setActiveTab }: Props) {
   const activeGroupId = useGroupStore((s) => s.activeGroupId);
   const groups = useGroupStore((s) => s.groups);
   const user = useAuthStore((s) => s.user);
@@ -121,19 +119,6 @@ export function GroupView({ channelId, onToggleCollapse, collapsed, voice, activ
     <div className="flex-1 flex flex-col zk-surface shadow-panel rounded-2xl min-w-0 overflow-hidden">
       {/* Header */}
       <div className="h-12 flex items-center px-4 border-b border-white/[0.06] gap-3 flex-shrink-0">
-        <button
-          onClick={onToggleCollapse}
-          className="p-1.5 text-surface-500 hover:text-surface-200 rounded transition-colors flex-shrink-0"
-          title={collapsed ? 'Expandir canais' : 'Recolher canais'}
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            {collapsed ? (
-              <><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="18" x2="21" y2="18" /></>
-            ) : (
-              <><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="18" x2="21" y2="18" /></>
-            )}
-          </svg>
-        </button>
         <h2 className="text-base font-bold text-surface-100 truncate">{group.name}</h2>
 
         <div className="ml-auto flex items-center gap-1">

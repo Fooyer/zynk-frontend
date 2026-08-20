@@ -431,7 +431,7 @@ export function DMChatArea({ dm }: Props) {
   };
 
   return (
-    <main className="flex-1 flex flex-col min-w-0 zk-surface shadow-panel rounded-2xl overflow-hidden">
+    <main className="flex-1 flex flex-col min-w-0 min-h-0 zk-surface shadow-panel rounded-2xl overflow-hidden">
       <header className="h-12 flex items-center gap-2 px-3 border-b border-white/[0.06] flex-shrink-0">
         {/* Left: back + identity */}
         <button

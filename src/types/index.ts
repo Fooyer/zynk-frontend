@@ -142,6 +142,8 @@ export interface VoiceParticipant {
   /** Vem do servidor (roster), não do WebRTC — por isso funciona mesmo pra
    *  quem não está conectado nessa call. */
   isSharing?: boolean;
+  /** Mesma ideia do isSharing — roster, não estado local do peer. */
+  isMuted?: boolean;
 }
 
 export type CallMode = 'normal' | 'game';
@@ -204,6 +206,11 @@ declare global {
       windowMinimize: () => void;
       windowMaximize: () => void;
       windowClose: () => void;
+      // Auto-update
+      onUpdateAvailable: (callback: (version: string) => void) => void;
+      onUpdateProgress: (callback: (percent: number) => void) => void;
+      onUpdateDownloaded: (callback: (version: string) => void) => void;
+      restartToUpdate: () => void;
       getScreenSources: () => Promise<ScreenSource[]>;
       selectScreenSource: (sourceId: string) => Promise<boolean>;
       gamepadIsAvailable: () => Promise<boolean>;

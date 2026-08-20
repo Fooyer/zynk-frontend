@@ -1,4 +1,5 @@
 import { app, BrowserWindow, shell, session, ipcMain, desktopCapturer, Tray, Menu, nativeImage, dialog, type DesktopCapturerSource } from 'electron';
+import { autoUpdater } from 'electron-updater';
 import path from 'path';
 import fs from 'fs';
 import { execFile } from 'child_process';
@@ -34,6 +35,8 @@ function getIconPath(): string {
 }
 
 function createWindow() {
+  const isLinux = process.platform === 'linux';
+
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 800,
@@ -43,16 +46,19 @@ function createWindow() {
     icon: getIconPath(),
     frame: false,
     titleBarStyle: 'hidden',
-    titleBarOverlay: {
-      color: '#131524',
-      symbolColor: '#8b91a7',
-      height: 36,
-    },
-    // roundedCorners é nativo no macOS e Windows 11 com frame:false, mas no
-    // Linux não existe — por isso a janela fica transparente e o arredondado
-    // vem do CSS (.window-shell), que também cobre o Linux.
+    // roundedCorners é nativo no macOS e Windows 11 com frame:false — nesses
+    // o próprio SO desenha o arredondado (DWM/Quartz), sem precisar de
+    // transparência. No Linux não existe suporte nativo, então a janela fica
+    // transparente e quem desenha o arredondado é o CSS (.window-shell).
+    // transparent:true em todas as plataformas (como era antes) quebrava a
+    // interação da janela no Windows — o maximizar do titleBarOverlay parava
+    // de responder a cliques por causa de como o DWM compõe janelas
+    // transparentes. Por isso os botões de controle agora são sempre os
+    // customizados (React + IPC), iguais em Windows e Linux, e o
+    // titleBarOverlay nativo (que só existe em Win/macOS) nem é usado.
     roundedCorners: true,
-    transparent: true,
+    transparent: isLinux,
+    backgroundColor: isLinux ? undefined : '#0a0a0b',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -123,6 +129,45 @@ ipcMain.on('window:maximize', () => {
   else mainWindow?.maximize();
 });
 ipcMain.on('window:close', () => mainWindow?.close());
+
+// ─── Auto-update (electron-updater + GitHub Releases) ─────────
+// Cada instalação já sabe seu próprio SO — o Windows só olha pro
+// latest.yml do NSIS, o Linux só pro latest-linux.yml do AppImage — então
+// não existe "detectar e redirecionar" nenhum, é tudo automático por
+// plataforma assim que uma release é publicada (`npm run release`).
+ipcMain.on('update:restart', () => autoUpdater.quitAndInstall());
+
+function setupAutoUpdater() {
+  if (!app.isPackaged) return; // não faz sentido checar update rodando via `npm run dev`
+
+  autoUpdater.autoDownload = true;
+  // Se o usuário ignorar o toast de "reiniciar agora", a atualização ainda
+  // se aplica sozinha na próxima vez que o app for fechado de verdade (menu
+  // da bandeja "Sair") — não só minimizado pro tray.
+  autoUpdater.autoInstallOnAppQuit = true;
+
+  autoUpdater.on('update-available', (info) => {
+    mainWindow?.webContents.send('update:available', info.version);
+  });
+  autoUpdater.on('download-progress', (progress) => {
+    mainWindow?.webContents.send('update:progress', Math.round(progress.percent));
+  });
+  autoUpdater.on('update-downloaded', (info) => {
+    mainWindow?.webContents.send('update:downloaded', info.version);
+  });
+  autoUpdater.on('error', (err) => {
+    console.error('[autoUpdater]', err);
+  });
+
+  const check = () => {
+    autoUpdater.checkForUpdates().catch((err) => console.error('[autoUpdater] falha ao checar:', err));
+  };
+
+  // Primeira checagem alguns segundos depois de abrir (não compete com o
+  // carregamento inicial da janela), depois a cada 4h enquanto aberto.
+  setTimeout(check, 10_000);
+  setInterval(check, 4 * 60 * 60 * 1000);
+}
 
 // ─── Screen Sharing via IPC ────────────────────────────────────
 // Abordagem direta: renderer pede sources, escolhe, e pede o stream ID.
@@ -431,6 +476,7 @@ app.whenReady().then(() => {
   }
 
   createWindow();
+  setupAutoUpdater();
 
   // ─── System Tray ──────────────────────────────────────────────
   const trayIcon = nativeImage.createFromPath(getIconPath()).resize({ width: 16, height: 16 });

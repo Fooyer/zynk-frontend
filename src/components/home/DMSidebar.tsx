@@ -11,7 +11,7 @@ interface DMSidebarProps {
 }
 
 export function DMSidebar({ voice }: DMSidebarProps) {
-  const { friends, dmChannels, activeDmChannelId, loadDmChannels, openDm, closeDm, setActiveDm, isDmLoading, isLoading } =
+  const { dmChannels, activeDmChannelId, loadDmChannels, closeDm, setActiveDm, isDmLoading } =
     useFriendStore();
 
   const callStatus = useCallStore((s) => s.status);
@@ -21,16 +21,6 @@ export function DMSidebar({ voice }: DMSidebarProps) {
   useEffect(() => {
     loadDmChannels();
   }, []);
-
-  const onlineFriends = friends.filter((f) => f.friend.status === 'online' || f.friend.status === 'in_call');
-
-  const handleOpenDm = async (friendId: number) => {
-    try {
-      await openDm(friendId);
-    } catch {
-      // silencioso
-    }
-  };
 
   const handleHangup = () => {
     window.dispatchEvent(new CustomEvent('call:hangup'));
@@ -137,46 +127,6 @@ export function DMSidebar({ voice }: DMSidebarProps) {
                 </div>
               );
             })}
-          </div>
-        )}
-
-        {/* Amigos online */}
-        {isLoading && friends.length === 0 && (
-          <div className="mt-4">
-            <h3 className="text-xs font-semibold text-surface-400 uppercase tracking-wider px-5 py-1.5">Online</h3>
-            <DMListSkeleton />
-          </div>
-        )}
-        {onlineFriends.length > 0 && (
-          <div className="mt-4">
-            <h3 className="text-xs font-semibold text-surface-400 uppercase tracking-wider px-5 py-1.5">
-              Online — {onlineFriends.length}
-            </h3>
-            <div className="px-2 space-y-0.5">
-              {onlineFriends.map((f) => {
-                const color = getUserColor(f.friend.username);
-                const hasDm = dmChannels.some((d) => d.friend.id === f.friend.id);
-                return (
-                  <button
-                    key={f.id}
-                    onClick={() => handleOpenDm(f.friend.id)}
-                    className="w-full flex items-center gap-2.5 px-2 py-1.5 rounded-xl text-surface-400 hover:text-surface-100 hover:bg-white/[0.05] transition-colors text-left"
-                    title={hasDm ? 'Abrir conversa' : 'Iniciar conversa'}
-                  >
-                    <div className="relative flex-shrink-0">
-                      <div
-                        className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-semibold"
-                        style={{ backgroundColor: color }}
-                      >
-                        {getInitials(f.friend.username)}
-                      </div>
-                      <div className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-surface-800 ${getStatusDotClass(f.friend.status)}`} />
-                    </div>
-                    <p className="text-sm font-medium truncate">{f.friend.username}</p>
-                  </button>
-                );
-              })}
-            </div>
           </div>
         )}
       </div>
