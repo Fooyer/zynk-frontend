@@ -72,6 +72,7 @@ export const friendsAPI = {
   listRequests: () => api.get("/friends/requests"),
   listSent: () => api.get("/friends/sent"),
   sendRequest: (username: string, tag: string) => api.post("/friends/request", { username, tag }),
+  sendRequestByUserId: (userId: number) => api.post("/friends/request-by-id", { userId }),
   accept: (id: number) => api.post(`/friends/${id}/accept`),
   reject: (id: number) => api.post(`/friends/${id}/reject`),
   remove: (id: number) => api.delete(`/friends/${id}`),

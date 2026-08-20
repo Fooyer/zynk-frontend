@@ -17,11 +17,13 @@ interface FriendState {
   loadAll: () => Promise<void>;
   loadDmChannels: () => Promise<void>;
   openDm: (targetUserId: number) => Promise<number>;
-  closeDm: (channelId: number) => void;
+  closeDm: (channelId: number) => Promise<void>;
   setActiveDm: (channelId: number | null) => void;
   updateFriendStatus: (userId: number, status: string) => void;
   updateFriendIdentity: (userId: number, username: string) => void;
+  isFriend: (userId: number) => boolean;
   sendRequest: (username: string, tag: string) => Promise<void>;
+  sendRequestByUserId: (userId: number) => Promise<void>;
   accept: (id: number) => Promise<void>;
   reject: (id: number) => Promise<void>;
   remove: (id: number) => Promise<void>;
@@ -92,11 +94,18 @@ export const useFriendStore = create<FriendState>((set, get) => ({
     return promise;
   },
 
-  closeDm: (channelId) => {
+  closeDm: async (channelId) => {
+    // Otimista — some da lista na hora; se a chamada falhar, na pior das
+    // hipóteses a conversa reaparece no próximo loadDmChannels().
     set((s) => ({
       dmChannels: s.dmChannels.filter((d) => d.channelId !== channelId),
       activeDmChannelId: s.activeDmChannelId === channelId ? null : s.activeDmChannelId,
     }));
+    try {
+      await channelsAPI.closeDM(channelId);
+    } catch {
+      // Silencioso — fechar conversa nunca deve travar a UI
+    }
   },
 
   updateFriendStatus: (userId, status) => {
@@ -128,10 +137,24 @@ export const useFriendStore = create<FriendState>((set, get) => ({
     }
   },
 
+  isFriend: (userId) => get().friends.some((f) => Number(f.friend.id) === Number(userId)),
+
   sendRequest: async (username, tag) => {
     set({ error: null });
     try {
       await friendsAPI.sendRequest(username, tag);
+      await get().loadAll();
+    } catch (err: any) {
+      const msg = err.response?.data?.message || 'Erro ao enviar solicitação';
+      set({ error: Array.isArray(msg) ? msg.join(', ') : msg });
+      throw err;
+    }
+  },
+
+  sendRequestByUserId: async (userId) => {
+    set({ error: null });
+    try {
+      await friendsAPI.sendRequestByUserId(userId);
       await get().loadAll();
     } catch (err: any) {
       const msg = err.response?.data?.message || 'Erro ao enviar solicitação';

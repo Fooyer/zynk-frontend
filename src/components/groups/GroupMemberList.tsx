@@ -1,6 +1,11 @@
 import { useMemo, useState } from 'react';
 import { useGroupStore } from '../../stores/groupStore';
 import { useLayoutStore } from '../../stores/layoutStore';
+import { useFriendStore } from '../../stores/friendStore';
+import { useAuthStore } from '../../stores/authStore';
+import { useContextMenuStore } from '../../stores/contextMenuStore';
+import { alertDialog } from '../../stores/dialogStore';
+import { ContextMenuItem, ContextMenuHeader } from '../common/ContextMenuItem';
 import { getInitials, getUserColor } from '../../utils/formatDate';
 import { MemberListSkeleton } from '../common/Skeleton';
 import type { GroupMemberEntry } from '../../types';
@@ -46,7 +51,52 @@ export function GroupMemberList() {
   const isLoadingMembers = useGroupStore((s) => s.isLoadingMembers);
   const collapsed = useLayoutStore((s) => s.memberListCollapsed);
   const setCollapsed = useLayoutStore((s) => s.setMemberListCollapsed);
+  const currentUser = useAuthStore((s) => s.user);
+  const isFriend = useFriendStore((s) => s.isFriend);
+  const sendRequestByUserId = useFriendStore((s) => s.sendRequestByUserId);
   const [offlineOpen, setOfflineOpen] = useState(false);
+
+  const openMemberMenu = (e: React.MouseEvent, m: GroupMemberEntry) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const isSelf = Number(m.user.id) === Number(currentUser?.id);
+    const alreadyFriend = isFriend(m.user.id);
+
+    useContextMenuStore.getState().open({ x: e.clientX, y: e.clientY }, (
+      <>
+        <ContextMenuHeader>{m.user.username}</ContextMenuHeader>
+
+        {!isSelf && !alreadyFriend && (
+          <ContextMenuItem
+            onClick={() => {
+              useContextMenuStore.getState().close();
+              sendRequestByUserId(m.user.id).catch((err: any) => {
+                alertDialog(err.response?.data?.message || 'Erro ao enviar solicitação', { title: 'Não foi possível adicionar' });
+              });
+            }}
+            icon={
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                <circle cx="8.5" cy="7" r="4" />
+                <line x1="20" y1="8" x2="20" y2="14" /><line x1="17" y1="11" x2="23" y2="11" />
+              </svg>
+            }
+            label="Adicionar"
+          />
+        )}
+        <ContextMenuItem
+          onClick={() => { useContextMenuStore.getState().close(); navigator.clipboard.writeText(m.user.username).catch(() => {}); }}
+          icon={
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="9" y="9" width="13" height="13" rx="2" />
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+            </svg>
+          }
+          label="Copiar nome de usuário"
+        />
+      </>
+    ));
+  };
 
   const online = useMemo(() => members.filter((m) => m.user.status !== 'offline'), [members]);
   const offline = useMemo(() => members.filter((m) => m.user.status === 'offline'), [members]);
@@ -87,6 +137,7 @@ export function GroupMemberList() {
   const renderMember = (m: GroupMemberEntry) => (
     <div
       key={m.id}
+      onContextMenu={(e) => openMemberMenu(e, m)}
       className={`group relative flex items-center gap-2.5 mx-2 pl-3 pr-2 py-1.5 rounded-lg transition-colors hover:bg-white/[0.05] ${
         m.user.status === 'offline' ? 'opacity-50 hover:opacity-90' : ''
       }`}

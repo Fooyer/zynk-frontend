@@ -1,17 +1,21 @@
 import { useEffect } from 'react';
 import { useFriendStore } from '../../stores/friendStore';
 import { useCallStore } from '../../stores/callStore';
+import { useContextMenuStore } from '../../stores/contextMenuStore';
+import { confirmDialog, alertDialog } from '../../stores/dialogStore';
 import { VoiceStatusBar } from '../groups/VoiceStatusBar';
 import { DMListSkeleton } from '../common/Skeleton';
+import { ContextMenuItem, ContextMenuHeader, ContextMenuSeparator } from '../common/ContextMenuItem';
 import { getInitials, getUserColor } from '../../utils/formatDate';
 import type { useVoiceRoom } from '../../hooks/useVoiceRoom';
+import type { DmChannel } from '../../types';
 
 interface DMSidebarProps {
   voice: ReturnType<typeof useVoiceRoom>;
 }
 
 export function DMSidebar({ voice }: DMSidebarProps) {
-  const { dmChannels, activeDmChannelId, loadDmChannels, closeDm, setActiveDm, isDmLoading } =
+  const { dmChannels, activeDmChannelId, loadDmChannels, closeDm, setActiveDm, isDmLoading, isFriend, sendRequestByUserId } =
     useFriendStore();
 
   const callStatus = useCallStore((s) => s.status);
@@ -24,6 +28,70 @@ export function DMSidebar({ voice }: DMSidebarProps) {
 
   const handleHangup = () => {
     window.dispatchEvent(new CustomEvent('call:hangup'));
+  };
+
+  const handleDeleteConversation = async (dm: DmChannel) => {
+    const ok = await confirmDialog(`A conversa com ${dm.friend.username} vai sumir da sua lista.`, {
+      title: 'Excluir conversa?',
+      confirmLabel: 'Excluir',
+      danger: true,
+    });
+    if (ok) closeDm(dm.channelId);
+  };
+
+  const openDmMenu = (e: React.MouseEvent, dm: DmChannel) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const alreadyFriend = isFriend(dm.friend.id);
+
+    useContextMenuStore.getState().open({ x: e.clientX, y: e.clientY }, (
+      <>
+        <ContextMenuHeader>{dm.friend.username}</ContextMenuHeader>
+
+        {!alreadyFriend && (
+          <ContextMenuItem
+            onClick={() => {
+              useContextMenuStore.getState().close();
+              sendRequestByUserId(dm.friend.id).catch((err: any) => {
+                alertDialog(err.response?.data?.message || 'Erro ao enviar solicitação', { title: 'Não foi possível adicionar' });
+              });
+            }}
+            icon={
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                <circle cx="8.5" cy="7" r="4" />
+                <line x1="20" y1="8" x2="20" y2="14" /><line x1="17" y1="11" x2="23" y2="11" />
+              </svg>
+            }
+            label="Enviar solicitação de amizade"
+          />
+        )}
+        <ContextMenuItem
+          onClick={() => { useContextMenuStore.getState().close(); navigator.clipboard.writeText(dm.friend.username).catch(() => {}); }}
+          icon={
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="9" y="9" width="13" height="13" rx="2" />
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+            </svg>
+          }
+          label="Copiar nome de usuário"
+        />
+        <ContextMenuSeparator />
+        <ContextMenuItem
+          onClick={() => { useContextMenuStore.getState().close(); handleDeleteConversation(dm); }}
+          danger
+          icon={
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="3 6 5 6 21 6" />
+              <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+              <path d="M10 11v6" /><path d="M14 11v6" />
+              <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+            </svg>
+          }
+          label="Excluir conversa"
+        />
+      </>
+    ));
   };
 
   const getStatusDotClass = (status: string) => {
@@ -76,6 +144,7 @@ export function DMSidebar({ voice }: DMSidebarProps) {
                       : 'text-surface-400 hover:text-surface-100 hover:bg-white/[0.05]'
                   }`}
                   onClick={() => setActiveDm(dm.channelId)}
+                  onContextMenu={(e) => openDmMenu(e, dm)}
                 >
                   <div className="relative flex-shrink-0">
                     <div

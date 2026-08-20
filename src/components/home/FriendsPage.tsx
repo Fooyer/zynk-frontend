@@ -1,8 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
 import { useFriendStore } from '../../stores/friendStore';
+import { useContextMenuStore } from '../../stores/contextMenuStore';
 import { getInitials, getUserColor } from '../../utils/formatDate';
 import { FriendGridSkeleton } from '../common/Skeleton';
+import { ContextMenuItem, ContextMenuHeader } from '../common/ContextMenuItem';
 import { useEditableContextMenu } from '../../hooks/useEditableContextMenu';
+import type { FriendEntry, FriendRequest } from '../../types';
 
 type Tab = 'online' | 'all' | 'requests' | 'add';
 
@@ -52,6 +55,74 @@ export function FriendsPage() {
     } catch {
       // silencioso
     }
+  };
+
+  const openRequestMenu = (e: React.MouseEvent, r: FriendRequest) => {
+    e.preventDefault();
+    e.stopPropagation();
+    useContextMenuStore.getState().open({ x: e.clientX, y: e.clientY }, (
+      <>
+        <ContextMenuHeader>{r.requester.username}</ContextMenuHeader>
+        <ContextMenuItem
+          onClick={() => { useContextMenuStore.getState().close(); accept(r.id); }}
+          icon={
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="20 6 9 17 4 12" />
+            </svg>
+          }
+          label="Aceitar"
+        />
+        <ContextMenuItem
+          onClick={() => { useContextMenuStore.getState().close(); reject(r.id); }}
+          danger
+          icon={
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          }
+          label="Recusar"
+        />
+      </>
+    ));
+  };
+
+  const openFriendMenu = (e: React.MouseEvent, f: FriendEntry) => {
+    e.preventDefault();
+    e.stopPropagation();
+    useContextMenuStore.getState().open({ x: e.clientX, y: e.clientY }, (
+      <>
+        <ContextMenuHeader>{f.friend.username}</ContextMenuHeader>
+        <ContextMenuItem
+          onClick={() => { useContextMenuStore.getState().close(); handleOpenDm(f.friend.id); }}
+          icon={
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+            </svg>
+          }
+          label="Enviar mensagem"
+        />
+        <ContextMenuItem
+          onClick={() => { useContextMenuStore.getState().close(); navigator.clipboard.writeText(f.friend.username).catch(() => {}); }}
+          icon={
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="9" y="9" width="13" height="13" rx="2" />
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+            </svg>
+          }
+          label="Copiar nome de usuário"
+        />
+        <ContextMenuItem
+          onClick={() => { useContextMenuStore.getState().close(); remove(f.id); }}
+          danger
+          icon={
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          }
+          label="Remover amigo"
+        />
+      </>
+    ));
   };
 
   const stats: { id: Tab; label: string; value: React.ReactNode; accent: string }[] = [
@@ -152,6 +223,7 @@ export function FriendsPage() {
               {requests.map((r) => (
                 <div
                   key={r.id}
+                  onContextMenu={(e) => openRequestMenu(e, r)}
                   className="rounded-xl border-l-4 border-l-danger border border-white/[0.07] bg-surface-800/60 shadow-panel p-4"
                 >
                   <div className="flex items-center gap-3 mb-3">
@@ -213,6 +285,7 @@ export function FriendsPage() {
                 key={f.id}
                 className="rounded-xl border border-white/[0.07] bg-surface-800/60 shadow-panel hover:border-white/[0.14] hover:bg-surface-800 hover:shadow-elevated transition-all p-3 flex items-center gap-3 cursor-pointer"
                 onClick={() => handleOpenDm(f.friend.id)}
+                onContextMenu={(e) => openFriendMenu(e, f)}
               >
                 <div className="relative flex-shrink-0">
                   <div
