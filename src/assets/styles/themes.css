@@ -1,0 +1,126 @@
+/* ─── Variáveis de tema ──────────────────────────────────────────
+   Dois eixos independentes:
+   - Aparência (claro/escuro) → atributo data-theme='dark'|'light' em <html>,
+     controla só a rampa --color-surface-* (neutra/chrome) abaixo.
+   - Cor de destaque (predefinida/personalizada/gradiente) → NÃO fica fixa
+     aqui; as variáveis --color-accent-* são escritas em runtime via JS
+     (ver App.tsx + src/utils/color.ts + src/utils/accentPresets.ts), porque
+     o usuário pode escolher qualquer cor/gradiente arbitrário, não só um
+     conjunto fixo. Os valores abaixo em :root são só o FALLBACK inicial
+     (vermelho, tom "500" da marca) até o JS aplicar o valor real — evita
+     elementos sem cor entre o primeiro paint e o efeito do React montar.
+
+   Formato "R G B" (sem vírgula, sem #) — exigido pelo padrão
+   rgb(var(--x) / <alpha-value>) usado em tailwind.config.js. */
+
+:root {
+  /* Escuro (padrão) */
+  --color-surface-50: 246 246 247;
+  --color-surface-100: 233 233 235;
+  --color-surface-200: 209 209 213;
+  --color-surface-300: 168 169 175;
+  --color-surface-400: 128 129 135;
+  --color-surface-500: 101 101 107;
+  --color-surface-600: 72 72 77;
+  --color-surface-700: 44 44 48;
+  --color-surface-750: 33 33 36;
+  --color-surface-800: 25 25 27;
+  --color-surface-900: 16 16 17;
+  --color-surface-950: 8 8 10;
+
+  /* Fallback de destaque (vermelho) — sobrescrito em runtime pelo JS */
+  --color-accent-300: 255 143 156;
+  --color-accent-400: 255 77 104;
+  --color-accent-500: 255 19 57;
+  --color-accent-600: 196 13 46;
+  --color-accent-700: 143 10 34;
+  --color-accent-800: 61 11 19;
+  --color-accent-900: 32 8 13;
+}
+
+:root[data-theme='light'] {
+  /* Claro — bem mais branco que uma inversão direta em tons de cinza médio:
+     os fundos (800/900/950) ficam próximos do branco puro com pouco espaço
+     entre si só pra dar uma pista sutil de profundidade, e o texto (50–300)
+     fica bem escuro pra manter contraste alto e legibilidade — em vez de um
+     cinza médio "lavado" nos dois extremos. */
+  --color-surface-50: 12 12 13;
+  --color-surface-100: 22 23 25;
+  --color-surface-200: 38 39 42;
+  --color-surface-300: 60 61 66;
+  --color-surface-400: 90 92 98;
+  --color-surface-500: 122 124 130;
+  --color-surface-600: 165 167 173;
+  --color-surface-700: 199 201 206;
+  --color-surface-750: 225 227 230;
+  --color-surface-800: 243 244 246;
+  --color-surface-900: 250 250 251;
+  --color-surface-950: 255 255 255;
+}
+
+/* ─── Ajustes de contraste do modo claro ──────────────────────────
+   As sobreposições translúcidas em branco (bordas/hovers/divisores —
+   border-white/[0.06], bg-white/[0.08] etc.) foram desenhadas pra dar um
+   realce sutil sobre fundo ESCURO; sobre fundo claro elas ficam quase
+   invisíveis (branco sobre quase-branco), o que deixava tudo "lavado"/sem
+   contraste. Em modo claro, essas mesmas classes passam a usar preto em vez
+   de branco (com alpha um pouco maior, pra compensar que preto translúcido
+   precisa de mais opacidade que branco pra ler igual). Lista fechada,
+   espelhando exatamente os valores usados no app hoje. */
+
+html[data-theme='light'] .border-white\/\[0\.05\] { border-color: rgb(0 0 0 / 0.08); }
+html[data-theme='light'] .border-white\/\[0\.06\] { border-color: rgb(0 0 0 / 0.10); }
+html[data-theme='light'] .border-white\/\[0\.07\] { border-color: rgb(0 0 0 / 0.11); }
+html[data-theme='light'] .border-white\/\[0\.08\] { border-color: rgb(0 0 0 / 0.12); }
+html[data-theme='light'] .border-white\/\[0\.10\] { border-color: rgb(0 0 0 / 0.14); }
+
+html[data-theme='light'] .bg-white\/\[0\.04\] { background-color: rgb(0 0 0 / 0.06); }
+html[data-theme='light'] .bg-white\/\[0\.06\] { background-color: rgb(0 0 0 / 0.08); }
+html[data-theme='light'] .bg-white\/\[0\.08\] { background-color: rgb(0 0 0 / 0.10); }
+html[data-theme='light'] .bg-white\/\[0\.10\] { background-color: rgb(0 0 0 / 0.12); }
+html[data-theme='light'] .bg-white\/\[0\.1\] { background-color: rgb(0 0 0 / 0.12); }
+
+html[data-theme='light'] .ring-white\/\[0\.10\] { --tw-ring-color: rgb(0 0 0 / 0.14); }
+html[data-theme='light'] .ring-white\/\[0\.1\] { --tw-ring-color: rgb(0 0 0 / 0.14); }
+
+html[data-theme='light'] .hover\:bg-white\/\[0\.03\]:hover { background-color: rgb(0 0 0 / 0.05); }
+html[data-theme='light'] .hover\:bg-white\/\[0\.05\]:hover { background-color: rgb(0 0 0 / 0.07); }
+html[data-theme='light'] .hover\:bg-white\/\[0\.06\]:hover { background-color: rgb(0 0 0 / 0.08); }
+html[data-theme='light'] .hover\:bg-white\/\[0\.08\]:hover { background-color: rgb(0 0 0 / 0.10); }
+html[data-theme='light'] .hover\:bg-white\/\[0\.12\]:hover { background-color: rgb(0 0 0 / 0.14); }
+html[data-theme='light'] .hover\:bg-white\/\[0\.16\]:hover { background-color: rgb(0 0 0 / 0.18); }
+
+html[data-theme='light'] .hover\:border-white\/\[0\.14\]:hover { border-color: rgb(0 0 0 / 0.18); }
+html[data-theme='light'] .hover\:border-white\/\[0\.16\]:hover { border-color: rgb(0 0 0 / 0.20); }
+html[data-theme='light'] .hover\:border-white\/\[0\.18\]:hover { border-color: rgb(0 0 0 / 0.22); }
+
+/* text-accent-300/400 são tons vívidos e CLAROS pensados pra "acender" sobre
+   fundo escuro (ex.: canal/aba selecionada, com bg-accent-600/15 por trás) —
+   sobre fundo claro/quase-branco a mesma cor pálida quase não contrasta
+   (era o texto ilegível do canal "geral" selecionado e do canal de voz
+   ativo). Em modo claro eles usam o tom 700 da mesma rampa (escuro,
+   saturado) em vez do 300/400 — mantém a cor de marca, só troca pra ponta
+   escura da rampa, igual ao resto do texto no modo claro. */
+html[data-theme='light'] .text-accent-300 { color: rgb(var(--color-accent-700)); }
+html[data-theme='light'] .text-accent-400 { color: rgb(var(--color-accent-700)); }
+html[data-theme='light'] .hover\:text-accent-300:hover { color: rgb(var(--color-accent-600)); }
+html[data-theme='light'] .hover\:text-accent-500:hover { color: rgb(var(--color-accent-600)); }
+
+/* ─── Destaque em gradiente ────────────────────────────────────────
+   Quando o usuário escolhe "gradiente" como cor de destaque, o JS grava
+   --color-accent-gradient e marca data-accent-style='gradient' em <html>.
+   Alvo: preenchimentos sólidos de destaque (botão primário, ícones ativos
+   de grupo/nav) — background-image cobre o background-color sólido por
+   baixo, então não precisa duplicar toda a lógica de cor. Texto, borda,
+   sombra/glow e scrollbar continuam sólidos (gradiente não faz sentido
+   neles) — usam sempre o tom 500/600 normal da rampa gerada. */
+
+html[data-accent-style='gradient'] .zk-btn-primary,
+html[data-accent-style='gradient'] .bg-accent-600,
+html[data-accent-style='gradient'] .bg-accent-500 {
+  background-image: var(--color-accent-gradient);
+}
+
+html[data-accent-style='gradient'] .zk-btn-primary:hover {
+  filter: brightness(1.08);
+}

@@ -292,7 +292,7 @@ function CallPanel({ dm, callStatus }: { dm: DmChannel; callStatus: 'calling' | 
                   title={`Volume: ${Math.round(volume * 100)}%`}
                   className="w-20 cursor-pointer"
                   style={{
-                    background: `linear-gradient(to right, #43b581 ${(volume / 2) * 100}%, #19191b ${(volume / 2) * 100}%)`,
+                    background: `linear-gradient(to right, #43b581 ${(volume / 2) * 100}%, rgb(var(--color-surface-800)) ${(volume / 2) * 100}%)`,
                   }}
                 />
                 <span className="text-[10px] text-surface-500 w-7 text-right tabular-nums">{Math.round(volume * 100)}%</span>

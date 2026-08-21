@@ -1,6 +1,8 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useUiStore } from '../../stores/uiStore';
+import { useThemeStore, type AccentMode, type AccentPreset } from '../../stores/themeStore';
+import { PRESET_SWATCH, PRESET_LABELS } from '../../utils/accentPresets';
 import { useAuthStore } from '../../stores/authStore';
 import { getProcessedStream } from '../../services/audioProcessing';
 import { useEditableContextMenu } from '../../hooks/useEditableContextMenu';
@@ -197,7 +199,7 @@ function SliderField({ label, value, min, max, step, format, onChange }: {
         onChange={(e) => onChange(Number(e.target.value))}
         className="w-full cursor-pointer"
         style={{
-          background: `linear-gradient(to right, #ff1339 ${((value - min) / (max - min)) * 100}%, #2c2c30 ${((value - min) / (max - min)) * 100}%)`,
+          background: `linear-gradient(to right, rgb(var(--color-accent-500)) ${((value - min) / (max - min)) * 100}%, rgb(var(--color-surface-700)) ${((value - min) / (max - min)) * 100}%)`,
         }}
       />
     </div>
@@ -519,6 +521,205 @@ function NotificationsSection() {
   );
 }
 
+function AppearanceSection() {
+  const mode = useThemeStore((s) => s.mode);
+  const setMode = useThemeStore((s) => s.setMode);
+
+  const OPTIONS: { id: 'dark' | 'light'; label: string; icon: React.ReactNode }[] = [
+    {
+      id: 'dark',
+      label: 'Escuro',
+      icon: (
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+        </svg>
+      ),
+    },
+    {
+      id: 'light',
+      label: 'Claro',
+      icon: (
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="5" />
+          <line x1="12" y1="1" x2="12" y2="3" /><line x1="12" y1="21" x2="12" y2="23" />
+          <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" /><line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+          <line x1="1" y1="12" x2="3" y2="12" /><line x1="21" y1="12" x2="23" y2="12" />
+          <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" /><line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+        </svg>
+      ),
+    },
+  ];
+
+  return (
+    <section className="space-y-4">
+      <SectionHeader
+        title="Aparência"
+        icon={
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="5" />
+            <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
+          </svg>
+        }
+      />
+
+      <div className="bg-surface-800 rounded-2xl p-5 border border-white/[0.06] shadow-panel space-y-4">
+        <p className="text-xs text-surface-500">Claro ou escuro — afeta o fundo, os painéis e a barra superior do app.</p>
+
+        <div className="grid grid-cols-2 gap-3">
+          {OPTIONS.map((o) => (
+            <button
+              key={o.id}
+              type="button"
+              onClick={() => setMode(o.id)}
+              aria-pressed={mode === o.id}
+              className={`flex items-center justify-center gap-2 py-3 rounded-xl border-2 text-sm font-medium transition-colors ${
+                mode === o.id
+                  ? 'border-accent-500 bg-accent-600/10 text-surface-50'
+                  : 'border-white/[0.06] text-surface-300 hover:border-white/[0.18]'
+              }`}
+            >
+              {o.icon}
+              {o.label}
+            </button>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function AccentSection() {
+  const accentMode = useThemeStore((s) => s.accentMode);
+  const accentPreset = useThemeStore((s) => s.accentPreset);
+  const customColor = useThemeStore((s) => s.customColor);
+  const gradientFrom = useThemeStore((s) => s.gradientFrom);
+  const gradientTo = useThemeStore((s) => s.gradientTo);
+  const setAccentMode = useThemeStore((s) => s.setAccentMode);
+  const setAccentPreset = useThemeStore((s) => s.setAccentPreset);
+  const setCustomColor = useThemeStore((s) => s.setCustomColor);
+  const setGradient = useThemeStore((s) => s.setGradient);
+
+  const MODE_TABS: { id: AccentMode; label: string }[] = [
+    { id: 'preset', label: 'Predefinida' },
+    { id: 'custom', label: 'Personalizada' },
+    { id: 'gradient', label: 'Gradiente' },
+  ];
+
+  return (
+    <section className="space-y-4">
+      <SectionHeader
+        title="Cor de destaque"
+        icon={
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="13.5" cy="6.5" r=".5" fill="currentColor" />
+            <circle cx="17.5" cy="10.5" r=".5" fill="currentColor" />
+            <circle cx="8.5" cy="7.5" r=".5" fill="currentColor" />
+            <circle cx="6.5" cy="12.5" r=".5" fill="currentColor" />
+            <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z" />
+          </svg>
+        }
+      />
+
+      <div className="bg-surface-800 rounded-2xl p-5 border border-white/[0.06] shadow-panel space-y-4">
+        <p className="text-xs text-surface-500">
+          Cor dos botões, ícones ativos e da barra superior — escolha uma cor predefinida, sua própria cor, ou um gradiente entre duas cores.
+        </p>
+
+        <div className="flex gap-1 p-1 bg-surface-900/60 rounded-xl w-fit">
+          {MODE_TABS.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => setAccentMode(t.id)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                accentMode === t.id ? 'bg-accent-600 text-white' : 'text-surface-400 hover:text-surface-100'
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        {accentMode === 'preset' && (
+          <div className="grid grid-cols-4 gap-3">
+            {(Object.keys(PRESET_SWATCH) as AccentPreset[]).map((id) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setAccentPreset(id)}
+                aria-pressed={accentPreset === id}
+                className={`relative rounded-xl p-2.5 border-2 bg-surface-900 transition-colors ${
+                  accentPreset === id ? 'border-accent-500' : 'border-white/[0.06] hover:border-white/[0.18]'
+                }`}
+              >
+                <span className="block w-full h-8 rounded-lg mb-2" style={{ backgroundColor: PRESET_SWATCH[id] }} />
+                <span className="block text-[11px] font-medium text-center text-surface-200">{PRESET_LABELS[id]}</span>
+                {accentPreset === id && (
+                  <span
+                    className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full flex items-center justify-center text-white"
+                    style={{ backgroundColor: PRESET_SWATCH[id] }}
+                  >
+                    <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {accentMode === 'custom' && (
+          <div className="flex items-center gap-3">
+            <input
+              type="color"
+              value={customColor}
+              onChange={(e) => setCustomColor(e.target.value)}
+              className="w-12 h-12 rounded-lg border border-white/[0.08] bg-transparent cursor-pointer"
+              aria-label="Cor de destaque personalizada"
+            />
+            <div>
+              <p className="text-sm font-medium text-surface-200">{customColor.toUpperCase()}</p>
+              <p className="text-xs text-surface-500">Clique no quadrado pra escolher a cor</p>
+            </div>
+          </div>
+        )}
+
+        {accentMode === 'gradient' && (
+          <div className="space-y-3">
+            <div className="flex items-center gap-3">
+              <input
+                type="color"
+                value={gradientFrom}
+                onChange={(e) => setGradient(e.target.value, gradientTo)}
+                className="w-12 h-12 rounded-lg border border-white/[0.08] bg-transparent cursor-pointer"
+                aria-label="Primeira cor do gradiente"
+              />
+              <input
+                type="color"
+                value={gradientTo}
+                onChange={(e) => setGradient(gradientFrom, e.target.value)}
+                className="w-12 h-12 rounded-lg border border-white/[0.08] bg-transparent cursor-pointer"
+                aria-label="Segunda cor do gradiente"
+              />
+              <div>
+                <p className="text-sm font-medium text-surface-200">
+                  {gradientFrom.toUpperCase()} → {gradientTo.toUpperCase()}
+                </p>
+                <p className="text-xs text-surface-500">Aplicado nos botões e destaques principais</p>
+              </div>
+            </div>
+            <div
+              className="h-10 rounded-xl border border-white/[0.08]"
+              style={{ background: `linear-gradient(135deg, ${gradientFrom}, ${gradientTo})` }}
+            />
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
 function InfoNote() {
   return (
     <div className="bg-surface-800/50 rounded-2xl p-4 border border-white/[0.05]">
@@ -542,7 +743,7 @@ function InfoNote() {
 // a busca ignora a aba atual — mostra qualquer seção cujo nome/palavra-chave
 // bata, com um atalho pra pular direto pra aba correspondente.
 
-type TabId = 'account' | 'audio' | 'notifications';
+type TabId = 'account' | 'audio' | 'notifications' | 'theme';
 
 const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
   {
@@ -577,6 +778,19 @@ const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
       </svg>
     ),
   },
+  {
+    id: 'theme',
+    label: 'Tema',
+    icon: (
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="13.5" cy="6.5" r=".5" fill="currentColor" />
+        <circle cx="17.5" cy="10.5" r=".5" fill="currentColor" />
+        <circle cx="8.5" cy="7.5" r=".5" fill="currentColor" />
+        <circle cx="6.5" cy="12.5" r=".5" fill="currentColor" />
+        <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z" />
+      </svg>
+    ),
+  },
 ];
 
 const SECTION_META: { id: string; tabId: TabId; label: string; keywords: string }[] = [
@@ -585,6 +799,8 @@ const SECTION_META: { id: string; tabId: TabId; label: string; keywords: string 
   { id: 'output', tabId: 'audio', label: 'Saída de áudio', keywords: 'saída output alto-falante speaker áudio' },
   { id: 'processing', tabId: 'audio', label: 'Processamento de áudio', keywords: 'ruído noise supressão eco echo cancelamento ganho gain' },
   { id: 'notifications', tabId: 'notifications', label: 'Notificações', keywords: 'notificação som push volume' },
+  { id: 'appearance', tabId: 'theme', label: 'Aparência', keywords: 'tema aparência claro escuro dark light modo' },
+  { id: 'accent', tabId: 'theme', label: 'Cor de destaque', keywords: 'cor destaque acento accent gradiente personalizada predefinida paleta' },
 ];
 
 export function SettingsPage() {
@@ -602,6 +818,8 @@ export function SettingsPage() {
     output: <OutputSection outputs={outputs} />,
     processing: <ProcessingSection />,
     notifications: <NotificationsSection />,
+    appearance: <AppearanceSection />,
+    accent: <AccentSection />,
   };
 
   const q = query.trim().toLowerCase();
@@ -717,6 +935,12 @@ export function SettingsPage() {
                   </>
                 )}
                 {activeTab === 'notifications' && sectionNodes.notifications}
+                {activeTab === 'theme' && (
+                  <>
+                    {sectionNodes.appearance}
+                    {sectionNodes.accent}
+                  </>
+                )}
               </div>
             </>
           )}

@@ -137,7 +137,7 @@ export function CreateGroupModal({ isOpen, onClose }: Props) {
               onChange={(e) => setMaxMembers(Number(e.target.value))}
               className="w-full"
               style={{
-                background: `linear-gradient(to right, #ff1339 ${((maxMembers - 2) / (32 - 2)) * 100}%, #2c2c30 ${((maxMembers - 2) / (32 - 2)) * 100}%)`,
+                background: `linear-gradient(to right, rgb(var(--color-accent-500)) ${((maxMembers - 2) / (32 - 2)) * 100}%, rgb(var(--color-surface-700)) ${((maxMembers - 2) / (32 - 2)) * 100}%)`,
               }}
             />
           </div>

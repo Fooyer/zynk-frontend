@@ -22,6 +22,20 @@
       if (!window.electronAPI || window.electronAPI.platform !== 'linux') {
         document.documentElement.classList.add('native-frame');
       }
+      // Aplica claro/escuro antes do primeiro paint (mesmo formato que o
+      // zustand/persist grava em src/stores/themeStore.ts) pra evitar o
+      // flash do modo errado antes do React montar. A cor de destaque
+      // (predefinida/personalizada/gradiente) não entra aqui — só é
+      // aplicada depois que o React monta (ver App.tsx), o que é aceitável
+      // já que uma cor de destaque "errada" por um instante é bem menos
+      // perceptível que o fundo inteiro trocando de claro pra escuro.
+      try {
+        var raw = localStorage.getItem('zynk-theme');
+        var mode = raw ? JSON.parse(raw).state.mode : null;
+        document.documentElement.setAttribute('data-theme', mode === 'light' ? 'light' : 'dark');
+      } catch (e) {
+        document.documentElement.setAttribute('data-theme', 'dark');
+      }
     </script>
     <style>
       html, body {
@@ -63,6 +77,21 @@
         animation: spin 0.8s linear infinite;
       }
       @keyframes spin { to { transform: rotate(360deg); } }
+      /* A splash tem paleta própria (fora do Tailwind/React) e continua fixa
+         para os temas escuros — some em menos de 1s, ganho marginal em
+         re-temar todas as 5 variantes. O modo claro é a exceção: sem este
+         ajuste, a splash escura ficaria visivelmente errada logo antes do
+         fade para uma UI clara. */
+      html[data-theme='light'] #splash {
+        background: #f7f7f7;
+      }
+      html[data-theme='light'] #splash .logo {
+        color: #111111;
+      }
+      html[data-theme='light'] #splash .spinner {
+        border-color: rgba(0, 0, 0, 0.12);
+        border-top-color: #b3001d;
+      }
     </style>
   </head>
   <body class="text-surface-100">

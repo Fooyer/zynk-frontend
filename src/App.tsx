@@ -3,6 +3,9 @@ import { useAuthStore } from './stores/authStore';
 import { useFriendStore } from './stores/friendStore';
 import { useGroupStore } from './stores/groupStore';
 import { useUiStore } from './stores/uiStore';
+import { useThemeStore } from './stores/themeStore';
+import { generateAccentRamp, mixHex, rgbTriple } from './utils/color';
+import { PRESET_RAMPS } from './utils/accentPresets';
 import { useCallStore } from './stores/callStore';
 import { useSocket } from './hooks/useSocket';
 import { useVoiceRoom } from './hooks/useVoiceRoom';
@@ -138,10 +141,52 @@ function AuthScreen() {
 
 export default function App() {
   const { token, isLoading, loadUser } = useAuthStore();
+  const mode = useThemeStore((s) => s.mode);
+  const accentMode = useThemeStore((s) => s.accentMode);
+  const accentPreset = useThemeStore((s) => s.accentPreset);
+  const customColor = useThemeStore((s) => s.customColor);
+  const gradientFrom = useThemeStore((s) => s.gradientFrom);
+  const gradientTo = useThemeStore((s) => s.gradientTo);
 
   useEffect(() => {
     loadUser();
   }, [loadUser]);
+
+  // Aplica claro/escuro no elemento raiz assim que muda — recolore o app
+  // inteiro (bg-surface-* já é var() em runtime) sem precisar de reload. O
+  // index.html já seta o data-theme certo antes do primeiro paint (lendo o
+  // localStorage), então essa run inicial é só uma confirmação, não um
+  // flash visível.
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', mode);
+  }, [mode]);
+
+  // Aplica a cor de destaque (predefinida, personalizada ou gradiente) via
+  // variáveis CSS em runtime — precisa ser JS (não dá pra fazer só com CSS
+  // estático) porque cor personalizada/gradiente é arbitrária, escolhida
+  // pelo usuário. Uma cor sólida "escuro/vermelho" no primeiro frame antes
+  // desse efeito rodar é aceitável (ao contrário do claro/escuro, não causa
+  // um flash de contraste ruim).
+  useEffect(() => {
+    const root = document.documentElement;
+    const ramp =
+      accentMode === 'preset'
+        ? PRESET_RAMPS[accentPreset]
+        : accentMode === 'custom'
+          ? generateAccentRamp(customColor)
+          : generateAccentRamp(mixHex(gradientFrom, gradientTo, 0.5));
+
+    (Object.keys(ramp) as (keyof typeof ramp)[]).forEach((step) => {
+      root.style.setProperty(`--color-accent-${step}`, rgbTriple(ramp[step]));
+    });
+
+    if (accentMode === 'gradient') {
+      root.style.setProperty('--color-accent-gradient', `linear-gradient(135deg, ${gradientFrom}, ${gradientTo})`);
+      root.setAttribute('data-accent-style', 'gradient');
+    } else {
+      root.removeAttribute('data-accent-style');
+    }
+  }, [accentMode, accentPreset, customColor, gradientFrom, gradientTo]);
 
   useEffect(() => {
     if (!isLoading) {

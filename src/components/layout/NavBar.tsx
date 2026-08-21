@@ -81,7 +81,11 @@ function NavIconButton({
       title={title}
       aria-label={title}
       className={`relative w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 font-bold transition-all ${
-        active ? 'bg-accent-600 text-white shadow-glow-accent' : 'bg-white/[0.04] text-surface-300 hover:bg-white/[0.08] hover:text-surface-100'
+        color
+          ? `text-white${active ? ' shadow-glow-accent' : ''}`
+          : active
+            ? 'bg-accent-600 text-white shadow-glow-accent'
+            : 'bg-white/[0.04] text-surface-300 hover:bg-white/[0.08] hover:text-surface-100'
       }`}
       style={color ? { backgroundColor: color } : undefined}
     >
@@ -266,7 +270,7 @@ export function NavBar() {
                     onClick={() => handleSelectGroup(g.id)}
                     onContextMenu={(e) => handleGroupContextMenu(e, g)}
                     title={g.name}
-                    color="#c40d2e"
+                    color="rgb(var(--color-accent-600))"
                   >
                     <span className="text-[10px]">{g.name.slice(0, 2).toUpperCase()}</span>
                   </NavIconButton>
