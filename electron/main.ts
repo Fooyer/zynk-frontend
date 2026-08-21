@@ -150,6 +150,23 @@ ipcMain.on('edit:selectAll', () => mainWindow?.webContents.selectAll());
 // plataforma assim que uma release é publicada (`npm run release`).
 ipcMain.on('update:restart', () => autoUpdater.quitAndInstall());
 
+ipcMain.handle('app:get-version', () => app.getVersion());
+
+// Botão "Verificar atualizações" nas Configurações chama isso — reusa o
+// autoUpdater.checkForUpdates() diretamente, então dispara os MESMOS eventos
+// (checking/available/not-available/error) que a checagem automática, e a UI
+// reage do mesmo jeito não importa quem pediu a checagem.
+ipcMain.handle('update:check', () => {
+  if (!app.isPackaged) {
+    mainWindow?.webContents.send('update:error', 'Checagem de atualização não disponível em modo de desenvolvimento.');
+    return;
+  }
+  autoUpdater.checkForUpdates().catch((err) => {
+    console.error('[autoUpdater] falha ao checar:', err);
+    mainWindow?.webContents.send('update:error', err?.message ?? String(err));
+  });
+});
+
 function setupAutoUpdater() {
   if (!app.isPackaged) return; // não faz sentido checar update rodando via `npm run dev`
 
@@ -159,8 +176,14 @@ function setupAutoUpdater() {
   // da bandeja "Sair") — não só minimizado pro tray.
   autoUpdater.autoInstallOnAppQuit = true;
 
+  autoUpdater.on('checking-for-update', () => {
+    mainWindow?.webContents.send('update:checking');
+  });
   autoUpdater.on('update-available', (info) => {
     mainWindow?.webContents.send('update:available', info.version);
+  });
+  autoUpdater.on('update-not-available', () => {
+    mainWindow?.webContents.send('update:not-available');
   });
   autoUpdater.on('download-progress', (progress) => {
     mainWindow?.webContents.send('update:progress', Math.round(progress.percent));
@@ -170,6 +193,7 @@ function setupAutoUpdater() {
   });
   autoUpdater.on('error', (err) => {
     console.error('[autoUpdater]', err);
+    mainWindow?.webContents.send('update:error', err?.message ?? String(err));
   });
 
   const check = () => {

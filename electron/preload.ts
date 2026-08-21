@@ -7,14 +7,25 @@ contextBridge.exposeInMainWorld('electronAPI', {
   windowClose: () => ipcRenderer.send('window:close'),
 
   // Auto-update
+  getAppVersion: () => ipcRenderer.invoke('app:get-version') as Promise<string>,
+  checkForUpdates: () => ipcRenderer.invoke('update:check') as Promise<void>,
+  onUpdateChecking: (callback: () => void) => {
+    ipcRenderer.on('update:checking', () => callback());
+  },
   onUpdateAvailable: (callback: (version: string) => void) => {
     ipcRenderer.on('update:available', (_event, version) => callback(version));
+  },
+  onUpdateNotAvailable: (callback: () => void) => {
+    ipcRenderer.on('update:not-available', () => callback());
   },
   onUpdateProgress: (callback: (percent: number) => void) => {
     ipcRenderer.on('update:progress', (_event, percent) => callback(percent));
   },
   onUpdateDownloaded: (callback: (version: string) => void) => {
     ipcRenderer.on('update:downloaded', (_event, version) => callback(version));
+  },
+  onUpdateError: (callback: (message: string) => void) => {
+    ipcRenderer.on('update:error', (_event, message) => callback(message));
   },
   restartToUpdate: () => ipcRenderer.send('update:restart'),
 

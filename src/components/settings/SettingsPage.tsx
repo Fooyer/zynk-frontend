@@ -743,7 +743,99 @@ function InfoNote() {
 // a busca ignora a aba atual — mostra qualquer seção cujo nome/palavra-chave
 // bata, com um atalho pra pular direto pra aba correspondente.
 
-type TabId = 'account' | 'audio' | 'notifications' | 'theme';
+type UpdateStatus =
+  | { kind: 'idle' }
+  | { kind: 'checking' }
+  | { kind: 'not-available' }
+  | { kind: 'downloading'; version: string; percent: number }
+  | { kind: 'ready'; version: string }
+  | { kind: 'error'; message: string };
+
+function UpdatesSection() {
+  const [appVersion, setAppVersion] = useState('');
+  const [status, setStatus] = useState<UpdateStatus>({ kind: 'idle' });
+
+  useEffect(() => {
+    if (!window.electronAPI) return;
+    window.electronAPI.getAppVersion().then(setAppVersion);
+    window.electronAPI.onUpdateChecking(() => setStatus({ kind: 'checking' }));
+    window.electronAPI.onUpdateAvailable((version) => setStatus({ kind: 'downloading', version, percent: 0 }));
+    window.electronAPI.onUpdateNotAvailable(() => setStatus({ kind: 'not-available' }));
+    window.electronAPI.onUpdateProgress((percent) => {
+      setStatus((prev) => (prev.kind === 'downloading' ? { ...prev, percent } : prev));
+    });
+    window.electronAPI.onUpdateDownloaded((version) => setStatus({ kind: 'ready', version }));
+    window.electronAPI.onUpdateError((message) => setStatus({ kind: 'error', message }));
+  }, []);
+
+  const checking = status.kind === 'checking';
+  const busy = checking || status.kind === 'downloading';
+
+  return (
+    <section className="space-y-4">
+      <SectionHeader
+        title="Sobre"
+        icon={
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="10" />
+            <line x1="12" y1="16" x2="12" y2="12" /><line x1="12" y1="8" x2="12.01" y2="8" />
+          </svg>
+        }
+      />
+
+      <div className="bg-surface-800 rounded-2xl p-5 border border-white/[0.06] shadow-panel space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium text-surface-200">Zynk</p>
+            <p className="text-xs text-surface-500 mt-0.5">Versão {appVersion || '—'}</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => window.electronAPI?.checkForUpdates()}
+            disabled={busy}
+            className="px-3 py-1.5 text-xs font-medium rounded-lg bg-white/[0.06] text-surface-300 hover:bg-white/[0.12] hover:text-surface-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {checking ? 'Verificando...' : 'Verificar atualizações'}
+          </button>
+        </div>
+
+        {status.kind !== 'idle' && (
+          <div className="pt-3 border-t border-white/[0.06]">
+            {status.kind === 'checking' && <p className="text-xs text-surface-400">Verificando atualizações...</p>}
+            {status.kind === 'not-available' && <p className="text-xs text-success">Você já está na versão mais recente.</p>}
+            {status.kind === 'error' && <p className="text-xs text-danger">Não foi possível verificar agora. Tente de novo mais tarde.</p>}
+            {status.kind === 'downloading' && (
+              <div className="space-y-2">
+                <p className="text-xs text-surface-400">Baixando versão {status.version} — {status.percent}%</p>
+                <div className="h-1 rounded-full bg-white/[0.08] overflow-hidden">
+                  <div className="h-full bg-accent-500 transition-all duration-300" style={{ width: `${status.percent}%` }} />
+                </div>
+              </div>
+            )}
+            {status.kind === 'ready' && (
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-surface-400">Versão {status.version} pronta para instalar.</p>
+                <button
+                  type="button"
+                  onClick={() => window.electronAPI?.restartToUpdate()}
+                  className="zk-btn-primary px-3 py-1.5 text-xs rounded-lg"
+                >
+                  Reiniciar agora
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {!window.electronAPI && (
+          <p className="text-xs text-surface-500">Atualizações automáticas só estão disponíveis no app instalado.</p>
+        )}
+      </div>
+    </section>
+  );
+}
+
+type TabId = 'account' | 'audio' | 'notifications' | 'theme' | 'about';
 
 const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
   {
@@ -791,6 +883,16 @@ const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
       </svg>
     ),
   },
+  {
+    id: 'about',
+    label: 'Sobre',
+    icon: (
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="10" />
+        <line x1="12" y1="16" x2="12" y2="12" /><line x1="12" y1="8" x2="12.01" y2="8" />
+      </svg>
+    ),
+  },
 ];
 
 const SECTION_META: { id: string; tabId: TabId; label: string; keywords: string }[] = [
@@ -801,6 +903,7 @@ const SECTION_META: { id: string; tabId: TabId; label: string; keywords: string 
   { id: 'notifications', tabId: 'notifications', label: 'Notificações', keywords: 'notificação som push volume' },
   { id: 'appearance', tabId: 'theme', label: 'Aparência', keywords: 'tema aparência claro escuro dark light modo' },
   { id: 'accent', tabId: 'theme', label: 'Cor de destaque', keywords: 'cor destaque acento accent gradiente personalizada predefinida paleta' },
+  { id: 'about', tabId: 'about', label: 'Sobre', keywords: 'sobre versão atualização update verificar' },
 ];
 
 export function SettingsPage() {
@@ -820,6 +923,7 @@ export function SettingsPage() {
     notifications: <NotificationsSection />,
     appearance: <AppearanceSection />,
     accent: <AccentSection />,
+    about: <UpdatesSection />,
   };
 
   const q = query.trim().toLowerCase();
@@ -941,6 +1045,7 @@ export function SettingsPage() {
                     {sectionNodes.accent}
                   </>
                 )}
+                {activeTab === 'about' && sectionNodes.about}
               </div>
             </>
           )}

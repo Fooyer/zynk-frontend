@@ -207,9 +207,14 @@ declare global {
       windowMaximize: () => void;
       windowClose: () => void;
       // Auto-update
+      getAppVersion: () => Promise<string>;
+      checkForUpdates: () => Promise<void>;
+      onUpdateChecking: (callback: () => void) => void;
       onUpdateAvailable: (callback: (version: string) => void) => void;
+      onUpdateNotAvailable: (callback: () => void) => void;
       onUpdateProgress: (callback: (percent: number) => void) => void;
       onUpdateDownloaded: (callback: (version: string) => void) => void;
+      onUpdateError: (callback: (message: string) => void) => void;
       restartToUpdate: () => void;
       // Edit commands
       editUndo: () => void;
