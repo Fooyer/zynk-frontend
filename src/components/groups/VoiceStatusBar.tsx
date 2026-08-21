@@ -46,10 +46,10 @@ export function VoiceStatusBar({ voice }: Props) {
       <div className="flex-shrink-0 bg-surface-900 border-t border-white/[0.06] overflow-hidden flex flex-col max-h-[45vh]">
         {/* Header — só status, não navega ao clicar */}
         <div className="px-3 py-2.5 border-b border-white/[0.06] flex items-center gap-2 flex-shrink-0">
-          <span className={`w-2 h-2 rounded-full animate-pulse flex-shrink-0 ${vc.mode === 'game' ? 'bg-warning' : 'bg-success'}`} />
+          <span className={`w-2 h-2 rounded-full animate-pulse flex-shrink-0 ${vc.mode === 'game' ? 'bg-warning' : 'bg-accent-500'}`} />
           <div className="min-w-0 flex-1">
             <p className="text-xs font-semibold text-surface-100 truncate">{vc.name}</p>
-            <p className={`text-[10px] ${vc.mode === 'game' ? 'text-warning' : 'text-success'}`}>Voz conectada</p>
+            <p className={`text-[10px] ${vc.mode === 'game' ? 'text-warning' : 'text-accent-400'}`}>Voz conectada</p>
           </div>
         </div>
 

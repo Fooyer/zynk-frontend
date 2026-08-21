@@ -438,7 +438,7 @@ function ChannelSidebar({ group, voice, activeChannelId, onSelectChannel, onOpen
                 <button
                   type="submit"
                   disabled={!newName.trim()}
-                  className="flex-1 py-1 bg-accent-600 text-white text-xs rounded hover:bg-accent-500 hover:shadow-glow-accent disabled:opacity-50 disabled:shadow-none transition-all"
+                  className="flex-1 py-1 bg-accent-600 text-on-accent text-xs rounded hover:bg-accent-500 hover:shadow-glow-accent disabled:opacity-50 disabled:shadow-none transition-all"
                 >
                   Criar
                 </button>
@@ -538,7 +538,7 @@ function ChannelSidebar({ group, voice, activeChannelId, onSelectChannel, onOpen
                         </span>
                       )}
                       {vc.participants.length > 0 && (
-                        <span className="text-[10px] text-surface-400 flex-shrink-0">{vc.participants.length}</span>
+                        <span className={`text-[10px] flex-shrink-0 ${isActive ? 'text-accent-400' : 'text-surface-400'}`}>{vc.participants.length}</span>
                       )}
                       <span
                         onClick={(e) => { e.stopPropagation(); openChannelMenu(e, row); }}

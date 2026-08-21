@@ -36,6 +36,12 @@
   --color-accent-700: 143 10 34;
   --color-accent-800: 61 11 19;
   --color-accent-900: 32 8 13;
+
+  /* Cor de texto sobre fundo sólido de destaque (botões, badges, ícones) —
+     branco por padrão/presets; recalculada em runtime (App.tsx) pra preto
+     quando a cor personalizada/gradiente escolhida for clara demais pro
+     branco contrastar bem. */
+  --color-accent-foreground: 255 255 255;
 }
 
 :root[data-theme='light'] {

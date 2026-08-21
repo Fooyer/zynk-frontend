@@ -18,7 +18,7 @@ export function GroupList() {
               : 'text-surface-300 hover:bg-white/[0.08] hover:text-surface-100'
           }`}
         >
-          <div className="w-8 h-8 rounded-lg bg-accent-600 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
+          <div className="w-8 h-8 rounded-lg bg-accent-600 flex items-center justify-center text-on-accent text-xs font-bold flex-shrink-0">
             {getInitials(group.name)}
           </div>
           <div className="flex-1 min-w-0">

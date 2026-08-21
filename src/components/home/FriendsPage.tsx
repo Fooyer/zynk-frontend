@@ -316,7 +316,7 @@ export function FriendsPage() {
                 <div className="flex gap-1 flex-shrink-0">
                   <button
                     onClick={(e) => { e.stopPropagation(); handleOpenDm(f.friend.id); }}
-                    className="p-2 bg-white/[0.06] hover:bg-accent-600 hover:text-white text-surface-300 rounded-lg transition-colors"
+                    className="p-2 bg-white/[0.06] hover:bg-accent-600 hover:text-on-accent text-surface-300 rounded-lg transition-colors"
                     title="Mensagem"
                     aria-label={`Enviar mensagem para ${f.friend.username}`}
                   >

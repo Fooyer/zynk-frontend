@@ -82,9 +82,9 @@ function NavIconButton({
       aria-label={title}
       className={`relative w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 font-bold transition-all ${
         color
-          ? `text-white${active ? ' shadow-glow-accent' : ''}`
+          ? `text-on-accent${active ? ' shadow-glow-accent' : ''}`
           : active
-            ? 'bg-accent-600 text-white shadow-glow-accent'
+            ? 'bg-accent-600 text-on-accent shadow-glow-accent'
             : 'bg-white/[0.04] text-surface-300 hover:bg-white/[0.08] hover:text-surface-100'
       }`}
       style={color ? { backgroundColor: color } : undefined}
@@ -393,7 +393,7 @@ export function NavBar() {
                         onClick={() => handleSelectGroup(g.id)}
                         onContextMenu={(e) => handleGroupContextMenu(e, g)}
                         icon={
-                          <span className="w-6 h-6 rounded-lg bg-accent-600 flex items-center justify-center text-white text-[10px] font-bold">
+                          <span className="w-6 h-6 rounded-lg bg-accent-600 flex items-center justify-center text-on-accent text-[10px] font-bold">
                             {g.name.slice(0, 2).toUpperCase()}
                           </span>
                         }

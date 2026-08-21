@@ -128,7 +128,7 @@ export function GroupView({ channelId, voice, activeTab, setActiveTab }: Props) 
               onClick={() => setActiveTab(tab.id)}
               className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
                 activeTab === tab.id
-                  ? 'bg-accent-600 text-white'
+                  ? 'bg-accent-600 text-on-accent'
                   : 'text-surface-400 hover:text-surface-100 hover:bg-white/[0.08]'
               }`}
             >

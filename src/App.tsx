@@ -4,7 +4,7 @@ import { useFriendStore } from './stores/friendStore';
 import { useGroupStore } from './stores/groupStore';
 import { useUiStore } from './stores/uiStore';
 import { useThemeStore } from './stores/themeStore';
-import { generateAccentRamp, mixHex, rgbTriple } from './utils/color';
+import { generateAccentRamp, getReadableTextColor, mixHex, rgbTriple } from './utils/color';
 import { PRESET_RAMPS } from './utils/accentPresets';
 import { useCallStore } from './stores/callStore';
 import { useSocket } from './hooks/useSocket';
@@ -179,6 +179,13 @@ export default function App() {
     (Object.keys(ramp) as (keyof typeof ramp)[]).forEach((step) => {
       root.style.setProperty(`--color-accent-${step}`, rgbTriple(ramp[step]));
     });
+
+    // Presets já vêm curados pra contrastar bem com texto branco (ver
+    // accentPresets.ts). Cor personalizada/gradiente é arbitrária — calcula o
+    // contraste contra o tom 600 (fundo sólido usado em botões/badges/ícones)
+    // e escolhe branco ou preto, o que garantir a maior legibilidade.
+    const textColor = accentMode === 'preset' ? ([255, 255, 255] as const) : getReadableTextColor(ramp['600']);
+    root.style.setProperty('--color-accent-foreground', rgbTriple(textColor as unknown as [number, number, number]));
 
     if (accentMode === 'gradient') {
       root.style.setProperty('--color-accent-gradient', `linear-gradient(135deg, ${gradientFrom}, ${gradientTo})`);

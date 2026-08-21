@@ -196,7 +196,15 @@ input[type='range']:disabled {
   .zk-btn-primary {
     @apply bg-accent-600 hover:bg-accent-500 hover:shadow-glow-accent
       disabled:opacity-50 disabled:shadow-none disabled:cursor-not-allowed
-      text-white font-semibold uppercase tracking-wide transition-all;
+      text-on-accent font-semibold uppercase tracking-wide transition-all;
+  }
+
+  /* Texto sobre fundo sólido de destaque (bg-accent-500/600) — branco ou
+     preto conforme --color-accent-foreground (ver App.tsx/color.ts), em vez
+     de text-white fixo, pra continuar legível com cor personalizada/gradiente
+     clara. */
+  .text-on-accent {
+    color: rgb(var(--color-accent-foreground));
   }
 }
 

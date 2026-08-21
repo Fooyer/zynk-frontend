@@ -632,7 +632,7 @@ function AccentSection() {
               type="button"
               onClick={() => setAccentMode(t.id)}
               className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                accentMode === t.id ? 'bg-accent-600 text-white' : 'text-surface-400 hover:text-surface-100'
+                accentMode === t.id ? 'bg-accent-600 text-on-accent' : 'text-surface-400 hover:text-surface-100'
               }`}
             >
               {t.label}

@@ -90,3 +90,30 @@ export function mixHex(a: string, b: string, t = 0.5): string {
   const [br, bg, bb] = hexToRgb(b);
   return rgbToHex([ar + (br - ar) * t, ag + (bg - ag) * t, ab + (bb - ab) * t]);
 }
+
+// Luminância relativa (WCAG 2.x) — usada pra decidir se texto preto ou branco
+// lê melhor sobre uma cor de fundo qualquer.
+function relativeLuminance([r, g, b]: RGB): number {
+  const toLinear = (c: number) => {
+    const cs = c / 255;
+    return cs <= 0.03928 ? cs / 12.92 : Math.pow((cs + 0.055) / 1.055, 2.4);
+  };
+  const [rl, gl, bl] = [toLinear(r), toLinear(g), toLinear(b)];
+  return 0.2126 * rl + 0.7152 * gl + 0.0722 * bl;
+}
+
+function contrastRatio(a: RGB, b: RGB): number {
+  const [l1, l2] = [relativeLuminance(a), relativeLuminance(b)].sort((x, y) => y - x);
+  return (l1 + 0.05) / (l2 + 0.05);
+}
+
+// Pra cor de destaque escolhida pelo usuário (personalizada/gradiente), não
+// dá pra assumir que texto branco sempre contrasta bem — uma cor clara (ex.:
+// amarelo, ciano) precisa de texto preto em cima. Compara o contraste contra
+// preto e branco e devolve o que ganhar, garantindo legibilidade pra
+// qualquer matiz/luminosidade escolhida.
+export function getReadableTextColor(bg: RGB): RGB {
+  const black: RGB = [0, 0, 0];
+  const white: RGB = [255, 255, 255];
+  return contrastRatio(bg, black) >= contrastRatio(bg, white) ? black : white;
+}
