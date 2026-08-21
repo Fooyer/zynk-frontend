@@ -2,6 +2,7 @@ import { memo, useEffect, useRef, useState } from 'react';
 import { formatMessageDate, getInitials, getUserColor } from '../../utils/formatDate';
 import { getSocket } from '../../services/socket';
 import { useAuthStore } from '../../stores/authStore';
+import { useChatStore } from '../../stores/chatStore';
 import { confirmDialog } from '../../stores/dialogStore';
 import { useContextMenuStore } from '../../stores/contextMenuStore';
 import { ContextMenuItem } from '../common/ContextMenuItem';
@@ -247,8 +248,14 @@ export const MessageItem = memo(function MessageItem({ message, isGrouped, onRep
   const handleSaveEdit = (value: string) => {
     const trimmed = value.trim();
     setIsEditing(false);
+    useChatStore.getState().focusComposer();
     if (!trimmed || trimmed === content) return;
     getSocket().emit('message:edit', { messageId: message.id, content: trimmed });
+  };
+
+  const handleCancelEdit = () => {
+    setIsEditing(false);
+    useChatStore.getState().focusComposer();
   };
 
   if (isGrouped) {
@@ -262,7 +269,7 @@ export const MessageItem = memo(function MessageItem({ message, isGrouped, onRep
         <div className="min-w-0 flex-1">
           {replyTo && <ReplyBanner replyTo={replyTo} />}
           {isEditing ? (
-            <EditForm initialValue={content} onSave={handleSaveEdit} onCancel={() => setIsEditing(false)} />
+            <EditForm initialValue={content} onSave={handleSaveEdit} onCancel={handleCancelEdit} />
           ) : (
             <MessageContent content={content} imageUrl={imageUrl} />
           )}

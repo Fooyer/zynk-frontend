@@ -531,7 +531,7 @@ app.whenReady().then(() => {
             " style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;" +
             " font-src 'self' https://fonts.gstatic.com;" +
             " connect-src 'self' https://zynk.fooyer.com ws://zynk.fooyer.com wss://zynk.fooyer.com wss://signaling.yjs.dev;" +
-            " img-src 'self' data:;"
+            " img-src 'self' data: blob: https://zynk.fooyer.com;"
           ],
         },
       });
