@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useGroupStore } from '../../stores/groupStore';
+import { useUnreadStore } from '../../stores/unreadStore';
 import { useAuthStore } from '../../stores/authStore';
 import { useContextMenuStore } from '../../stores/contextMenuStore';
 import { useVoiceRoom } from '../../hooks/useVoiceRoom';
@@ -66,7 +67,11 @@ function ChannelSidebar({ group, voice, activeChannelId, onSelectChannel, onOpen
     if (!group) { setTextChannels([]); return; }
     setIsLoadingChannels(true);
     groupsAPI.getTextChannels(group.id)
-      .then(({ data }) => setTextChannels(data))
+      .then(({ data }) => {
+        setTextChannels(data);
+        // Registra channelId -> groupId pro badge de não lidas do servidor conseguir somar
+        useUnreadStore.getState().registerChannels(data.map((c: GroupTextChannel) => c.id), group.id);
+      })
       .finally(() => setIsLoadingChannels(false));
   }, [group?.id]);
 
@@ -76,6 +81,7 @@ function ChannelSidebar({ group, voice, activeChannelId, onSelectChannel, onOpen
     const onCreated = (ch: GroupTextChannel) => {
       if (ch.groupId === group?.id) {
         setTextChannels((prev) => prev.some((p) => p.id === ch.id) ? prev : [...prev, ch]);
+        useUnreadStore.getState().registerChannels([ch.id], ch.groupId);
       }
     };
     socket.on('group-channel:created', onCreated);
@@ -688,7 +694,10 @@ function ChannelSidebar({ group, voice, activeChannelId, onSelectChannel, onOpen
 export function GroupLayout({ voice }: { voice: ReturnType<typeof useVoiceRoom> }) {
   const groups = useGroupStore((s) => s.groups);
   const activeGroupId = useGroupStore((s) => s.activeGroupId);
-  const [activeChannelId, setActiveChannelId] = useState<number | null>(null);
+  // Vive na store (não como useState local) pra que notification.ts e o
+  // unreadStore consigam saber qual canal de grupo está aberto de verdade.
+  const activeChannelId = useGroupStore((s) => s.activeChannelId);
+  const setActiveChannelId = useGroupStore((s) => s.setActiveChannelId);
   // Vive aqui (não dentro de GroupView) porque o clique no canal de voz já
   // conectado, na sidebar, precisa poder trocar pra aba "Chamada".
   const [activeTab, setActiveTab] = useState<Tab>('chat');

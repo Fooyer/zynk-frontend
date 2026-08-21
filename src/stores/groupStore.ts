@@ -1,10 +1,15 @@
 import { create } from 'zustand';
 import { groupsAPI } from '../services/api';
+import { useUnreadStore } from './unreadStore';
 import type { Group, GroupMemberEntry } from '../types';
 
 interface GroupState {
   groups: Group[];
   activeGroupId: number | null;
+  /** Canal de texto do grupo atualmente aberto (vive aqui, não como useState
+   *  local de GroupLayout, pra que notification.ts e o unreadStore consigam
+   *  saber qual canal de grupo está "ativo" de verdade. */
+  activeChannelId: number | null;
   members: GroupMemberEntry[];
   isLoading: boolean;
   isLoadingMembers: boolean;
@@ -17,6 +22,7 @@ interface GroupState {
   inviteMember: (groupId: number, userId: number) => Promise<void>;
   leaveGroup: (groupId: number) => Promise<void>;
   setActiveGroup: (groupId: number | null) => void;
+  setActiveChannelId: (channelId: number | null) => void;
   loadMembers: (groupId: number) => Promise<void>;
   getActiveGroup: () => Group | null;
   removeGroupFromState: (groupId: number) => void;
@@ -31,6 +37,7 @@ interface GroupState {
 export const useGroupStore = create<GroupState>((set, get) => ({
   groups: [],
   activeGroupId: null,
+  activeChannelId: null,
   members: [],
   isLoading: false,
   isLoadingMembers: false,
@@ -82,8 +89,13 @@ export const useGroupStore = create<GroupState>((set, get) => ({
   },
 
   setActiveGroup: (groupId) => {
-    set({ activeGroupId: groupId, members: [] });
+    set({ activeGroupId: groupId, activeChannelId: null, members: [] });
     if (groupId) get().loadMembers(groupId);
+  },
+
+  setActiveChannelId: (channelId) => {
+    set({ activeChannelId: channelId });
+    if (channelId) useUnreadStore.getState().clear(channelId);
   },
 
   loadMembers: async (groupId) => {

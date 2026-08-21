@@ -4,6 +4,8 @@ import { notifyMessage, requestNotificationPermission } from '../services/notifi
 import { useChatStore } from '../stores/chatStore';
 import { useFriendStore } from '../stores/friendStore';
 import { useGroupStore } from '../stores/groupStore';
+import { useUiStore } from '../stores/uiStore';
+import { useUnreadStore } from '../stores/unreadStore';
 import type { Message, TypingEvent, UserStatusEvent } from '../types';
 
 export function useSocket() {
@@ -106,6 +108,17 @@ export function useSocket() {
     const onFocus = () => {
       if (awayTimer) { clearTimeout(awayTimer); awayTimer = null; }
       emitStatus('online');
+
+      // Recuperou o foco com a conversa certa já aberta — zera o não lida
+      // dela em vez de esperar o usuário trocar de canal.
+      const { view } = useUiStore.getState();
+      if (view === 'home') {
+        const { activeDmChannelId } = useFriendStore.getState();
+        if (activeDmChannelId) useUnreadStore.getState().clear(activeDmChannelId);
+      } else if (view === 'group') {
+        const { activeChannelId } = useGroupStore.getState();
+        if (activeChannelId) useUnreadStore.getState().clear(activeChannelId);
+      }
     };
 
     window.addEventListener('blur', onBlur);

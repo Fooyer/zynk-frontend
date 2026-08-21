@@ -1,7 +1,9 @@
 import { useSettingsStore } from '../stores/settingsStore';
 import { useAuthStore } from '../stores/authStore';
 import { useFriendStore } from '../stores/friendStore';
+import { useGroupStore } from '../stores/groupStore';
 import { useUiStore } from '../stores/uiStore';
+import { useUnreadStore } from '../stores/unreadStore';
 import type { Message } from '../types';
 
 // ─── Som ────────────────────────────────────────────
@@ -37,14 +39,17 @@ function sendPush(title: string, body: string) {
   const { notifPush } = useSettingsStore.getState();
   if (!notifPush) return;
 
-  // Usa a Notification API nativa (funciona tanto em Electron quanto web)
+  // Usa a Notification API nativa (funciona tanto em Electron quanto web).
+  // silent:true porque o toast nativo do SO tem seu próprio som padrão, que
+  // não respeita notifSound/notifVolume — o som de verdade é o playSound()
+  // acima, então o toast do sistema só deve ser visual.
   if ('Notification' in window) {
     if (Notification.permission === 'granted') {
-      new Notification(title, { body, icon: '/zynk-icon.png' });
+      new Notification(title, { body, icon: '/icon.svg', silent: true });
     } else if (Notification.permission !== 'denied') {
       Notification.requestPermission().then((perm) => {
         if (perm === 'granted') {
-          new Notification(title, { body, icon: '/zynk-icon.png' });
+          new Notification(title, { body, icon: '/icon.svg', silent: true });
         }
       });
     }
@@ -56,8 +61,10 @@ function sendPush(title: string, body: string) {
 function isChannelActive(channelId: number): boolean {
   const { view } = useUiStore.getState();
   const { activeDmChannelId } = useFriendStore.getState();
+  const { activeChannelId } = useGroupStore.getState();
 
   if (view === 'home' && activeDmChannelId === channelId) return true;
+  if (view === 'group' && activeChannelId === channelId) return true;
   return false;
 }
 
@@ -79,6 +86,9 @@ export function notifyMessage(message: Message) {
 
   // Ignora se o canal está ativo e a janela está em foco
   if (document.hasFocus() && isChannelActive(message.channelId)) return;
+
+  // Não lida — conta pro badge do Início/servidor, independente de som/push
+  useUnreadStore.getState().increment(message.channelId);
 
   // Som
   playSound();

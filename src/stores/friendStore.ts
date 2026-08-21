@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { friendsAPI, channelsAPI } from '../services/api';
 import { getSocket } from '../services/socket';
 import { useChatStore } from './chatStore';
+import { useUnreadStore } from './unreadStore';
 import type { FriendEntry, FriendRequest, SentRequest, DmChannel } from '../types';
 
 interface FriendState {
@@ -87,6 +88,7 @@ export const useFriendStore = create<FriendState>((set, get) => ({
       await get().loadDmChannels();
 
       set({ activeDmChannelId: channelId });
+      useUnreadStore.getState().clear(channelId);
       return channelId;
     })().finally(() => pendingOpenDm.delete(targetUserId));
 
@@ -134,6 +136,7 @@ export const useFriendStore = create<FriendState>((set, get) => ({
     set({ activeDmChannelId: channelId });
     if (channelId) {
       useChatStore.getState().loadMessages(channelId);
+      useUnreadStore.getState().clear(channelId);
     }
   },
 

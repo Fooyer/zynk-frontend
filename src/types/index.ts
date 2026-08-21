@@ -216,6 +216,9 @@ declare global {
       onUpdateDownloaded: (callback: (version: string) => void) => void;
       onUpdateError: (callback: (message: string) => void) => void;
       restartToUpdate: () => void;
+      // Badge de notificação não lida — taskbar (overlay) e bandeja
+      setOverlayBadge: (dataUrl: string | null) => void;
+      setTrayBadge: (dataUrl: string | null) => void;
       // Edit commands
       editUndo: () => void;
       editRedo: () => void;

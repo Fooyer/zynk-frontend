@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { useUiStore } from '../../stores/uiStore';
 import { useFriendStore } from '../../stores/friendStore';
 import { useGroupStore } from '../../stores/groupStore';
+import { useUnreadStore } from '../../stores/unreadStore';
 import { useAuthStore } from '../../stores/authStore';
 import { confirmDialog } from '../../stores/dialogStore';
 import { useContextMenuStore } from '../../stores/contextMenuStore';
@@ -102,6 +103,9 @@ function NavIconButton({
 export function NavBar() {
   const { view, setView } = useUiStore();
   const pendingRequests = useFriendStore((s) => s.requests.length);
+  const dmChannels = useFriendStore((s) => s.dmChannels);
+  const unreadCounts = useUnreadStore((s) => s.counts);
+  const channelGroupMap = useUnreadStore((s) => s.channelGroup);
   const groups = useGroupStore((s) => s.groups);
   const isLoadingGroups = useGroupStore((s) => s.isLoading);
   const activeGroupId = useGroupStore((s) => s.activeGroupId);
@@ -124,6 +128,23 @@ export function NavBar() {
   // ─── Reordenar servidores (grupos) por arrastar-e-soltar — ordem fica
   // salva localmente (zynk-layout) e é aplicada em cima da lista vinda do backend. ──
   const orderedGroups = useMemo(() => applyGroupOrder(groups, groupOrder), [groups, groupOrder]);
+
+  // Badge do "Início" = pedidos de amizade pendentes + mensagens não lidas nas DMs
+  const dmUnreadTotal = useMemo(
+    () => dmChannels.reduce((sum, d) => sum + (unreadCounts[d.channelId] ?? 0), 0),
+    [dmChannels, unreadCounts],
+  );
+  const homeBadge = pendingRequests + dmUnreadTotal;
+
+  // Badge de cada grupo (servidor) = soma das não lidas de todos os seus canais de texto
+  const groupUnreadTotals = useMemo(() => {
+    const totals: Record<number, number> = {};
+    for (const [channelIdStr, groupId] of Object.entries(channelGroupMap)) {
+      const count = unreadCounts[Number(channelIdStr)];
+      if (count) totals[groupId] = (totals[groupId] ?? 0) + count;
+    }
+    return totals;
+  }, [channelGroupMap, unreadCounts]);
   const [draggedGroupId, setDraggedGroupId] = useState<number | null>(null);
   const [dragOverInfo, setDragOverInfo] = useState<{ id: number; position: 'before' | 'after' } | null>(null);
 
@@ -242,7 +263,7 @@ export function NavBar() {
                 </svg>
               </button>
 
-              <NavIconButton active={view === 'home'} onClick={() => setView('home')} title="Início" badge={pendingRequests}>
+              <NavIconButton active={view === 'home'} onClick={() => setView('home')} title="Início" badge={homeBadge}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" />
                 </svg>
@@ -270,6 +291,7 @@ export function NavBar() {
                     onClick={() => handleSelectGroup(g.id)}
                     onContextMenu={(e) => handleGroupContextMenu(e, g)}
                     title={g.name}
+                    badge={groupUnreadTotals[g.id] ?? 0}
                     color="rgb(var(--color-accent-600))"
                   >
                     <span className="text-[10px]">{g.name.slice(0, 2).toUpperCase()}</span>
@@ -346,7 +368,7 @@ export function NavBar() {
               <NavRow
                 active={view === 'home'}
                 onClick={() => setView('home')}
-                badge={pendingRequests}
+                badge={homeBadge}
                 icon={
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
                     <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" />
@@ -392,6 +414,7 @@ export function NavBar() {
                         active={view === 'group' && g.id === activeGroupId}
                         onClick={() => handleSelectGroup(g.id)}
                         onContextMenu={(e) => handleGroupContextMenu(e, g)}
+                        badge={groupUnreadTotals[g.id] ?? 0}
                         icon={
                           <span className="w-6 h-6 rounded-lg bg-accent-600 flex items-center justify-center text-on-accent text-[10px] font-bold">
                             {g.name.slice(0, 2).toUpperCase()}

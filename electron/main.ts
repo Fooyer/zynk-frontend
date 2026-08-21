@@ -24,6 +24,10 @@ if (process.platform === 'linux') {
 
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
+// Guardado à parte pra poder restaurar o ícone original da bandeja quando o
+// badge de "não lida" for removido (tray.setImage substitui o ícone inteiro,
+// não existe overlay nativo como na taskbar).
+let trayIcon: Electron.NativeImage | null = null;
 let isQuitting = false;
 let pendingScreenSource: DesktopCapturerSource | null = null;
 
@@ -151,6 +155,28 @@ ipcMain.on('edit:selectAll', () => mainWindow?.webContents.selectAll());
 ipcMain.on('update:restart', () => autoUpdater.quitAndInstall());
 
 ipcMain.handle('app:get-version', () => app.getVersion());
+
+// ─── Badge de notificação não lida (taskbar + bandeja) ─────────
+// O renderer desenha os PNGs (via <canvas>, sem precisar de dependência de
+// imagem no processo main) e manda o data URL pronto por IPC.
+ipcMain.on('notif:set-overlay-badge', (_event, dataUrl: string | null) => {
+  if (!mainWindow) return;
+  if (dataUrl) {
+    const icon = nativeImage.createFromDataURL(dataUrl).resize({ width: 16, height: 16 });
+    mainWindow.setOverlayIcon(icon, 'Notificações não lidas');
+  } else {
+    mainWindow.setOverlayIcon(null, '');
+  }
+});
+
+ipcMain.on('notif:set-tray-badge', (_event, dataUrl: string | null) => {
+  if (!tray) return;
+  if (dataUrl) {
+    tray.setImage(nativeImage.createFromDataURL(dataUrl).resize({ width: 16, height: 16 }));
+  } else if (trayIcon) {
+    tray.setImage(trayIcon);
+  }
+});
 
 // Botão "Verificar atualizações" nas Configurações chama isso — reusa o
 // autoUpdater.checkForUpdates() diretamente, então dispara os MESMOS eventos
@@ -516,7 +542,7 @@ app.whenReady().then(() => {
   setupAutoUpdater();
 
   // ─── System Tray ──────────────────────────────────────────────
-  const trayIcon = nativeImage.createFromPath(getIconPath()).resize({ width: 16, height: 16 });
+  trayIcon = nativeImage.createFromPath(getIconPath()).resize({ width: 16, height: 16 });
   tray = new Tray(trayIcon);
   tray.setToolTip('Zynk');
 

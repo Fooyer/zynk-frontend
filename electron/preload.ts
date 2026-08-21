@@ -29,6 +29,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   restartToUpdate: () => ipcRenderer.send('update:restart'),
 
+  // Badge de notificação não lida — taskbar (overlay) e bandeja (ícone inteiro)
+  setOverlayBadge: (dataUrl: string | null) => ipcRenderer.send('notif:set-overlay-badge', dataUrl),
+  setTrayBadge: (dataUrl: string | null) => ipcRenderer.send('notif:set-tray-badge', dataUrl),
+
   // Edit commands — usados pelo menu de contexto customizado dos campos de texto
   editUndo: () => ipcRenderer.send('edit:undo'),
   editRedo: () => ipcRenderer.send('edit:redo'),

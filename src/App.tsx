@@ -3,7 +3,9 @@ import { useAuthStore } from './stores/authStore';
 import { useFriendStore } from './stores/friendStore';
 import { useGroupStore } from './stores/groupStore';
 import { useUiStore } from './stores/uiStore';
+import { useUnreadStore } from './stores/unreadStore';
 import { useThemeStore } from './stores/themeStore';
+import { applyUnreadBadge } from './services/trayBadge';
 import { generateAccentRamp, getReadableTextColor, mixHex, rgbTriple } from './utils/color';
 import { PRESET_RAMPS } from './utils/accentPresets';
 import { useCallStore } from './stores/callStore';
@@ -85,6 +87,13 @@ function AppLayout() {
   const callChannelId = useCallStore((s) => s.channelId);
 
   useSocket();
+
+  // Selo de "não lida" na taskbar/bandeja — liga/desliga sozinho conforme o
+  // total de mensagens não lidas (qualquer DM ou canal de grupo) muda.
+  const hasUnread = useUnreadStore((s) => Object.values(s.counts).some((c) => c > 0));
+  useEffect(() => {
+    applyUnreadBadge(hasUnread);
+  }, [hasUnread]);
 
   // Montado aqui (não dentro de GroupLayout) pra sobreviver à navegação —
   // trocar de tela não deve derrubar uma chamada de voz em andamento.
