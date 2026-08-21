@@ -172,7 +172,7 @@ function CallPanel({ dm, callStatus }: { dm: DmChannel; callStatus: 'calling' | 
       <div className={`bg-accent-900 border-b flex-shrink-0 ${isGame ? 'border-warning/40' : 'border-white/[0.06]'}`}>
         {isCalling ? (
           /* ─── Estado: Chamando ─── */
-          <div className="py-8 flex flex-col items-center gap-4">
+          <div className="pt-14 pb-8 flex flex-col items-center gap-4">
             <div className="relative">
               <div className="absolute -inset-2 rounded-full animate-ping opacity-20" style={{ backgroundColor: getUserColor(dm.friend.username) }} />
               <div

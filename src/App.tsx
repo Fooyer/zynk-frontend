@@ -36,7 +36,7 @@ function TitleBar() {
   const showWindowControls = !!window.electronAPI && platform !== 'darwin';
 
   return (
-    <div className="h-9 flex-shrink-0 bg-surface-900 drag-region flex items-center gap-2 px-4 border-b border-white/[0.06]">
+    <div className="h-9 flex-shrink-0 bg-surface-750 shadow-panel drag-region flex items-center gap-2 px-4 border-b border-white/[0.06]">
       <span className="w-1.5 h-1.5 rounded-full bg-accent-500 shadow-glow-accent-sm animate-pulse no-drag select-none" />
       <span className="text-xs font-semibold text-surface-400 uppercase tracking-[0.2em] no-drag select-none">Zynk</span>
       {showWindowControls && (

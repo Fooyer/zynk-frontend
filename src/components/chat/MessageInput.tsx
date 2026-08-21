@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { getSocket } from '../../services/socket';
 import { messagesAPI } from '../../services/api';
 import { useChatStore } from '../../stores/chatStore';
@@ -26,29 +26,46 @@ export function MessageInput({ channelId, placeholder = 'Envie uma mensagem...' 
 
   const replyingTo = useChatStore((s) => s.replyingTo);
   const setReplyingTo = useChatStore((s) => s.setReplyingTo);
+  const composerFocusTick = useChatStore((s) => s.composerFocusTick);
 
   const clearImage = useCallback(() => {
     setImageFile(null);
     if (imagePreview) URL.revokeObjectURL(imagePreview);
     setImagePreview(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
+    textareaRef.current?.focus();
   }, [imagePreview]);
+
+  // Sempre que uma resposta é iniciada ou cancelada (banner ✕, Escape, clique
+  // em "responder" numa mensagem), o foco volta pro campo de digitação.
+  useEffect(() => {
+    textareaRef.current?.focus();
+  }, [replyingTo]);
+
+  // Sinal disparado por outros componentes (ex: salvar/cancelar edição de
+  // mensagem) pedindo o foco de volta pro campo de digitação principal.
+  useEffect(() => {
+    if (composerFocusTick > 0) textareaRef.current?.focus();
+  }, [composerFocusTick]);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     if (!ALLOWED_TYPES.includes(file.type)) {
-      alertDialog('Tipo não suportado. Use JPEG, PNG, GIF ou WebP.', { title: 'Imagem inválida' });
+      alertDialog('Tipo não suportado. Use JPEG, PNG, GIF ou WebP.', { title: 'Imagem inválida' })
+        .then(() => textareaRef.current?.focus());
       return;
     }
     if (file.size > MAX_SIZE) {
-      alertDialog('Imagem muito grande. Máximo 5 MB.', { title: 'Imagem inválida' });
+      alertDialog('Imagem muito grande. Máximo 5 MB.', { title: 'Imagem inválida' })
+        .then(() => textareaRef.current?.focus());
       return;
     }
 
     setImageFile(file);
     setImagePreview(URL.createObjectURL(file));
+    textareaRef.current?.focus();
   };
 
   const handleSend = useCallback(async () => {
@@ -63,7 +80,8 @@ export function MessageInput({ channelId, placeholder = 'Envie uma mensagem...' 
         const { data } = await messagesAPI.uploadImage(imageFile);
         imageUrl = data.imageUrl;
       } catch {
-        alertDialog('Erro ao enviar imagem. Tente novamente.', { title: 'Falha no envio' });
+        alertDialog('Erro ao enviar imagem. Tente novamente.', { title: 'Falha no envio' })
+          .then(() => textareaRef.current?.focus());
         setUploading(false);
         return;
       } finally {

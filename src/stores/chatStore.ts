@@ -15,6 +15,10 @@ interface ChatState {
   // Reply
   replyingTo: Message | null;
 
+  // Incrementado sempre que uma ação em outro componente (ex: salvar/cancelar
+  // edição de mensagem) deve devolver o foco ao campo de digitação principal.
+  composerFocusTick: number;
+
   // Actions
   loadMessages: (channelId: number) => Promise<void>;
   loadMore: (channelId: number) => Promise<void>;
@@ -24,6 +28,7 @@ interface ChatState {
   addSystemMessage: (channelId: number, content: string) => void;
   setTyping: (event: TypingEvent) => void;
   setReplyingTo: (message: Message | null) => void;
+  focusComposer: () => void;
   clearMessages: () => void;
 }
 
@@ -34,6 +39,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   isLoading: false,
   typingUsers: {},
   replyingTo: null,
+  composerFocusTick: 0,
 
   /**
    * Carrega as mensagens iniciais de um canal.
@@ -188,6 +194,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   setReplyingTo: (message) => {
     set({ replyingTo: message });
+  },
+
+  focusComposer: () => {
+    set((state) => ({ composerFocusTick: state.composerFocusTick + 1 }));
   },
 
   clearMessages: () => {

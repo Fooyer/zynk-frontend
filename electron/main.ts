@@ -42,8 +42,8 @@ function createWindow() {
   const isLinux = process.platform === 'linux';
 
   mainWindow = new BrowserWindow({
-    width: 1280,
-    height: 800,
+    width: 1360,
+    height: 860,
     minWidth: 940,
     minHeight: 600,
     title: 'Zynk',
