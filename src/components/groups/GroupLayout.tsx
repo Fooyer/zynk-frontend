@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useGroupStore } from '../../stores/groupStore';
 import { useUnreadStore } from '../../stores/unreadStore';
+import { useLayoutStore } from '../../stores/layoutStore';
 import { useAuthStore } from '../../stores/authStore';
 import { useContextMenuStore } from '../../stores/contextMenuStore';
 import { useVoiceRoom } from '../../hooks/useVoiceRoom';
@@ -694,6 +695,7 @@ function ChannelSidebar({ group, voice, activeChannelId, onSelectChannel, onOpen
 export function GroupLayout({ voice }: { voice: ReturnType<typeof useVoiceRoom> }) {
   const groups = useGroupStore((s) => s.groups);
   const activeGroupId = useGroupStore((s) => s.activeGroupId);
+  const cinemaMode = useLayoutStore((s) => s.cinemaMode);
   // Vive na store (não como useState local) pra que notification.ts e o
   // unreadStore consigam saber qual canal de grupo está aberto de verdade.
   const activeChannelId = useGroupStore((s) => s.activeChannelId);
@@ -704,23 +706,29 @@ export function GroupLayout({ voice }: { voice: ReturnType<typeof useVoiceRoom> 
 
   const activeGroup = groups.find((g) => g.id === activeGroupId) ?? null;
 
-  // Reset active channel when group changes
+  // Reset active channel when group changes — a não ser que exista um canal
+  // "pendente" marcado de fora (ex: prompt "Entrar agora" de um evento),
+  // que tem prioridade sobre o canal principal padrão.
   useEffect(() => {
-    setActiveChannelId(activeGroup?.channelId ?? null);
+    const pending = useGroupStore.getState().consumePendingChannelId();
+    setActiveChannelId(pending ?? activeGroup?.channelId ?? null);
   }, [activeGroupId, activeGroup?.channelId]);
 
   return (
     <>
-      {/* ── Col 1: Channel sidebar ───────────────────────────── */}
-      <div className="h-full w-60 flex flex-col flex-shrink-0 overflow-hidden">
-        <ChannelSidebar
-          group={activeGroup}
-          voice={voice}
-          activeChannelId={activeChannelId}
-          onSelectChannel={(id) => { setActiveChannelId(id); setActiveTab('chat'); }}
-          onOpenCall={() => setActiveTab('call')}
-        />
-      </div>
+      {/* ── Col 1: Channel sidebar — some inteira no modo cinema, em vez de
+          só recolher, pra liberar toda a largura pro vídeo em foco. ──── */}
+      {!cinemaMode && (
+        <div className="h-full w-60 flex flex-col flex-shrink-0 overflow-hidden">
+          <ChannelSidebar
+            group={activeGroup}
+            voice={voice}
+            activeChannelId={activeChannelId}
+            onSelectChannel={(id) => { setActiveChannelId(id); setActiveTab('chat'); }}
+            onOpenCall={() => setActiveTab('call')}
+          />
+        </div>
+      )}
 
       {/* ── Col 2: Main content ───────────────────────────── */}
       <GroupView

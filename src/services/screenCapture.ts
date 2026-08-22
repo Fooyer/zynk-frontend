@@ -10,7 +10,13 @@ export async function captureScreen(sourceId?: string): Promise<MediaStream> {
     if (sourceId && window.electronAPI?.selectScreenSource) {
       await window.electronAPI.selectScreenSource(sourceId);
     }
-    return await navigator.mediaDevices.getDisplayMedia({ video: true });
+    // audio:true aqui é o que faz o Chromium de fato aceitar a faixa de
+    // áudio que o main process concede via `audio: 'loopback'` no
+    // setDisplayMediaRequestHandler — sem pedir áudio na constraint da
+    // própria chamada, o loopback do main é ignorado e o stream sempre
+    // volta só com vídeo (era por isso que captureSystemAudio() nunca
+    // achava nenhuma faixa de áudio pra capturar).
+    return await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
   } catch (e) {
     console.error('[captureScreen] getDisplayMedia falhou:', e);
     throw e;

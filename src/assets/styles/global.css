@@ -208,6 +208,15 @@ input[type='range']:disabled {
   }
 }
 
+/* ─── Contagem regressiva de eventos ───────────────────────────────
+   Cada número "pipoca" (escala + fade) — remontado a cada segundo via
+   key={secondsLeft} no componente, pra reiniciar a animação em todo tick. */
+@keyframes zynk-countdown-pop {
+  0% { transform: scale(1.7); opacity: 0; }
+  55% { transform: scale(1); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
 /* ─── Cantos-guia estilo HUD ───────────────────────────────────────
    Quatro traços em L nos cantos, desenhados só com background-image (sem
    markup extra) — o toque "mira/reticle" de painel futurista. Combina com

@@ -10,6 +10,11 @@ interface GroupState {
    *  local de GroupLayout, pra que notification.ts e o unreadStore consigam
    *  saber qual canal de grupo está "ativo" de verdade. */
   activeChannelId: number | null;
+  // Canal de texto que a PRÓXIMA troca de grupo deve abrir, em vez do canal
+  // principal padrão — usado pelo prompt "Entrar agora" de eventos, que
+  // precisa navegar pra um servidor E selecionar um canal específico ao
+  // mesmo tempo (setActiveGroup() sozinho sempre reseta pro canal principal).
+  pendingChannelId: number | null;
   members: GroupMemberEntry[];
   isLoading: boolean;
   isLoadingMembers: boolean;
@@ -23,6 +28,9 @@ interface GroupState {
   leaveGroup: (groupId: number) => Promise<void>;
   setActiveGroup: (groupId: number | null) => void;
   setActiveChannelId: (channelId: number | null) => void;
+  /** Chame ANTES de setActiveGroup — marca qual canal abrir assim que o grupo virar ativo. */
+  setPendingChannelId: (channelId: number) => void;
+  consumePendingChannelId: () => number | null;
   loadMembers: (groupId: number) => Promise<void>;
   getActiveGroup: () => Group | null;
   removeGroupFromState: (groupId: number) => void;
@@ -38,6 +46,7 @@ export const useGroupStore = create<GroupState>((set, get) => ({
   groups: [],
   activeGroupId: null,
   activeChannelId: null,
+  pendingChannelId: null,
   members: [],
   isLoading: false,
   isLoadingMembers: false,
@@ -96,6 +105,14 @@ export const useGroupStore = create<GroupState>((set, get) => ({
   setActiveChannelId: (channelId) => {
     set({ activeChannelId: channelId });
     if (channelId) useUnreadStore.getState().clear(channelId);
+  },
+
+  setPendingChannelId: (channelId) => set({ pendingChannelId: channelId }),
+
+  consumePendingChannelId: () => {
+    const id = get().pendingChannelId;
+    if (id !== null) set({ pendingChannelId: null });
+    return id;
   },
 
   loadMembers: async (groupId) => {

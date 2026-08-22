@@ -3,7 +3,7 @@ import { groupsAPI } from '../services/api';
 import { getSocket } from '../services/socket';
 import { useAuthStore } from '../stores/authStore';
 import { useSettingsStore } from '../stores/settingsStore';
-import { captureScreen } from '../services/screenCapture';
+import { captureScreen, captureSystemAudio } from '../services/screenCapture';
 import { alertDialog } from '../stores/dialogStore';
 import { ICE_SERVERS } from '../services/iceServers';
 import { applyLowLatencySenderParams, withLowLatencyOpus } from '../services/lowLatencyAudio';
@@ -40,6 +40,7 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
   const [isMuted, setIsMuted] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [isScreenSharing, setIsScreenSharing] = useState(false);
+  const [isSharingAudio, setIsSharingAudio] = useState(false);
   const [screenStreams, setScreenStreams] = useState<Map<number, MediaStream>>(new Map());
   // "Silenciar localmente" — só afeta o que EU escuto de alguém, não é
   // broadcast pro roster (diferente do isMuted, que é o próprio participante
@@ -48,11 +49,19 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
 
   const localStream = useRef<MediaStream | null>(null);
   const localScreenStream = useRef<MediaStream | null>(null);
+  const localAudioShareStream = useRef<MediaStream | null>(null);
   const peers = useRef<Map<number, RTCPeerConnection>>(new Map());
   const audioRefs = useRef<Map<number, HTMLAudioElement>>(new Map());
+  // Stream persistente por peer que RECEBE áudio — o mic e um eventual
+  // compartilhamento de áudio chegam como tracks separados (ontrack dispara
+  // uma vez por track), então acumulam nesse MediaStream em vez de
+  // substituir o srcObject do <audio> a cada novo track (senão o segundo
+  // track — o áudio compartilhado — silenciava o mic desse peer pra todo mundo).
+  const remoteAudioStreams = useRef<Map<number, MediaStream>>(new Map());
   const locallyMutedIdsRef = useRef<Set<number>>(new Set());
   locallyMutedIdsRef.current = locallyMutedIds;
   const screenSenders = useRef<Map<number, ScreenSenders>>(new Map());
+  const audioShareSenders = useRef<Map<number, RTCRtpSender>>(new Map());
   const activeVcIdRef = useRef<number | null>(null);
   activeVcIdRef.current = activeVcId;
   // Ids dos outros participantes da call conectada — usado só pra decidir
@@ -208,12 +217,12 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
       await pc.setLocalDescription(answer);
       socket.emit('voice:answer', { targetUserId: data.from, answer, voiceChannelId: activeVcId });
 
-      // createPeer() já tinha adicionado os tracks da minha tela (se eu
+      // createPeer() já tinha adicionado os tracks da minha tela/áudio (se eu
       // estiver compartilhando), mas uma resposta não pode introduzir
       // m-lines que não vieram no offer de quem acabou de entrar — sem
-      // essa renegociação extra, a tela nunca chegava pra quem chegou
+      // essa renegociação extra, a tela/áudio nunca chegava pra quem chegou
       // depois que o compartilhamento já tinha começado.
-      if (isNewPeer && localScreenStream.current) {
+      if (isNewPeer && (localScreenStream.current || localAudioShareStream.current)) {
         await renegotiate(data.from, pc);
       }
     };
@@ -277,6 +286,13 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
     pc.ontrack = (e) => {
       const track = e.track;
       if (track.kind === 'audio') {
+        let stream = remoteAudioStreams.current.get(targetUserId);
+        if (!stream) {
+          stream = new MediaStream();
+          remoteAudioStreams.current.set(targetUserId, stream);
+        }
+        stream.addTrack(track);
+
         let audio = audioRefs.current.get(targetUserId);
         if (!audio) {
           audio = new Audio();
@@ -287,8 +303,8 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
           if (outputId && typeof audio.setSinkId === 'function') {
             audio.setSinkId(outputId).catch(() => {});
           }
+          audio.srcObject = stream;
         }
-        audio.srcObject = e.streams[0];
         // `autoplay` sozinho não é confiável (política de autoplay do
         // Chromium/Electron pode bloquear silenciosamente) — era por isso
         // que só dava pra ouvir o outro depois de interagir com o picker de
@@ -320,6 +336,14 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
       }
     }
 
+    // Mesma ideia pro compartilhamento de só áudio.
+    if (localAudioShareStream.current) {
+      const audioTrack = localAudioShareStream.current.getAudioTracks()[0];
+      if (audioTrack) {
+        audioShareSenders.current.set(targetUserId, pc.addTrack(audioTrack, localAudioShareStream.current));
+      }
+    }
+
     peers.current.set(targetUserId, pc);
     return pc;
   };
@@ -329,7 +353,9 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
     peers.current.delete(uid);
     const audio = audioRefs.current.get(uid);
     if (audio) { audio.srcObject = null; audioRefs.current.delete(uid); }
+    remoteAudioStreams.current.delete(uid);
     screenSenders.current.delete(uid);
+    audioShareSenders.current.delete(uid);
     removeScreenStream(uid);
   };
 
@@ -342,9 +368,13 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
     localStream.current = null;
     localScreenStream.current?.getTracks().forEach((t) => t.stop());
     localScreenStream.current = null;
+    localAudioShareStream.current?.getTracks().forEach((t) => t.stop());
+    localAudioShareStream.current = null;
     screenSenders.current.clear();
+    audioShareSenders.current.clear();
     setScreenStreams(new Map());
     setIsScreenSharing(false);
+    setIsSharingAudio(false);
     peers.current.forEach((_, uid) => closePeer(uid));
     setActiveVcId(null);
     setConnectedVc(null);
@@ -411,7 +441,7 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
   };
 
   const startScreenShare = async (sourceId?: string) => {
-    if (!activeVcId || isScreenSharing) return;
+    if (!activeVcId || isScreenSharing || isSharingAudio) return;
     try {
       const screenStream = await captureScreen(sourceId);
       const videoTrack = screenStream.getVideoTracks()[0];
@@ -476,6 +506,66 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
     playScreenShareStopSound();
   };
 
+  /**
+   * Compartilha só o áudio do sistema (sem vídeo) — útil pra tocar uma
+   * música/áudio de jogo pra call sem expor a tela. Mutuamente exclusivo
+   * com startScreenShare (a UI desabilita um enquanto o outro está ativo).
+   */
+  const startAudioShare = async () => {
+    if (!activeVcId || isSharingAudio || isScreenSharing) return;
+    try {
+      const audioStream = await captureSystemAudio();
+      const audioTrack = audioStream.getAudioTracks()[0];
+      localAudioShareStream.current = audioStream;
+
+      for (const [uid, pc] of peers.current) {
+        audioShareSenders.current.set(uid, pc.addTrack(audioTrack, audioStream));
+        await renegotiate(uid, pc);
+      }
+
+      // Mesmo padrão do compartilhamento de tela: avisa o roster (não é
+      // sinal WebRTC) — é o que faz o indicador aparecer mesmo pra quem
+      // não está na call.
+      getSocket().emit('voice:audio-share-start', {
+        voiceChannelId: activeVcIdRef.current,
+        groupChannelId: connectedGroupChannelIdRef.current,
+      });
+
+      setIsSharingAudio(true);
+      playScreenShareStartSound();
+
+      audioTrack.onended = () => { stopAudioShare(); };
+    } catch (e) {
+      console.error('[voice-audio-share] erro ao iniciar:', e);
+      localAudioShareStream.current?.getTracks().forEach((t) => t.stop());
+      localAudioShareStream.current = null;
+    }
+  };
+
+  const stopAudioShare = async () => {
+    if (!localAudioShareStream.current) return;
+    for (const [uid, pc] of peers.current) {
+      const sender = audioShareSenders.current.get(uid);
+      if (sender) {
+        pc.removeTrack(sender);
+        audioShareSenders.current.delete(uid);
+        await renegotiate(uid, pc);
+      }
+    }
+    localAudioShareStream.current.getTracks().forEach((t) => t.stop());
+    localAudioShareStream.current = null;
+
+    if (activeVcIdRef.current) {
+      getSocket().emit('voice:audio-share-stop', {
+        voiceChannelId: activeVcIdRef.current,
+        groupChannelId: connectedGroupChannelIdRef.current,
+      });
+    }
+
+    setIsSharingAudio(false);
+    playScreenShareStopSound();
+  };
+
   const createChannel = async (name: string, mode: CallMode = 'normal') => {
     const { data } = await groupsAPI.createVoiceChannel(groupId, name, mode);
     setVoiceChannels((prev) => [...prev, { ...data, participants: [] }]);
@@ -505,6 +595,7 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
     isMuted,
     isConnecting,
     isScreenSharing,
+    isSharingAudio,
     screenStreams,
     locallyMutedIds,
     join,
@@ -513,6 +604,8 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
     toggleLocalMute,
     startScreenShare,
     stopScreenShare,
+    startAudioShare,
+    stopAudioShare,
     createChannel,
     deleteChannel,
     renameChannel,

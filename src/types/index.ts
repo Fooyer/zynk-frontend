@@ -151,6 +151,9 @@ export interface VoiceParticipant {
   isSharing?: boolean;
   /** Mesma ideia do isSharing — roster, não estado local do peer. */
   isMuted?: boolean;
+  /** Compartilhando só áudio do sistema (sem vídeo) — mutuamente exclusivo
+   *  com isSharing na UI, mas é um campo de roster independente. */
+  isSharingAudio?: boolean;
 }
 
 export type CallMode = 'normal' | 'game';
@@ -195,6 +198,24 @@ export interface Poll {
   creator: Pick<User, 'id' | 'username' | 'avatarUrl'>;
   options: PollOption[];
   totalVotes: number;
+}
+
+// ─── Events (eventos agendados em servidores) ───
+// Tipo se chama ServerEvent (não `Event`) pra não colidir com o Event global do DOM.
+
+export interface ServerEvent {
+  id: number;
+  groupId: number;
+  groupName: string;
+  channelKind: 'text' | 'voice';
+  channelId: number;
+  channelName: string;
+  title: string;
+  description: string | null;
+  scheduledAt: string;
+  createdAt: string;
+  creator: Pick<User, 'id' | 'username' | 'avatarUrl'>;
+  myStatus: 'accepted' | 'declined' | null;
 }
 
 // ─── Game Sessions ─────────────────────────────

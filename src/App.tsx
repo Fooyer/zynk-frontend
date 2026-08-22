@@ -9,6 +9,7 @@ import { applyUnreadBadge } from './services/trayBadge';
 import { generateAccentRamp, getReadableTextColor, mixHex, rgbTriple } from './utils/color';
 import { PRESET_RAMPS } from './utils/accentPresets';
 import { useCallStore } from './stores/callStore';
+import { useEventStore } from './stores/eventStore';
 import { useSocket } from './hooks/useSocket';
 import { useVoiceRoom } from './hooks/useVoiceRoom';
 import { ActiveCallOverlay } from './components/call/ActiveCallOverlay';
@@ -19,6 +20,9 @@ import { RegisterForm } from './components/auth/RegisterForm';
 import { CallManager } from './components/call/CallManager';
 import { SettingsPage } from './components/settings/SettingsPage';
 import { GroupLayout } from './components/groups/GroupLayout';
+import { EventsHub } from './components/events/EventsHub';
+import { EventInviteModal } from './components/events/EventInviteModal';
+import { EventCountdownOverlay } from './components/events/EventCountdownOverlay';
 import { DialogHost } from './components/common/DialogHost';
 import { ContextMenuHost } from './components/common/ContextMenuHost';
 import { UpdateToast } from './components/common/UpdateToast';
@@ -100,11 +104,14 @@ function AppLayout() {
   const activeGroup = groups.find((g) => g.id === activeGroupId) ?? null;
   const voice = useVoiceRoom(activeGroupId ?? 0, activeGroup?.channelId ?? null);
 
+  const loadEvents = useEventStore((s) => s.loadEvents);
+
   useEffect(() => {
     loadFriends();
     loadDmChannels();
     loadGroups();
-  }, [loadFriends, loadDmChannels, loadGroups]);
+    loadEvents();
+  }, [loadFriends, loadDmChannels, loadGroups, loadEvents]);
 
   // A barra flutuante só aparece quando a chamada está ativa e o usuário
   // não está olhando para a própria conversa (que já tem os controles inline).
@@ -119,10 +126,15 @@ function AppLayout() {
           uma linha de borda — pra reforçar a leitura "módulos de HUD" do tema. */}
       <div className="flex-1 flex gap-2 p-2 overflow-hidden">
         <NavBar />
-        {view === 'settings' ? <SettingsPage /> : view === 'group' ? <GroupLayout voice={voice} /> : <HomeLayout voice={voice} />}
+        {view === 'settings' ? <SettingsPage />
+          : view === 'group' ? <GroupLayout voice={voice} />
+          : view === 'events' ? <EventsHub />
+          : <HomeLayout voice={voice} />}
       </div>
       <CallManager />
       {showFloatingCall && <ActiveCallOverlay />}
+      <EventCountdownOverlay voice={voice} />
+      <EventInviteModal />
       <DialogHost />
       <ContextMenuHost />
       <UpdateToast />

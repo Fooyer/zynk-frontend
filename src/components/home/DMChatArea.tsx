@@ -4,6 +4,7 @@ import { MessageInput } from '../chat/MessageInput';
 import { TypingIndicator } from '../chat/TypingIndicator';
 import { useFriendStore } from '../../stores/friendStore';
 import { useCallStore } from '../../stores/callStore';
+import { useLayoutStore } from '../../stores/layoutStore';
 import { useAuthStore } from '../../stores/authStore';
 import { getInitials, getUserColor } from '../../utils/formatDate';
 import { remoteScreenStreamRef, localAnalyserRef, remoteAnalyserRef } from '../../services/callStream';
@@ -128,6 +129,15 @@ function CallPanel({ dm, callStatus }: { dm: DmChannel; callStatus: 'calling' | 
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [screenExpanded, cinemaMode]);
+
+  // Reflete o modo cinema local no layout global — esconde a lista de
+  // conversas e recolhe o nav na versão menor, restaurando ao desligar
+  // (inclusive se este painel desmontar com o modo ainda ligado).
+  useEffect(() => {
+    if (cinemaMode) useLayoutStore.getState().enterCinemaMode();
+    else useLayoutStore.getState().exitCinemaMode();
+    return () => useLayoutStore.getState().exitCinemaMode();
+  }, [cinemaMode]);
 
   const handleToggleMute = () => window.dispatchEvent(new CustomEvent('call:toggle-mute'));
   const handleHangup = () => window.dispatchEvent(new CustomEvent('call:hangup'));

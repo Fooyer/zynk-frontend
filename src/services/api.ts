@@ -134,6 +134,16 @@ export const groupsAPI = {
     api.put(`/groups/${id}/channel-order`, { items }),
 };
 
+// ─── Events ─────────────────────────────────────
+
+export const eventsAPI = {
+  mine: () => api.get('/events/mine'),
+  create: (groupId: number, data: { title: string; description?: string; scheduledAt: string; channelKind: 'text' | 'voice'; channelId: number }) =>
+    api.post(`/groups/${groupId}/events`, data),
+  respond: (eventId: number, status: 'accepted' | 'declined') => api.post(`/events/${eventId}/respond`, { status }),
+  remove: (eventId: number) => api.delete(`/events/${eventId}`),
+};
+
 // ─── Game Sessions ─────────────────────────────
 
 export const gameSessionsAPI = {

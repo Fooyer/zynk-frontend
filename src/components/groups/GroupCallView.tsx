@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useAuthStore } from '../../stores/authStore';
+import { useLayoutStore } from '../../stores/layoutStore';
 import { getInitials, getUserColor } from '../../utils/formatDate';
 import { ScreenPicker } from '../call/ScreenPicker';
 import type { useVoiceRoom } from '../../hooks/useVoiceRoom';
@@ -18,7 +19,9 @@ function ParticipantTile({ participant, isSelf, isMuted }: {
     <div className="flex flex-col items-center gap-2 w-28">
       <div className="relative">
         <div
-          className="w-20 h-20 rounded-full ring-2 ring-white/[0.10] flex items-center justify-center text-white text-2xl font-bold overflow-hidden"
+          className={`w-20 h-20 rounded-full ring-2 flex items-center justify-center text-white text-2xl font-bold overflow-hidden ${
+            participant.isSharingAudio ? 'ring-success' : 'ring-white/[0.10]'
+          }`}
           style={{ backgroundColor: getUserColor(participant.username) }}
         >
           {participant.avatarUrl ? (
@@ -32,6 +35,17 @@ function ParticipantTile({ participant, isSelf, isMuted }: {
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round">
               <line x1="1" y1="1" x2="23" y2="23" />
               <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6" />
+            </svg>
+          </div>
+        )}
+        {participant.isSharingAudio && (
+          <div
+            className="absolute -bottom-1 -left-1 w-7 h-7 rounded-full bg-success flex items-center justify-center border-2 border-surface-950"
+            title="Compartilhando áudio"
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 18v-6a9 9 0 0 1 18 0v6" />
+              <path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z" />
             </svg>
           </div>
         )}
@@ -156,6 +170,17 @@ export function GroupCallView({ voice }: Props) {
   // Sai do modo cinema junto se a tela em foco parar de ser compartilhada
   useEffect(() => { if (!focusedStream) setCinemaMode(false); }, [focusedStream]);
 
+  // Reflete o modo cinema local no layout global — recolhe nav/membros na
+  // versão menor e esconde a sidebar de canais, restaurando o estado de
+  // antes ao desligar. Mesmo efeito serve pra sincronizar o toggle E pra
+  // desfazer no cleanup, se o usuário sair da aba "Chamada" com o modo
+  // cinema ainda ligado (troca de aba desmonta este componente).
+  useEffect(() => {
+    if (cinemaMode) useLayoutStore.getState().enterCinemaMode();
+    else useLayoutStore.getState().exitCinemaMode();
+    return () => useLayoutStore.getState().exitCinemaMode();
+  }, [cinemaMode]);
+
   const toggleFullscreen = () => {
     if (document.fullscreenElement) {
       document.exitFullscreen().catch(() => {});
@@ -169,6 +194,11 @@ export function GroupCallView({ voice }: Props) {
   const handleScreenClick = () => {
     if (voice.isScreenSharing) voice.stopScreenShare();
     else setShowPicker(true);
+  };
+
+  const handleAudioShareClick = () => {
+    if (voice.isSharingAudio) voice.stopAudioShare();
+    else voice.startAudioShare();
   };
 
   const handlePickerSelect = (source: ScreenSource) => {
@@ -274,11 +304,23 @@ export function GroupCallView({ voice }: Props) {
                 </button>
                 <button
                   onClick={handleScreenClick}
-                  title={voice.isScreenSharing ? 'Parar compartilhamento' : 'Compartilhar tela'}
-                  className={`p-3 rounded-full transition-colors ${voice.isScreenSharing ? 'bg-success text-white' : 'bg-white/10 text-white hover:bg-white/20'}`}
+                  disabled={voice.isSharingAudio}
+                  title={voice.isSharingAudio ? 'Pare o compartilhamento de áudio primeiro' : voice.isScreenSharing ? 'Parar compartilhamento' : 'Compartilhar tela'}
+                  className={`p-3 rounded-full transition-colors ${voice.isSharingAudio ? 'opacity-30 cursor-not-allowed bg-white/10 text-white' : voice.isScreenSharing ? 'bg-success text-white' : 'bg-white/10 text-white hover:bg-white/20'}`}
                 >
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <rect x="2" y="3" width="20" height="14" rx="2" /><polyline points="8 21 12 17 16 21" /><line x1="12" y1="17" x2="12" y2="21" />
+                  </svg>
+                </button>
+                <button
+                  onClick={handleAudioShareClick}
+                  disabled={voice.isScreenSharing}
+                  title={voice.isScreenSharing ? 'Pare o compartilhamento de tela primeiro' : voice.isSharingAudio ? 'Parar compartilhamento de áudio' : 'Compartilhar apenas o áudio'}
+                  className={`p-3 rounded-full transition-colors ${voice.isScreenSharing ? 'opacity-30 cursor-not-allowed bg-white/10 text-white' : voice.isSharingAudio ? 'bg-success text-white' : 'bg-white/10 text-white hover:bg-white/20'}`}
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M3 18v-6a9 9 0 0 1 18 0v6" />
+                    <path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z" />
                   </svg>
                 </button>
                 <button
@@ -345,11 +387,18 @@ export function GroupCallView({ voice }: Props) {
           )}
         </ControlButton>
 
-        <ControlButton onClick={handleScreenClick} title={voice.isScreenSharing ? 'Parar compartilhamento' : 'Compartilhar tela'} active={voice.isScreenSharing}>
+        <ControlButton onClick={handleScreenClick} title={voice.isSharingAudio ? 'Pare o compartilhamento de áudio primeiro' : voice.isScreenSharing ? 'Parar compartilhamento' : 'Compartilhar tela'} active={voice.isScreenSharing}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <rect x="2" y="3" width="20" height="14" rx="2" />
             <polyline points="8 21 12 17 16 21" />
             <line x1="12" y1="17" x2="12" y2="21" />
+          </svg>
+        </ControlButton>
+
+        <ControlButton onClick={handleAudioShareClick} title={voice.isScreenSharing ? 'Pare o compartilhamento de tela primeiro' : voice.isSharingAudio ? 'Parar compartilhamento de áudio' : 'Compartilhar apenas o áudio'} active={voice.isSharingAudio}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M3 18v-6a9 9 0 0 1 18 0v6" />
+            <path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z" />
           </svg>
         </ControlButton>
 

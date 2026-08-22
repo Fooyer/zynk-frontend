@@ -7,7 +7,9 @@ import { useGroupStore } from '../stores/groupStore';
 import { useUiStore } from '../stores/uiStore';
 import { useUnreadStore } from '../stores/unreadStore';
 import { usePollStore } from '../stores/pollStore';
-import type { Message, Poll, TypingEvent, UserStatusEvent } from '../types';
+import { useEventStore } from '../stores/eventStore';
+import { useAuthStore } from '../stores/authStore';
+import type { Message, Poll, ServerEvent, TypingEvent, UserStatusEvent } from '../types';
 
 export function useSocket() {
   const addMessage = useChatStore((s) => s.addMessage);
@@ -88,6 +90,21 @@ export function useSocket() {
     socket.on('poll:created', (poll: Poll) => usePollStore.getState().upsertPoll(poll));
     socket.on('poll:updated', (poll: Poll) => usePollStore.getState().upsertPoll(poll));
 
+    // Evento criado num servidor — o payload vem hidratado com o RSVP de
+    // quem criou (sempre 'accepted'), não o meu. Pra quem só está recebendo
+    // o convite, força myStatus null (evento acabou de ser criado, ninguém
+    // além do criador respondeu ainda) e dispara o popup de convite.
+    socket.on('event:created', (event: ServerEvent) => {
+      const me = useAuthStore.getState().user;
+      const isCreator = Number(event.creator.id) === Number(me?.id);
+      const normalized: ServerEvent = isCreator ? event : { ...event, myStatus: null };
+      useEventStore.getState().upsertEvent(normalized);
+      if (!isCreator) useEventStore.getState().setPendingInvite(normalized);
+    });
+    socket.on('event:deleted', (data: { eventId: number }) => {
+      useEventStore.getState().removeEvent(data.eventId);
+    });
+
     socket.on('error', (err: { message: string }) => {
       console.error('[Socket Error]', err.message);
     });
@@ -142,6 +159,8 @@ export function useSocket() {
       socket.off('group:member-left');
       socket.off('poll:created');
       socket.off('poll:updated');
+      socket.off('event:created');
+      socket.off('event:deleted');
       socket.off('error');
       socket.off('connect');
       socket.off('disconnect');
