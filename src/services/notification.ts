@@ -4,6 +4,7 @@ import { useFriendStore } from '../stores/friendStore';
 import { useGroupStore } from '../stores/groupStore';
 import { useUiStore } from '../stores/uiStore';
 import { useUnreadStore } from '../stores/unreadStore';
+import { getNotificationIcon } from './notificationIcon';
 import type { Message } from '../types';
 
 // ─── Som ────────────────────────────────────────────
@@ -43,13 +44,17 @@ function sendPush(title: string, body: string) {
   // silent:true porque o toast nativo do SO tem seu próprio som padrão, que
   // não respeita notifSound/notifVolume — o som de verdade é o playSound()
   // acima, então o toast do sistema só deve ser visual.
+  // O ícone é gerado em runtime (getNotificationIcon) na cor de destaque
+  // escolhida pelo usuário, em vez do /icon.svg estático — fica consistente
+  // com o tema do app e renderiza nítido no Action Center do Windows.
   if ('Notification' in window) {
+    const icon = getNotificationIcon();
     if (Notification.permission === 'granted') {
-      new Notification(title, { body, icon: '/icon.svg', silent: true });
+      new Notification(title, { body, icon, silent: true });
     } else if (Notification.permission !== 'denied') {
       Notification.requestPermission().then((perm) => {
         if (perm === 'granted') {
-          new Notification(title, { body, icon: '/icon.svg', silent: true });
+          new Notification(title, { body, icon, silent: true });
         }
       });
     }
@@ -84,8 +89,11 @@ export function notifyMessage(message: Message) {
   // Ignora mensagens de sistema
   if (message.isSystem) return;
 
-  // Ignora se o canal está ativo e a janela está em foco
-  if (document.hasFocus() && isChannelActive(message.channelId)) return;
+  // Ignora se a conversa já está aberta — mesmo sem foco na janela, o
+  // usuário já está "olhando" pra ela, então nem o badge nem o toast do
+  // sistema fazem sentido (antes isso só valia com a janela focada, e o
+  // toast continuava vindo com a conversa aberta em segundo plano).
+  if (isChannelActive(message.channelId)) return;
 
   // Não lida — conta pro badge do Início/servidor, independente de som/push
   useUnreadStore.getState().increment(message.channelId);

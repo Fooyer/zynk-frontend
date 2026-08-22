@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useGroupStore } from '../../stores/groupStore';
 import { useChatStore } from '../../stores/chatStore';
+import { usePollStore } from '../../stores/pollStore';
 import { useAuthStore } from '../../stores/authStore';
 import { confirmDialog } from '../../stores/dialogStore';
 import { getSocket } from '../../services/socket';
@@ -63,6 +64,7 @@ export function GroupView({ channelId, voice, activeTab, setActiveTab }: Props) 
     if (channelId) {
       getSocket().emit('group:join-room', { channelId });
       loadMessages(channelId);
+      usePollStore.getState().loadPolls(channelId);
     }
   }, [activeGroupId, channelId, loadMessages]);
 
@@ -183,7 +185,7 @@ export function GroupView({ channelId, voice, activeTab, setActiveTab }: Props) 
       {activeTab === 'chat' && channelId && (
         <div className="flex-1 flex flex-col overflow-hidden min-h-0">
           <MessageList channelId={channelId} />
-          <MessageInput channelId={channelId} />
+          <MessageInput channelId={channelId} allowPolls />
         </div>
       )}
 

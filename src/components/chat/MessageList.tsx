@@ -1,18 +1,37 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useMemo } from 'react';
 import { useChatStore } from '../../stores/chatStore';
+import { usePollStore } from '../../stores/pollStore';
 import { MessageItem } from './MessageItem';
+import { PollMessage } from './PollMessage';
 import { MessageListSkeleton } from '../common/Skeleton';
+import type { Message, Poll } from '../../types';
 
 interface Props {
   channelId: number;
 }
 
+type TimelineItem =
+  | { kind: 'message'; key: string; createdAt: string; message: Message }
+  | { kind: 'poll'; key: string; createdAt: string; poll: Poll };
+
 export function MessageList({ channelId }: Props) {
   const messages = useChatStore((s) => s.messagesByChannel[channelId] || []);
+  const polls = usePollStore((s) => s.pollsByChannel[channelId] || []);
   const hasMore = useChatStore((s) => s.hasMore[channelId] ?? true);
   const loadMore = useChatStore((s) => s.loadMore);
   const isLoading = useChatStore((s) => s.isLoading);
   const setReplyingTo = useChatStore((s) => s.setReplyingTo);
+
+  // Enquetes não são mensagens (tabela própria) — intercala as duas listas
+  // por data de criação pra aparecerem na ordem certa na linha do tempo.
+  const timeline = useMemo<TimelineItem[]>(() => {
+    const items: TimelineItem[] = [
+      ...messages.map((m): TimelineItem => ({ kind: 'message', key: `m-${m.id}`, createdAt: m.createdAt, message: m })),
+      ...polls.map((p): TimelineItem => ({ kind: 'poll', key: `p-${p.id}`, createdAt: p.createdAt, poll: p })),
+    ];
+    items.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+    return items;
+  }, [messages, polls]);
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -31,11 +50,11 @@ export function MessageList({ channelId }: Props) {
       wasAtBottom.current = true;
     }
 
-    if (!wasAtBottom.current || messages.length === 0) return;
+    if (!wasAtBottom.current || timeline.length === 0) return;
 
     bottomRef.current?.scrollIntoView({ behavior: scrolledInitially.current ? 'smooth' : 'auto' });
     scrolledInitially.current = true;
-  }, [channelId, messages.length]);
+  }, [channelId, timeline.length]);
 
   const handleScroll = useCallback(() => {
     const el = containerRef.current;
@@ -70,10 +89,15 @@ export function MessageList({ channelId }: Props) {
         </div>
       )}
       <div className="pb-4">
-        {messages.map((msg, i) => {
+        {timeline.map((item, i) => {
+          if (item.kind === 'poll') {
+            return <PollMessage key={item.key} poll={item.poll} />;
+          }
+
+          const msg = item.message;
           if (msg.isSystem) {
             return (
-              <div key={msg.id} className="flex items-center gap-3 my-2 px-4">
+              <div key={item.key} className="flex items-center gap-3 my-2 px-4">
                 <div className="flex-1 h-px bg-white/[0.06]" />
                 <span className="text-xs text-surface-500 flex-shrink-0 flex items-center gap-1.5">
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" className="text-surface-500">
@@ -85,7 +109,9 @@ export function MessageList({ channelId }: Props) {
               </div>
             );
           }
-          const prev = messages[i - 1];
+
+          const prevItem = timeline[i - 1];
+          const prev = prevItem?.kind === 'message' ? prevItem.message : undefined;
           const isGrouped =
             !!prev &&
             !prev.isSystem &&
@@ -94,7 +120,7 @@ export function MessageList({ channelId }: Props) {
             new Date(msg.createdAt).getTime() - new Date(prev.createdAt).getTime() < 300000;
           return (
             <MessageItem
-              key={msg.id}
+              key={item.key}
               message={msg}
               isGrouped={isGrouped}
               onReply={setReplyingTo}

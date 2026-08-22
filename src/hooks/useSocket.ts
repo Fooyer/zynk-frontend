@@ -6,7 +6,8 @@ import { useFriendStore } from '../stores/friendStore';
 import { useGroupStore } from '../stores/groupStore';
 import { useUiStore } from '../stores/uiStore';
 import { useUnreadStore } from '../stores/unreadStore';
-import type { Message, TypingEvent, UserStatusEvent } from '../types';
+import { usePollStore } from '../stores/pollStore';
+import type { Message, Poll, TypingEvent, UserStatusEvent } from '../types';
 
 export function useSocket() {
   const addMessage = useChatStore((s) => s.addMessage);
@@ -83,6 +84,10 @@ export function useSocket() {
       if (useGroupStore.getState().activeGroupId === data.groupId) loadMembers(data.groupId);
     });
 
+    // Enquete criada/votada por outro membro do canal
+    socket.on('poll:created', (poll: Poll) => usePollStore.getState().upsertPoll(poll));
+    socket.on('poll:updated', (poll: Poll) => usePollStore.getState().upsertPoll(poll));
+
     socket.on('error', (err: { message: string }) => {
       console.error('[Socket Error]', err.message);
     });
@@ -135,6 +140,8 @@ export function useSocket() {
       socket.off('user:identity-updated');
       socket.off('group:member-joined');
       socket.off('group:member-left');
+      socket.off('poll:created');
+      socket.off('poll:updated');
       socket.off('error');
       socket.off('connect');
       socket.off('disconnect');

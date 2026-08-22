@@ -14,6 +14,8 @@ export interface ReplyTo {
   id: number;
   content: string;
   imageUrl?: string | null;
+  fileUrl?: string | null;
+  fileName?: string | null;
   sender: Pick<User, 'id' | 'username' | 'avatarUrl'>;
 }
 
@@ -21,6 +23,11 @@ export interface Message {
   id: number;
   content: string;
   imageUrl?: string | null;
+  // Anexo genérico (não-imagem) — os quatro campos vêm juntos ou não vêm nenhum.
+  fileUrl?: string | null;
+  fileName?: string | null;
+  fileSize?: number | null;
+  fileMimeType?: string | null;
   replyToId?: number | null;
   replyTo?: ReplyTo | null;
   channelId: number;
@@ -166,6 +173,28 @@ export interface GroupTextChannel {
   position: number;
   ownerId: number;
   createdAt: string;
+}
+
+// ─── Polls (enquetes em canais de servidor) ─────
+
+export interface PollOption {
+  id: number;
+  text: string;
+  position: number;
+  voteCount: number;
+  votedByMe: boolean;
+}
+
+export interface Poll {
+  id: number;
+  channelId: number;
+  question: string;
+  allowMultiple: boolean;
+  closedAt: string | null;
+  createdAt: string;
+  creator: Pick<User, 'id' | 'username' | 'avatarUrl'>;
+  options: PollOption[];
+  totalVotes: number;
 }
 
 // ─── Game Sessions ─────────────────────────────

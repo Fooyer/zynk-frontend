@@ -3,22 +3,28 @@ import { getSocket } from '../../services/socket';
 import { messagesAPI } from '../../services/api';
 import { useChatStore } from '../../stores/chatStore';
 import { alertDialog } from '../../stores/dialogStore';
-import { getUserColor } from '../../utils/formatDate';
+import { getUserColor, formatFileSize } from '../../utils/formatDate';
 import { useEditableContextMenu } from '../../hooks/useEditableContextMenu';
+import { PollComposerModal } from './PollComposerModal';
 
 interface Props {
   channelId: number;
   placeholder?: string;
+  // Enquetes só fazem sentido em canal de servidor — DMChatArea não passa isso.
+  allowPolls?: boolean;
 }
 
-const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-const MAX_SIZE = 5 * 1024 * 1024; // 5 MB
+const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+const MAX_SIZE = 25 * 1024 * 1024; // 25 MB — igual ao limite do backend
 
-export function MessageInput({ channelId, placeholder = 'Envie uma mensagem...' }: Props) {
+export function MessageInput({ channelId, placeholder = 'Envie uma mensagem...', allowPolls }: Props) {
   const [content, setContent] = useState('');
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  // Anexo genérico (não-imagem) — mutuamente exclusivo com imageFile.
+  const [attachedFile, setAttachedFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [showPollComposer, setShowPollComposer] = useState(false);
   const lastTypingEmit = useRef(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -28,13 +34,16 @@ export function MessageInput({ channelId, placeholder = 'Envie uma mensagem...' 
   const setReplyingTo = useChatStore((s) => s.setReplyingTo);
   const composerFocusTick = useChatStore((s) => s.composerFocusTick);
 
-  const clearImage = useCallback(() => {
+  const clearAttachment = useCallback(() => {
     setImageFile(null);
-    if (imagePreview) URL.revokeObjectURL(imagePreview);
-    setImagePreview(null);
+    setAttachedFile(null);
+    setImagePreview((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return null;
+    });
     if (fileInputRef.current) fileInputRef.current.value = '';
     textareaRef.current?.focus();
-  }, [imagePreview]);
+  }, []);
 
   // Sempre que uma resposta é iniciada ou cancelada (banner ✕, Escape, clique
   // em "responder" numa mensagem), o foco volta pro campo de digitação.
@@ -48,39 +57,105 @@ export function MessageInput({ channelId, placeholder = 'Envie uma mensagem...' 
     if (composerFocusTick > 0) textareaRef.current?.focus();
   }, [composerFocusTick]);
 
+  const handleFile = useCallback((file: File) => {
+    if (file.size > MAX_SIZE) {
+      alertDialog('Arquivo muito grande. Máximo 25 MB.', { title: 'Arquivo inválido' })
+        .then(() => textareaRef.current?.focus());
+      return;
+    }
+
+    if (IMAGE_TYPES.includes(file.type)) {
+      setAttachedFile(null);
+      setImageFile(file);
+      setImagePreview((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return URL.createObjectURL(file);
+      });
+    } else {
+      setImageFile(null);
+      setImagePreview((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return null;
+      });
+      setAttachedFile(file);
+    }
+  }, []);
+
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
-    if (!ALLOWED_TYPES.includes(file.type)) {
-      alertDialog('Tipo não suportado. Use JPEG, PNG, GIF ou WebP.', { title: 'Imagem inválida' })
-        .then(() => textareaRef.current?.focus());
-      return;
-    }
-    if (file.size > MAX_SIZE) {
-      alertDialog('Imagem muito grande. Máximo 5 MB.', { title: 'Imagem inválida' })
-        .then(() => textareaRef.current?.focus());
-      return;
-    }
-
-    setImageFile(file);
-    setImagePreview(URL.createObjectURL(file));
+    handleFile(file);
     textareaRef.current?.focus();
   };
 
+  // Ctrl+V com uma imagem (print, imagem copiada de outro app/navegador) ou
+  // qualquer outro arquivo na área de transferência anexa direto.
+  const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (const item of items) {
+      if (item.kind === 'file') {
+        const file = item.getAsFile();
+        if (file) {
+          e.preventDefault();
+          handleFile(file);
+        }
+        break;
+      }
+    }
+  };
+
+  // Envolve a seleção atual (ou insere um bloco vazio, se nada selecionado)
+  // num code fence — preserva indentação/quebras de linha exatamente como
+  // digitadas, sem precisar de nenhuma lib de markdown.
+  const handleInsertCodeBlock = () => {
+    const el = textareaRef.current;
+    if (!el) return;
+    const start = el.selectionStart;
+    const end = el.selectionEnd;
+    const selected = content.slice(start, end);
+    const before = content.slice(0, start);
+    const after = content.slice(end);
+    const needsLeadingNewline = before.length > 0 && !before.endsWith('\n');
+    const needsTrailingNewline = after.length > 0 && !after.startsWith('\n');
+
+    const block = '```\n' + selected + (selected ? '\n' : '') + '```';
+    const insertion = (needsLeadingNewline ? '\n' : '') + block + (needsTrailingNewline ? '\n' : '');
+    const next = before + insertion + after;
+    setContent(next);
+
+    requestAnimationFrame(() => {
+      el.focus();
+      const codeStart = before.length + (needsLeadingNewline ? 1 : 0) + 4; // depois de "```\n"
+      const codeEnd = codeStart + selected.length;
+      el.setSelectionRange(codeStart, codeEnd);
+      el.style.height = 'auto';
+      el.style.height = Math.min(el.scrollHeight, 128) + 'px';
+    });
+  };
+
   const handleSend = useCallback(async () => {
-    if (!content.trim() && !imageFile) return;
+    const attachment = imageFile || attachedFile;
+    if (!content.trim() && !attachment) return;
     if (uploading) return;
 
     let imageUrl: string | undefined;
+    let fileUrl: string | undefined;
+    let fileName: string | undefined;
+    let fileSize: number | undefined;
+    let fileMimeType: string | undefined;
 
-    if (imageFile) {
+    if (attachment) {
       try {
         setUploading(true);
-        const { data } = await messagesAPI.uploadImage(imageFile);
+        const { data } = await messagesAPI.uploadFile(attachment);
         imageUrl = data.imageUrl;
+        fileUrl = data.fileUrl;
+        fileName = data.fileName;
+        fileSize = data.fileSize;
+        fileMimeType = data.fileMimeType;
       } catch {
-        alertDialog('Erro ao enviar imagem. Tente novamente.', { title: 'Falha no envio' })
+        alertDialog('Erro ao enviar arquivo. Tente novamente.', { title: 'Falha no envio' })
           .then(() => textareaRef.current?.focus());
         setUploading(false);
         return;
@@ -94,13 +169,14 @@ export function MessageInput({ channelId, placeholder = 'Envie uma mensagem...' 
       channelId,
       content: content.trim(),
       ...(imageUrl && { imageUrl }),
+      ...(fileUrl && { fileUrl, fileName, fileSize, fileMimeType }),
       ...(replyingTo && { replyToId: replyingTo.id }),
     });
 
     setContent('');
-    clearImage();
+    clearAttachment();
     setReplyingTo(null);
-  }, [content, channelId, imageFile, uploading, clearImage, replyingTo, setReplyingTo]);
+  }, [content, channelId, imageFile, attachedFile, uploading, clearAttachment, replyingTo, setReplyingTo]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -166,7 +242,7 @@ export function MessageInput({ channelId, placeholder = 'Envie uma mensagem...' 
             className="max-h-32 max-w-xs rounded-xl border border-white/[0.08] shadow-panel object-cover"
           />
           <button
-            onClick={clearImage}
+            onClick={clearAttachment}
             className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center text-xs transition-colors"
             aria-label="Remover imagem"
           >
@@ -175,33 +251,84 @@ export function MessageInput({ channelId, placeholder = 'Envie uma mensagem...' 
         </div>
       )}
 
+      {/* Preview do arquivo genérico (não-imagem) */}
+      {attachedFile && (
+        <div className="mb-2 inline-flex items-center gap-2 pl-3 pr-2 py-2 rounded-xl bg-white/[0.04] border border-white/[0.08]">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-surface-400 flex-shrink-0">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+            <polyline points="14 2 14 8 20 8" />
+          </svg>
+          <div className="min-w-0">
+            <p className="text-xs font-medium text-surface-200 truncate max-w-[220px]">{attachedFile.name}</p>
+            <p className="text-[11px] text-surface-500">{formatFileSize(attachedFile.size)}</p>
+          </div>
+          <button
+            onClick={clearAttachment}
+            className="ml-1 w-6 h-6 flex-shrink-0 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center text-xs transition-colors"
+            aria-label="Remover arquivo"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       <div className="flex items-end gap-2 bg-surface-800/70 rounded-2xl px-4 py-2 border border-white/[0.08] shadow-panel focus-within:border-accent-500/50 focus-within:shadow-elevated transition-all">
-        {/* Botão de anexar imagem */}
+        {/* Botão de anexar arquivo (qualquer tipo) */}
         <button
           onClick={() => fileInputRef.current?.click()}
           disabled={uploading}
           className="p-2 rounded-lg text-surface-400 hover:text-accent-400 hover:bg-accent-500/10 disabled:opacity-30 transition-all flex-shrink-0"
-          aria-label="Anexar imagem"
+          aria-label="Anexar arquivo"
+          title="Anexar arquivo"
         >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-            <circle cx="8.5" cy="8.5" r="1.5" />
-            <polyline points="21 15 16 10 5 21" />
+            <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
           </svg>
         </button>
         <input
           ref={fileInputRef}
           type="file"
-          accept="image/jpeg,image/png,image/gif,image/webp"
           onChange={handleFileSelect}
           className="hidden"
         />
+
+        {/* Bloco de código */}
+        <button
+          onClick={handleInsertCodeBlock}
+          disabled={uploading}
+          className="p-2 rounded-lg text-surface-400 hover:text-accent-400 hover:bg-accent-500/10 disabled:opacity-30 transition-all flex-shrink-0"
+          aria-label="Inserir bloco de código"
+          title="Inserir bloco de código"
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="16 18 22 12 16 6" />
+            <polyline points="8 6 2 12 8 18" />
+          </svg>
+        </button>
+
+        {/* Enquete — só em canais de servidor */}
+        {allowPolls && (
+          <button
+            onClick={() => setShowPollComposer(true)}
+            disabled={uploading}
+            className="p-2 rounded-lg text-surface-400 hover:text-accent-400 hover:bg-accent-500/10 disabled:opacity-30 transition-all flex-shrink-0"
+            aria-label="Criar enquete"
+            title="Criar enquete"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="18" y1="20" x2="18" y2="10" />
+              <line x1="12" y1="20" x2="12" y2="4" />
+              <line x1="6" y1="20" x2="6" y2="14" />
+            </svg>
+          </button>
+        )}
 
         <textarea
           ref={textareaRef}
           value={content}
           onChange={handleChange}
           onKeyDown={handleKeyDown}
+          onPaste={handlePaste}
           onContextMenu={handleEditContextMenu}
           rows={1}
           placeholder={replyingTo ? `Responder a ${replyingTo.sender.username}...` : placeholder}
@@ -216,7 +343,7 @@ export function MessageInput({ channelId, placeholder = 'Envie uma mensagem...' 
 
         <button
           onClick={handleSend}
-          disabled={(!content.trim() && !imageFile) || uploading}
+          disabled={(!content.trim() && !imageFile && !attachedFile) || uploading}
           className="p-2 rounded-lg text-accent-400 hover:bg-accent-500/10 disabled:opacity-30 disabled:cursor-not-allowed transition-all flex-shrink-0"
           aria-label="Enviar"
         >
@@ -231,6 +358,10 @@ export function MessageInput({ channelId, placeholder = 'Envie uma mensagem...' 
           )}
         </button>
       </div>
+
+      {showPollComposer && (
+        <PollComposerModal channelId={channelId} onClose={() => setShowPollComposer(false)} />
+      )}
     </div>
   );
 }

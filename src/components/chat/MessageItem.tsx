@@ -1,5 +1,5 @@
 import { memo, useEffect, useRef, useState } from 'react';
-import { formatMessageDate, getInitials, getUserColor } from '../../utils/formatDate';
+import { formatMessageDate, getInitials, getUserColor, formatFileSize } from '../../utils/formatDate';
 import { getSocket } from '../../services/socket';
 import { useAuthStore } from '../../stores/authStore';
 import { useChatStore } from '../../stores/chatStore';
@@ -84,8 +84,107 @@ function MessageMenuItems({ canCopy, canEdit, canDelete, onReply, onCopy, onEdit
   );
 }
 
-function MessageContent({ content, imageUrl }: { content: string; imageUrl?: string | null }) {
+function FileChip({ fileUrl, fileName, fileSize }: { fileUrl: string; fileName: string; fileSize?: number | null }) {
+  return (
+    <a
+      href={`${API_URL}${fileUrl}`}
+      target="_blank"
+      rel="noopener noreferrer"
+      download={fileName}
+      className="mt-1 flex items-center gap-2 pl-3 pr-3 py-2 rounded-xl bg-white/[0.04] border border-white/[0.08] hover:bg-white/[0.07] transition-colors max-w-xs"
+    >
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-surface-400 flex-shrink-0">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+        <polyline points="14 2 14 8 20 8" />
+      </svg>
+      <div className="min-w-0 flex-1">
+        <p className="text-xs font-medium text-surface-200 truncate">{fileName}</p>
+        {fileSize != null && <p className="text-[11px] text-surface-500">{formatFileSize(fileSize)}</p>}
+      </div>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-surface-500 flex-shrink-0">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+        <polyline points="7 10 12 15 17 10" />
+        <line x1="12" y1="15" x2="12" y2="3" />
+      </svg>
+    </a>
+  );
+}
+
+function CodeBlock({ code, lang }: { code: string; lang: string }) {
+  const lines = code.split('\n');
+  // Blocos curtos já vêm abertos — só os longos começam retraídos, pra não
+  // esconder um trecho de 3 linhas atrás de um clique extra à toa.
+  const [collapsed, setCollapsed] = useState(lines.length > 12);
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(code).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    }).catch(() => {});
+  };
+
+  return (
+    <div className="mt-1.5 rounded-xl border border-white/[0.08] bg-surface-950/60 overflow-hidden max-w-full">
+      <div className="flex items-center justify-between px-3 py-1.5 bg-white/[0.03] border-b border-white/[0.06]">
+        <button
+          onClick={() => setCollapsed((v) => !v)}
+          className="flex items-center gap-1.5 text-xs text-surface-400 hover:text-surface-200 transition-colors"
+        >
+          <svg
+            width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+            className={`transition-transform ${collapsed ? '-rotate-90' : ''}`}
+          >
+            <polyline points="6 9 12 15 18 9" />
+          </svg>
+          {lang || 'código'} · {lines.length} {lines.length === 1 ? 'linha' : 'linhas'}
+        </button>
+        <button onClick={handleCopy} className="text-xs text-surface-500 hover:text-surface-200 transition-colors">
+          {copied ? 'Copiado!' : 'Copiar'}
+        </button>
+      </div>
+      {!collapsed && (
+        <pre className="px-3 py-2 overflow-x-auto text-xs leading-relaxed text-surface-200 font-mono whitespace-pre">
+          <code>{code}</code>
+        </pre>
+      )}
+    </div>
+  );
+}
+
+type ContentPart = { type: 'text'; value: string } | { type: 'code'; lang: string; value: string };
+
+// Divide o conteúdo em texto normal e blocos ```code``` — preserva
+// indentação/quebras de linha exatamente como digitadas dentro do fence,
+// sem depender de nenhuma lib de markdown.
+function parseContent(content: string): ContentPart[] {
+  const parts: ContentPart[] = [];
+  const regex = /```(\w*)\n?([\s\S]*?)```/g;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = regex.exec(content))) {
+    if (match.index > lastIndex) {
+      parts.push({ type: 'text', value: content.slice(lastIndex, match.index) });
+    }
+    parts.push({ type: 'code', lang: match[1], value: match[2].replace(/\n$/, '') });
+    lastIndex = regex.lastIndex;
+  }
+  if (lastIndex < content.length) {
+    parts.push({ type: 'text', value: content.slice(lastIndex) });
+  }
+  return parts;
+}
+
+function MessageContent({ content, imageUrl, fileUrl, fileName, fileSize }: {
+  content: string;
+  imageUrl?: string | null;
+  fileUrl?: string | null;
+  fileName?: string | null;
+  fileSize?: number | null;
+}) {
   const [expanded, setExpanded] = useState(false);
+  const parts = content ? parseContent(content) : [];
 
   return (
     <>
@@ -100,10 +199,17 @@ function MessageContent({ content, imageUrl }: { content: string; imageUrl?: str
           loading="lazy"
         />
       )}
-      {content && (
-        <p className="text-sm text-surface-200 leading-relaxed break-words">
-          {content}
-        </p>
+      {fileUrl && fileName && <FileChip fileUrl={fileUrl} fileName={fileName} fileSize={fileSize} />}
+      {parts.map((part, i) =>
+        part.type === 'code' ? (
+          <CodeBlock key={i} code={part.value} lang={part.lang} />
+        ) : (
+          part.value.trim() && (
+            <p key={i} className="text-sm text-surface-200 leading-relaxed break-words whitespace-pre-wrap">
+              {part.value.trim()}
+            </p>
+          )
+        ),
       )}
     </>
   );
@@ -119,7 +225,11 @@ function ReplyBanner({ replyTo }: { replyTo: NonNullable<Message['replyTo']> }) 
           {replyTo.sender.username}
         </span>
         <p className="text-xs text-surface-400 truncate max-w-md">
-          {replyTo.imageUrl && !replyTo.content ? '📷 Imagem' : replyTo.content}
+          {!replyTo.content && replyTo.imageUrl
+            ? '📷 Imagem'
+            : !replyTo.content && replyTo.fileUrl
+              ? `📎 ${replyTo.fileName || 'Arquivo'}`
+              : replyTo.content}
         </p>
       </div>
       {replyTo.imageUrl && (
@@ -201,7 +311,7 @@ function EditForm({ initialValue, onSave, onCancel }: {
 }
 
 export const MessageItem = memo(function MessageItem({ message, isGrouped, onReply }: Props) {
-  const { sender, content, imageUrl, replyTo, createdAt, editedAt } = message;
+  const { sender, content, imageUrl, fileUrl, fileName, fileSize, replyTo, createdAt, editedAt } = message;
   const color = getUserColor(sender.username);
   const currentUser = useAuthStore((s) => s.user);
 
@@ -271,7 +381,7 @@ export const MessageItem = memo(function MessageItem({ message, isGrouped, onRep
           {isEditing ? (
             <EditForm initialValue={content} onSave={handleSaveEdit} onCancel={handleCancelEdit} />
           ) : (
-            <MessageContent content={content} imageUrl={imageUrl} />
+            <MessageContent content={content} imageUrl={imageUrl} fileUrl={fileUrl} fileName={fileName} fileSize={fileSize} />
           )}
         </div>
         <ReplyButton onClick={() => onReply(message)} />
@@ -308,7 +418,7 @@ export const MessageItem = memo(function MessageItem({ message, isGrouped, onRep
         {isEditing ? (
           <EditForm initialValue={content} onSave={handleSaveEdit} onCancel={() => setIsEditing(false)} />
         ) : (
-          <MessageContent content={content} imageUrl={imageUrl} />
+          <MessageContent content={content} imageUrl={imageUrl} fileUrl={fileUrl} fileName={fileName} fileSize={fileSize} />
         )}
       </div>
       <ReplyButton onClick={() => onReply(message)} />

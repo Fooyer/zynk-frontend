@@ -56,13 +56,28 @@ export const messagesAPI = {
     api.get(`/channels/${channelId}/messages`, {
       params: { cursor, limit },
     }),
-  uploadImage: (file: File) => {
+  // Imagem retorna { imageUrl }; qualquer outro arquivo retorna
+  // { fileUrl, fileName, fileSize, fileMimeType } — quem decide é o backend
+  // (baseado no mimetype), então o retorno é uma união dos dois formatos.
+  uploadFile: (file: File) => {
     const formData = new FormData();
     formData.append('image', file);
-    return api.post<{ imageUrl: string }>('/messages/upload', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    });
+    return api.post<{ imageUrl?: string; fileUrl?: string; fileName?: string; fileSize?: number; fileMimeType?: string }>(
+      '/messages/upload',
+      formData,
+      { headers: { 'Content-Type': 'multipart/form-data' } },
+    );
   },
+};
+
+// ─── Polls ──────────────────────────────────────
+
+export const pollsAPI = {
+  getByChannel: (channelId: number) => api.get(`/channels/${channelId}/polls`),
+  create: (channelId: number, data: { question: string; options: string[]; allowMultiple?: boolean }) =>
+    api.post(`/channels/${channelId}/polls`, data),
+  vote: (pollId: number, optionId: number) => api.post(`/polls/${pollId}/vote`, { optionId }),
+  close: (pollId: number) => api.post(`/polls/${pollId}/close`),
 };
 
 // ─── Friends ────────────────────────────────────

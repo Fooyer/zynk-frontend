@@ -46,28 +46,31 @@ function CallPanel({ dm, callStatus }: { dm: DmChannel; callStatus: 'calling' | 
   const isGame = mode === 'game';
   const isMuted = useCallStore((s) => s.isMuted);
   const isScreenSharing = useCallStore((s) => s.isScreenSharing);
+  const isSharingAudio = useCallStore((s) => s.isSharingAudio);
   const remoteHasScreen = useCallStore((s) => s.remoteHasScreen);
   const volume = useCallStore((s) => s.volume);
   const setVolume = useCallStore((s) => s.setVolume);
   const videoRef = useRef<HTMLVideoElement>(null);
   const expandedVideoRef = useRef<HTMLVideoElement>(null);
   const [screenExpanded, setScreenExpanded] = useState(false);
-  const [callDuration, setCallDuration] = useState(0);
+  const [cinemaMode, setCinemaMode] = useState(false);
+  const callStartedAt = useCallStore((s) => s.callStartedAt);
+  const [, forceTick] = useState(0);
   const [localSpeaking, setLocalSpeaking] = useState(false);
   const [remoteSpeaking, setRemoteSpeaking] = useState(false);
-  const callStartRef = useRef(0);
 
   const isCalling = callStatus === 'calling';
 
-  // Timer de duração da chamada
+  // Duração vem do timestamp da store, não de um estado local — este painel
+  // desmonta/remonta quando a call vira barra flutuante e volta, e um estado
+  // local reiniciaria o cronômetro do zero nesse momento.
   useEffect(() => {
-    if (isCalling) { setCallDuration(0); return; }
-    callStartRef.current = Date.now();
-    const interval = setInterval(() => {
-      setCallDuration(Math.floor((Date.now() - callStartRef.current) / 1000));
-    }, 1000);
+    if (isCalling || !callStartedAt) return;
+    const interval = setInterval(() => forceTick((t) => t + 1), 1000);
     return () => clearInterval(interval);
-  }, [isCalling]);
+  }, [isCalling, callStartedAt]);
+
+  const callDuration = callStartedAt ? Math.floor((Date.now() - callStartedAt) / 1000) : 0;
 
   // Detecção de fala via AnalyserNode
   useEffect(() => {
@@ -118,17 +121,18 @@ function CallPanel({ dm, callStatus }: { dm: DmChannel; callStatus: 'calling' | 
     if (screenExpanded && expandedVideoRef.current) { expandedVideoRef.current.srcObject = remoteScreenStreamRef.current; expandedVideoRef.current.play().catch(() => {}); }
     if (!screenExpanded && videoRef.current) { videoRef.current.srcObject = remoteScreenStreamRef.current; videoRef.current.play().catch(() => {}); }
   }, [screenExpanded]);
-  useEffect(() => { if (!remoteHasScreen) setScreenExpanded(false); }, [remoteHasScreen]);
+  useEffect(() => { if (!remoteHasScreen) { setScreenExpanded(false); setCinemaMode(false); } }, [remoteHasScreen]);
   useEffect(() => {
-    if (!screenExpanded) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setScreenExpanded(false); };
+    if (!screenExpanded && !cinemaMode) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { setScreenExpanded(false); setCinemaMode(false); } };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [screenExpanded]);
+  }, [screenExpanded, cinemaMode]);
 
   const handleToggleMute = () => window.dispatchEvent(new CustomEvent('call:toggle-mute'));
   const handleHangup = () => window.dispatchEvent(new CustomEvent('call:hangup'));
   const handleScreenShare = () => window.dispatchEvent(new CustomEvent('call:screen-share-toggle'));
+  const handleAudioShare = () => window.dispatchEvent(new CustomEvent('call:audio-share-toggle'));
 
   // ─── User card component ───
   const UserCard = ({ username, avatarUrl, color, speaking, muted, label }: {
@@ -162,14 +166,22 @@ function CallPanel({ dm, callStatus }: { dm: DmChannel; callStatus: 'calling' | 
       </div>
       <div className="text-center">
         <p className="text-sm font-medium text-surface-200 leading-tight">{username}</p>
-        {label && <p className="text-[11px] text-surface-500 mt-0.5">{label}</p>}
+        {/* Sempre renderizado (mesmo sem label) pra reservar a altura da
+            linha — senão mutar/desmutar muda a altura do card e empurra a
+            barra de controles abaixo pra cima/baixo. */}
+        <p className={`text-[11px] mt-0.5 ${label ? 'text-surface-500' : 'invisible'}`}>{label || ' '}</p>
       </div>
     </div>
   );
 
   return (
     <>
-      <div className={`bg-accent-900 border-b flex-shrink-0 ${isGame ? 'border-warning/40' : 'border-white/[0.06]'}`}>
+      {/* Véu escurecendo o resto do app no modo cinema — o painel abaixo
+          fica com z-index acima dele, só o chat por trás é que escurece */}
+      {cinemaMode && (
+        <div className="fixed inset-0 z-[9970] bg-black/85" onClick={() => setCinemaMode(false)} />
+      )}
+      <div className={`bg-accent-900 border-b flex-shrink-0 relative ${cinemaMode ? 'z-[9971]' : ''} ${isGame ? 'border-warning/40' : 'border-white/[0.06]'}`}>
         {isCalling ? (
           /* ─── Estado: Chamando ─── */
           <div className="pt-14 pb-8 flex flex-col items-center gap-4">
@@ -268,15 +280,31 @@ function CallPanel({ dm, callStatus }: { dm: DmChannel; callStatus: 'calling' | 
               </button>
 
               {/* Screen share */}
-              <button onClick={handleScreenShare} title={isScreenSharing ? 'Parar compartilhamento' : 'Compartilhar tela'}
+              <button onClick={handleScreenShare} disabled={isSharingAudio}
+                title={isSharingAudio ? 'Pare o compartilhamento de áudio primeiro' : isScreenSharing ? 'Parar compartilhamento' : 'Compartilhar tela'}
                 className={`p-2.5 rounded-full transition-colors ${
-                  isScreenSharing ? 'bg-success/20 text-success hover:bg-success/30' : 'bg-white/[0.06] text-surface-300 hover:bg-white/[0.12] hover:text-surface-100'
+                  isSharingAudio ? 'opacity-30 cursor-not-allowed bg-white/[0.06] text-surface-300'
+                  : isScreenSharing ? 'bg-success/20 text-success hover:bg-success/30' : 'bg-white/[0.06] text-surface-300 hover:bg-white/[0.12] hover:text-surface-100'
                 }`}
               >
                 <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <rect x="2" y="3" width="20" height="14" rx="2" />
                   <polyline points="8 21 12 17 16 21" />
                   <line x1="12" y1="17" x2="12" y2="21" />
+                </svg>
+              </button>
+
+              {/* Compartilhar apenas o áudio (sem vídeo) */}
+              <button onClick={handleAudioShare} disabled={isScreenSharing}
+                title={isScreenSharing ? 'Pare o compartilhamento de tela primeiro' : isSharingAudio ? 'Parar compartilhamento de áudio' : 'Compartilhar apenas o áudio'}
+                className={`p-2.5 rounded-full transition-colors ${
+                  isScreenSharing ? 'opacity-30 cursor-not-allowed bg-white/[0.06] text-surface-300'
+                  : isSharingAudio ? 'bg-success/20 text-success hover:bg-success/30' : 'bg-white/[0.06] text-surface-300 hover:bg-white/[0.12] hover:text-surface-100'
+                }`}
+              >
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M3 18v-6a9 9 0 0 1 18 0v6" />
+                  <path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z" />
                 </svg>
               </button>
 
@@ -310,12 +338,23 @@ function CallPanel({ dm, callStatus }: { dm: DmChannel; callStatus: 'calling' | 
           </div>
         )}
 
-        {/* Tela compartilhada remotamente — inline */}
+        {/* Tela compartilhada remotamente — inline (ou em modo cinema,
+            maior e com o resto do app escurecido por trás) */}
         {!isCalling && remoteHasScreen && !screenExpanded && (
-          <div className="bg-black border-t border-white/[0.05] max-h-[60vh] flex items-center justify-center relative group">
-            <video ref={videoRef} autoPlay muted className="w-full max-h-[60vh] object-contain cursor-pointer" onDoubleClick={() => setScreenExpanded(true)} />
+          <div className={`bg-black border-t border-white/[0.05] flex items-center justify-center relative group ${cinemaMode ? 'max-h-[80vh]' : 'max-h-[60vh]'}`}>
+            <video ref={videoRef} autoPlay muted className={`w-full object-contain cursor-pointer ${cinemaMode ? 'max-h-[80vh]' : 'max-h-[60vh]'}`} onDoubleClick={() => setScreenExpanded(true)} />
             <div className="absolute top-2 right-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-              <button onClick={() => setScreenExpanded(true)} title="Expandir tela"
+              <button onClick={() => setCinemaMode((v) => !v)} title={cinemaMode ? 'Sair do modo cinema' : 'Modo cinema'}
+                className={`p-1.5 rounded backdrop-blur-sm transition-colors ${cinemaMode ? 'bg-accent-600 text-white' : 'bg-black/60 text-white hover:bg-black/80'}`}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="2" y="3" width="20" height="18" rx="2" />
+                  <line x1="7" y1="3" x2="7" y2="21" /><line x1="17" y1="3" x2="17" y2="21" />
+                  <line x1="2" y1="8" x2="7" y2="8" /><line x1="2" y1="16" x2="7" y2="16" />
+                  <line x1="17" y1="8" x2="22" y2="8" /><line x1="17" y1="16" x2="22" y2="16" />
+                </svg>
+              </button>
+              <button onClick={() => { setCinemaMode(false); setScreenExpanded(true); }} title="Expandir tela"
                 className="p-1.5 rounded bg-black/60 text-white hover:bg-black/80 backdrop-blur-sm transition-colors"
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -332,6 +371,12 @@ function CallPanel({ dm, callStatus }: { dm: DmChannel; callStatus: 'calling' | 
           <div className="px-4 py-2 border-t border-white/[0.05] flex items-center gap-2 text-xs text-success">
             <div className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
             Você está compartilhando a tela
+          </div>
+        )}
+        {!isCalling && isSharingAudio && (
+          <div className="px-4 py-2 border-t border-white/[0.05] flex items-center gap-2 text-xs text-success">
+            <div className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
+            Você está compartilhando apenas o áudio
           </div>
         )}
       </div>
@@ -384,11 +429,19 @@ function CallPanel({ dm, callStatus }: { dm: DmChannel; callStatus: 'calling' | 
                 </svg>
               )}
             </button>
-            <button onClick={handleScreenShare} title={isScreenSharing ? 'Parar compartilhamento' : 'Compartilhar tela'}
-              className={`p-3 rounded-full transition-colors ${isScreenSharing ? 'bg-success text-white' : 'bg-white/10 text-white hover:bg-white/20'}`}
+            <button onClick={handleScreenShare} disabled={isSharingAudio} title={isScreenSharing ? 'Parar compartilhamento' : 'Compartilhar tela'}
+              className={`p-3 rounded-full transition-colors ${isSharingAudio ? 'opacity-30 cursor-not-allowed bg-white/10 text-white' : isScreenSharing ? 'bg-success text-white' : 'bg-white/10 text-white hover:bg-white/20'}`}
             >
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <rect x="2" y="3" width="20" height="14" rx="2" /><polyline points="8 21 12 17 16 21" /><line x1="12" y1="17" x2="12" y2="21" />
+              </svg>
+            </button>
+            <button onClick={handleAudioShare} disabled={isScreenSharing} title={isSharingAudio ? 'Parar compartilhamento de áudio' : 'Compartilhar apenas o áudio'}
+              className={`p-3 rounded-full transition-colors ${isScreenSharing ? 'opacity-30 cursor-not-allowed bg-white/10 text-white' : isSharingAudio ? 'bg-success text-white' : 'bg-white/10 text-white hover:bg-white/20'}`}
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 18v-6a9 9 0 0 1 18 0v6" />
+                <path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z" />
               </svg>
             </button>
             <button onClick={() => setScreenExpanded(false)} title="Minimizar"
