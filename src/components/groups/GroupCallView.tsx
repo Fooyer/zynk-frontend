@@ -3,6 +3,9 @@ import { useAuthStore } from '../../stores/authStore';
 import { useLayoutStore } from '../../stores/layoutStore';
 import { getInitials, getUserColor } from '../../utils/formatDate';
 import { ScreenPicker } from '../call/ScreenPicker';
+import { WatchTogetherPlayer } from './WatchTogetherPlayer';
+import { WatchTogetherModal } from './WatchTogetherModal';
+import { WatchQueuePanel } from './WatchQueuePanel';
 import type { useVoiceRoom } from '../../hooks/useVoiceRoom';
 import type { ScreenSource, VoiceParticipant } from '../../types';
 
@@ -129,6 +132,8 @@ export function GroupCallView({ voice }: Props) {
   const currentUser = useAuthStore((s) => s.user);
   const [focusedUserId, setFocusedUserId] = useState<number | null>(null);
   const [showPicker, setShowPicker] = useState(false);
+  const [watchModalMode, setWatchModalMode] = useState<'add' | 'swap' | null>(null);
+  const [showQueuePanel, setShowQueuePanel] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [cinemaMode, setCinemaMode] = useState(false);
   const focusedVideoRef = useRef<HTMLVideoElement>(null);
@@ -159,16 +164,20 @@ export function GroupCallView({ voice }: Props) {
     return () => document.removeEventListener('fullscreenchange', onFsChange);
   }, []);
 
-  // Sai da tela cheia sozinho se a tela em foco parar de ser compartilhada
-  // (senão ficava preso em tela cheia mostrando um vídeo parado/preto).
+  // Sai da tela cheia sozinho se a tela em foco parar de ser compartilhada E
+  // não tiver um "assistir junto" tomando o lugar dela (mesma área/ref serve
+  // pros dois — só um está ativo por vez).
   useEffect(() => {
-    if (!focusedStream && document.fullscreenElement === focusedContainerRef.current) {
+    if (!focusedStream && !voice.watchState && document.fullscreenElement === focusedContainerRef.current) {
       document.exitFullscreen().catch(() => {});
     }
-  }, [focusedStream]);
+  }, [focusedStream, voice.watchState]);
 
-  // Sai do modo cinema junto se a tela em foco parar de ser compartilhada
-  useEffect(() => { if (!focusedStream) setCinemaMode(false); }, [focusedStream]);
+  // Sai do modo cinema/teatro junto se nem tela compartilhada nem "assistir
+  // junto" estiverem mais ativos.
+  useEffect(() => {
+    if (!focusedStream && !voice.watchState) setCinemaMode(false);
+  }, [focusedStream, voice.watchState]);
 
   // Reflete o modo cinema local no layout global — recolhe nav/membros na
   // versão menor e esconde a sidebar de canais, restaurando o estado de
@@ -204,6 +213,12 @@ export function GroupCallView({ voice }: Props) {
   const handlePickerSelect = (source: ScreenSource) => {
     setShowPicker(false);
     voice.startScreenShare(source.id);
+  };
+
+  // Passa o videoId atual como referência — o servidor usa isso pra ignorar
+  // um "pular" tardio/duplicado se o vídeo já tiver avançado por outro meio.
+  const handleSkip = () => {
+    if (voice.watchState) voice.playNextInQueue(voice.watchState.videoId);
   };
 
   const nameFor = (uid: number) => vc.participants.find((p) => p.userId === uid)?.username ?? 'Alguém';
@@ -349,6 +364,93 @@ export function GroupCallView({ voice }: Props) {
               </div>
             )}
           </div>
+        ) : voice.watchState ? (
+          <div className="w-full h-full flex flex-col gap-4">
+            <div
+              ref={focusedContainerRef}
+              className={`flex-1 min-h-0 overflow-hidden bg-black relative group/watch ${isFullscreen || cinemaMode ? '' : 'rounded-2xl'}`}
+            >
+              <WatchTogetherPlayer
+                state={voice.watchState}
+                onPlay={voice.playVideo}
+                onPause={voice.pauseVideo}
+                onSeek={voice.seekVideo}
+                onEnded={(endedVideoId) => voice.playNextInQueue(endedVideoId)}
+                onSkip={handleSkip}
+                isTheater={cinemaMode}
+                onToggleTheater={() => setCinemaMode((v) => !v)}
+                isFullscreen={isFullscreen}
+                onToggleFullscreen={toggleFullscreen}
+              />
+
+              <div className="absolute top-0 inset-x-0 z-10 flex items-center justify-between px-4 py-3 bg-gradient-to-b from-black/80 to-transparent opacity-0 group-hover/watch:opacity-100 transition-opacity">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-danger animate-pulse" />
+                  <span className="text-sm font-medium text-white">Assistindo junto — YouTube</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setShowQueuePanel((v) => !v)}
+                    title="Fila de vídeos"
+                    className={`relative p-2 rounded-lg backdrop-blur-sm transition-colors ${showQueuePanel ? 'bg-accent-600 text-white' : 'bg-white/10 text-white hover:bg-white/20'}`}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" /><line x1="8" y1="18" x2="21" y2="18" />
+                      <line x1="3" y1="6" x2="3.01" y2="6" /><line x1="3" y1="12" x2="3.01" y2="12" /><line x1="3" y1="18" x2="3.01" y2="18" />
+                    </svg>
+                    {voice.watchState.queue.length > 0 && (
+                      <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-accent-500 text-white text-[10px] font-bold flex items-center justify-center">
+                        {voice.watchState.queue.length}
+                      </span>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => setWatchModalMode('swap')}
+                    title="Trocar vídeo"
+                    className="p-2 rounded-lg bg-white/10 text-white hover:bg-white/20 backdrop-blur-sm transition-colors"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="17 1 21 5 17 9" /><path d="M3 11V9a4 4 0 0 1 4-4h14" />
+                      <polyline points="7 23 3 19 7 15" /><path d="M21 13v2a4 4 0 0 1-4 4H3" />
+                    </svg>
+                  </button>
+                  <button
+                    onClick={voice.stopWatch}
+                    title="Parar de assistir junto"
+                    className="p-2 rounded-lg bg-danger text-white hover:bg-red-700 transition-colors"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+
+              {showQueuePanel && (
+                <WatchQueuePanel
+                  queue={voice.watchState.queue}
+                  onRemove={voice.removeFromQueue}
+                  onAdd={() => setWatchModalMode('add')}
+                  onSkip={handleSkip}
+                  onClose={() => setShowQueuePanel(false)}
+                />
+              )}
+            </div>
+
+            {vc.participants.length > 1 && !cinemaMode && (
+              <div className="flex-shrink-0 flex items-center gap-3 overflow-x-auto pb-1">
+                {vc.participants.map((p) => (
+                  <ParticipantChip
+                    key={p.userId}
+                    participant={p}
+                    isSharing={voice.screenStreams.has(p.userId)}
+                    isFocused={false}
+                    onClick={() => {}}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
         ) : (
           <div
             className="grid gap-x-8 gap-y-6 justify-center content-center"
@@ -402,6 +504,17 @@ export function GroupCallView({ voice }: Props) {
           </svg>
         </ControlButton>
 
+        <ControlButton
+          onClick={() => setWatchModalMode('add')}
+          title={voice.watchState ? 'Adicionar à fila' : 'Assistir YouTube junto'}
+          active={!!voice.watchState}
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="2" y="4" width="20" height="16" rx="3" />
+            <polygon points="10 9 15 12 10 15" fill="currentColor" stroke="none" />
+          </svg>
+        </ControlButton>
+
         <ControlButton onClick={voice.leave} title="Sair da call" danger>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
             <path d="M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1-9.4 0-17-7.6-17-17 0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.3 0 .7-.2 1L6.6 10.8z" />
@@ -411,6 +524,13 @@ export function GroupCallView({ voice }: Props) {
       )}
 
       {showPicker && <ScreenPicker onSelect={handlePickerSelect} onCancel={() => setShowPicker(false)} />}
+      {watchModalMode && (
+        <WatchTogetherModal
+          mode={watchModalMode}
+          onClose={() => setWatchModalMode(null)}
+          onSubmit={(videoId) => (watchModalMode === 'swap' ? voice.loadVideo(videoId) : voice.addToQueue(videoId))}
+        />
+      )}
     </div>
   );
 }

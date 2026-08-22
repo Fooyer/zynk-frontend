@@ -56,7 +56,8 @@ export const useAuthStore = create<AuthState>((set) => ({
     localStorage.removeItem('token');
     disconnectSocket();
     // Limpa todos os stores para não vazar dados entre contas
-    useChatStore.setState({ messagesByChannel: {}, cursors: {}, hasMore: {}, typingUsers: {} });
+    useChatStore.getState().clearMessages();
+    useChatStore.setState({ typingUsers: {} });
     useFriendStore.setState({ friends: [], requests: [], sent: [], dmChannels: [], activeDmChannelId: null, error: null });
     useUiStore.setState({ view: 'home' });
     set({ user: null, token: null });

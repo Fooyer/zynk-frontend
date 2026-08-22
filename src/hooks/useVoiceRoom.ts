@@ -16,7 +16,7 @@ import {
   playScreenShareStartSound,
   playScreenShareStopSound,
 } from '../services/callSounds';
-import type { CallMode, VoiceChannel, VoiceParticipant } from '../types';
+import type { CallMode, VoiceChannel, VoiceParticipant, WatchTogetherState } from '../types';
 
 interface ScreenSenders {
   video: RTCRtpSender;
@@ -42,6 +42,9 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
   const [isScreenSharing, setIsScreenSharing] = useState(false);
   const [isSharingAudio, setIsSharingAudio] = useState(false);
   const [screenStreams, setScreenStreams] = useState<Map<number, MediaStream>>(new Map());
+  // "Assistir junto" (YouTube) — autoritativo no servidor, null quando não
+  // há sessão ativa no canal de voz conectado.
+  const [watchState, setWatchState] = useState<WatchTogetherState | null>(null);
   // "Silenciar localmente" — só afeta o que EU escuto de alguém, não é
   // broadcast pro roster (diferente do isMuted, que é o próprio participante
   // se mutando pra todo mundo).
@@ -162,6 +165,19 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
     };
     socket.on('channel:renamed', onChannelRenamed);
     return () => { socket.off('channel:renamed', onChannelRenamed); };
+  }, []);
+
+  // Socket: estado do "assistir junto" (carregar vídeo, play/pause/seek,
+  // parar) — autoritativo no servidor, chega tanto pra quem disparou a ação
+  // (eco, aplicar é um no-op) quanto pra todo mundo mais na call.
+  useEffect(() => {
+    const socket = getSocket();
+    const onWatchState = (data: { voiceChannelId: number; state: WatchTogetherState | null }) => {
+      if (data.voiceChannelId !== activeVcIdRef.current) return;
+      setWatchState(data.state);
+    };
+    socket.on('watch:state', onWatchState);
+    return () => { socket.off('watch:state', onWatchState); };
   }, []);
 
   const addScreenStream = (uid: number, stream: MediaStream) => {
@@ -380,6 +396,7 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
     setConnectedVc(null);
     setIsMuted(false);
     setLocallyMutedIds(new Set());
+    setWatchState(null);
     activeModeRef.current = 'normal';
   };
 
@@ -566,6 +583,85 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
     playScreenShareStopSound();
   };
 
+  /**
+   * "Assistir junto" (YouTube) — o estado de verdade fica no servidor
+   * (watchState acima só reflete o último `watch:state` recebido); estas
+   * funções só emitem a intenção, sem otimismo local, pra nunca divergir do
+   * que o servidor manda pro resto da call.
+   */
+  const loadVideo = (videoId: string) => {
+    if (!activeVcIdRef.current) return;
+    getSocket().emit('watch:load', {
+      voiceChannelId: activeVcIdRef.current,
+      groupChannelId: connectedGroupChannelIdRef.current,
+      videoId,
+    });
+  };
+
+  const playVideo = (positionSec: number) => {
+    if (!activeVcIdRef.current) return;
+    getSocket().emit('watch:play', {
+      voiceChannelId: activeVcIdRef.current,
+      groupChannelId: connectedGroupChannelIdRef.current,
+      positionSec,
+    });
+  };
+
+  const pauseVideo = (positionSec: number) => {
+    if (!activeVcIdRef.current) return;
+    getSocket().emit('watch:pause', {
+      voiceChannelId: activeVcIdRef.current,
+      groupChannelId: connectedGroupChannelIdRef.current,
+      positionSec,
+    });
+  };
+
+  const seekVideo = (positionSec: number) => {
+    if (!activeVcIdRef.current) return;
+    getSocket().emit('watch:seek', {
+      voiceChannelId: activeVcIdRef.current,
+      groupChannelId: connectedGroupChannelIdRef.current,
+      positionSec,
+    });
+  };
+
+  const stopWatch = () => {
+    if (!activeVcIdRef.current) return;
+    getSocket().emit('watch:stop', {
+      voiceChannelId: activeVcIdRef.current,
+      groupChannelId: connectedGroupChannelIdRef.current,
+    });
+  };
+
+  /** Toca na hora se nada estiver rolando ainda, ou entra no fim da fila se já tem vídeo tocando. */
+  const addToQueue = (videoId: string) => {
+    if (!activeVcIdRef.current) return;
+    getSocket().emit('watch:add', {
+      voiceChannelId: activeVcIdRef.current,
+      groupChannelId: connectedGroupChannelIdRef.current,
+      videoId,
+    });
+  };
+
+  const removeFromQueue = (index: number) => {
+    if (!activeVcIdRef.current) return;
+    getSocket().emit('watch:queue-remove', {
+      voiceChannelId: activeVcIdRef.current,
+      groupChannelId: connectedGroupChannelIdRef.current,
+      index,
+    });
+  };
+
+  /** `endedVideoId` deixa a chamada idempotente — ver comentário do handler no gateway. */
+  const playNextInQueue = (endedVideoId?: string) => {
+    if (!activeVcIdRef.current) return;
+    getSocket().emit('watch:next', {
+      voiceChannelId: activeVcIdRef.current,
+      groupChannelId: connectedGroupChannelIdRef.current,
+      endedVideoId,
+    });
+  };
+
   const createChannel = async (name: string, mode: CallMode = 'normal') => {
     const { data } = await groupsAPI.createVoiceChannel(groupId, name, mode);
     setVoiceChannels((prev) => [...prev, { ...data, participants: [] }]);
@@ -598,6 +694,7 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
     isSharingAudio,
     screenStreams,
     locallyMutedIds,
+    watchState,
     join,
     leave,
     toggleMute,
@@ -606,6 +703,14 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
     stopScreenShare,
     startAudioShare,
     stopAudioShare,
+    loadVideo,
+    playVideo,
+    pauseVideo,
+    seekVideo,
+    stopWatch,
+    addToQueue,
+    removeFromQueue,
+    playNextInQueue,
     createChannel,
     deleteChannel,
     renameChannel,

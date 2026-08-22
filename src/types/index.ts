@@ -169,6 +169,19 @@ export interface VoiceChannel {
   createdAt: string;
 }
 
+/** Estado do "assistir junto" (YouTube) de um canal de voz — autoritativo no
+ *  servidor, pra quem entra depois já sincronizar sem depender de quem
+ *  estava tocando no momento. */
+export interface WatchTogetherState {
+  videoId: string;
+  isPlaying: boolean;
+  positionSec: number;
+  updatedAtMs: number;
+  updatedBy: number;
+  /** Próximos vídeos, em ordem — o vídeo atual não está incluído aqui. */
+  queue: string[];
+}
+
 export interface GroupTextChannel {
   id: number;
   name: string;

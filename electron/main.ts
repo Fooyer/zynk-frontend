@@ -527,11 +527,17 @@ app.whenReady().then(() => {
           ...details.responseHeaders,
           'Content-Security-Policy': [
             "default-src 'self';" +
-            " script-src 'self';" +
+            // https://www.youtube.com carrega o script da IFrame Player API
+            // (assistir junto sincronizado) — sem isso o <script src=...>
+            // dinâmico era bloqueado silenciosamente em build de produção.
+            " script-src 'self' https://www.youtube.com;" +
             " style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;" +
             " font-src 'self' https://fonts.gstatic.com;" +
             " connect-src 'self' https://zynk.fooyer.com ws://zynk.fooyer.com wss://zynk.fooyer.com wss://signaling.yjs.dev;" +
-            " img-src 'self' data: blob: https://zynk.fooyer.com;"
+            " img-src 'self' data: blob: https://zynk.fooyer.com;" +
+            // Sem frame-src, default-src 'self' bloqueia o próprio <iframe>
+            // que a IFrame Player API cria pra embutir o vídeo.
+            " frame-src https://www.youtube.com;"
           ],
         },
       });

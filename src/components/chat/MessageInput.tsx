@@ -6,6 +6,7 @@ import { alertDialog } from '../../stores/dialogStore';
 import { getUserColor, formatFileSize } from '../../utils/formatDate';
 import { useEditableContextMenu } from '../../hooks/useEditableContextMenu';
 import { PollComposerModal } from './PollComposerModal';
+import type { Message } from '../../types';
 
 interface Props {
   channelId: number;
@@ -30,8 +31,12 @@ export function MessageInput({ channelId, placeholder = 'Envie uma mensagem...',
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const handleEditContextMenu = useEditableContextMenu(textareaRef);
 
-  const replyingTo = useChatStore((s) => s.replyingTo);
-  const setReplyingTo = useChatStore((s) => s.setReplyingTo);
+  const replyingTo = useChatStore((s) => s.replyingTo[channelId] ?? null);
+  const setReplyingToRaw = useChatStore((s) => s.setReplyingTo);
+  const setReplyingTo = useCallback(
+    (message: Message | null) => setReplyingToRaw(channelId, message),
+    [setReplyingToRaw, channelId],
+  );
   const composerFocusTick = useChatStore((s) => s.composerFocusTick);
 
   const clearAttachment = useCallback(() => {

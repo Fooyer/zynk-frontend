@@ -2,18 +2,32 @@ import { create } from 'zustand';
 import { messagesAPI } from '../services/api';
 import type { Message, TypingEvent } from '../types';
 
+// Máximo de mensagens mantidas em memória por canal — acima disso, a ponta
+// mais distante da posição atual de leitura é descartada (igual ao Discord:
+// abrir um histórico antigo não empilha infinitamente as mensagens recentes
+// já vistas, e vice-versa).
+const WINDOW_SIZE = 150;
+
 interface ChatState {
   // Messages por canal — Map-like para evitar re-render desnecessário
   messagesByChannel: Record<number, Message[]>;
   cursors: Record<number, number | null>;
   hasMore: Record<number, boolean>;
-  isLoading: boolean;
+  // true = a ponta recente (mais nova) deste canal foi descartada da memória
+  // pra caber na janela — o array carregado não chega mais até "agora".
+  // Enquanto true, mensagens novas do socket não são anexadas (deixariam um
+  // buraco no meio do histórico) e a UI deve oferecer "voltar ao recente".
+  hasNewer: Record<number, boolean>;
+  isLoading: Record<number, boolean>;
+  isLoadingMore: Record<number, boolean>;
 
   // Typing
   typingUsers: Record<number, { userId: number; username: string; timeout: NodeJS.Timeout }[]>;
 
-  // Reply
-  replyingTo: Message | null;
+  // Reply — por canal: sem isso, iniciar uma resposta num canal e trocar de
+  // conversa sem cancelar fazia o banner (e o replyToId enviado) vazarem
+  // pra dentro da conversa errada.
+  replyingTo: Record<number, Message | null>;
 
   // Incrementado sempre que uma ação em outro componente (ex: salvar/cancelar
   // edição de mensagem) deve devolver o foco ao campo de digitação principal.
@@ -22,12 +36,14 @@ interface ChatState {
   // Actions
   loadMessages: (channelId: number) => Promise<void>;
   loadMore: (channelId: number) => Promise<void>;
+  /** Descarta a janela carregada e busca a página mais recente de novo — "voltar ao presente". */
+  jumpToLatest: (channelId: number) => Promise<void>;
   addMessage: (message: Message) => void;
   updateMessage: (message: Message) => void;
   removeMessage: (channelId: number, messageId: number) => void;
   addSystemMessage: (channelId: number, content: string) => void;
   setTyping: (event: TypingEvent) => void;
-  setReplyingTo: (message: Message | null) => void;
+  setReplyingTo: (channelId: number, message: Message | null) => void;
   focusComposer: () => void;
   clearMessages: () => void;
 }
@@ -36,9 +52,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
   messagesByChannel: {},
   cursors: {},
   hasMore: {},
-  isLoading: false,
+  hasNewer: {},
+  isLoading: {},
+  isLoadingMore: {},
   typingUsers: {},
-  replyingTo: null,
+  replyingTo: {},
   composerFocusTick: 0,
 
   /**
@@ -49,7 +67,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     // Se já tem mensagens desse canal, não recarrega
     if (get().messagesByChannel[channelId]?.length) return;
 
-    set({ isLoading: true });
+    set((state) => ({ isLoading: { ...state.isLoading, [channelId]: true } }));
     try {
       const { data } = await messagesAPI.list(channelId);
       set((state) => ({
@@ -60,33 +78,74 @@ export const useChatStore = create<ChatState>((set, get) => ({
         },
         cursors: { ...state.cursors, [channelId]: data.nextCursor },
         hasMore: { ...state.hasMore, [channelId]: data.hasMore },
-        isLoading: false,
+        hasNewer: { ...state.hasNewer, [channelId]: false },
+        isLoading: { ...state.isLoading, [channelId]: false },
       }));
     } catch {
-      set({ isLoading: false });
+      set((state) => ({ isLoading: { ...state.isLoading, [channelId]: false } }));
     }
   },
 
   /**
    * Carrega mensagens mais antigas (scroll up).
+   *
+   * Reentrância: scroll dispara vários eventos por segundo, e sem uma trava
+   * por canal aqui, cada um deles chamava loadMore de novo antes do anterior
+   * responder — todos liam o mesmo cursor (ainda não avançou) e prepend'avam
+   * a MESMA página, duplicando mensagens no histórico.
    */
   loadMore: async (channelId) => {
     const cursor = get().cursors[channelId];
-    if (!cursor || !get().hasMore[channelId]) return;
+    if (!cursor || !get().hasMore[channelId] || get().isLoadingMore[channelId]) return;
 
+    set((state) => ({ isLoadingMore: { ...state.isLoadingMore, [channelId]: true } }));
     try {
       const { data } = await messagesAPI.list(channelId, cursor);
-      set((state) => ({
-        messagesByChannel: {
-          ...state.messagesByChannel,
-          // Prepend: mensagens antigas vão no início
-          [channelId]: [...data.messages.reverse(), ...(state.messagesByChannel[channelId] || [])],
-        },
-        cursors: { ...state.cursors, [channelId]: data.nextCursor },
-        hasMore: { ...state.hasMore, [channelId]: data.hasMore },
-      }));
+      set((state) => {
+        const existing = state.messagesByChannel[channelId] || [];
+        const existingIds = new Set(existing.map((m) => m.id));
+        const older = data.messages.reverse().filter((m: Message) => !existingIds.has(m.id));
+        let merged = [...older, ...existing];
+
+        // Janela cheia: descarta a ponta recente (o usuário está navegando
+        // pra trás, longe dela) e marca que este canal não alcança mais "agora".
+        let hasNewer = state.hasNewer[channelId] ?? false;
+        if (merged.length > WINDOW_SIZE) {
+          merged = merged.slice(0, WINDOW_SIZE);
+          hasNewer = true;
+        }
+
+        return {
+          messagesByChannel: { ...state.messagesByChannel, [channelId]: merged },
+          cursors: { ...state.cursors, [channelId]: data.nextCursor },
+          hasMore: { ...state.hasMore, [channelId]: data.hasMore },
+          hasNewer: { ...state.hasNewer, [channelId]: hasNewer },
+        };
+      });
     } catch {
       // Silencioso
+    } finally {
+      set((state) => ({ isLoadingMore: { ...state.isLoadingMore, [channelId]: false } }));
+    }
+  },
+
+  /**
+   * "Voltar ao recente" — descarta a janela atual (que pode estar presa lá
+   * atrás no histórico) e busca a página mais nova de novo, do zero.
+   */
+  jumpToLatest: async (channelId) => {
+    set((state) => ({ isLoading: { ...state.isLoading, [channelId]: true } }));
+    try {
+      const { data } = await messagesAPI.list(channelId);
+      set((state) => ({
+        messagesByChannel: { ...state.messagesByChannel, [channelId]: data.messages.reverse() },
+        cursors: { ...state.cursors, [channelId]: data.nextCursor },
+        hasMore: { ...state.hasMore, [channelId]: data.hasMore },
+        hasNewer: { ...state.hasNewer, [channelId]: false },
+        isLoading: { ...state.isLoading, [channelId]: false },
+      }));
+    } catch {
+      set((state) => ({ isLoading: { ...state.isLoading, [channelId]: false } }));
     }
   },
 
@@ -99,10 +158,21 @@ export const useChatStore = create<ChatState>((set, get) => ({
       // Evita duplicatas (pode acontecer em reconexão)
       if (existing.some((m) => m.id === message.id)) return state;
 
+      // Canal com a ponta recente descartada da janela (usuário lá atrás no
+      // histórico): anexar aqui deixaria um buraco entre o que está carregado
+      // e a mensagem nova. Deixa o badge de não lida e o botão "voltar ao
+      // recente" cuidarem disso em vez de corromper a linha do tempo.
+      if (state.hasNewer[message.channelId]) return state;
+
+      let updated = [...existing, message];
+      if (updated.length > WINDOW_SIZE) {
+        updated = updated.slice(updated.length - WINDOW_SIZE);
+      }
+
       return {
         messagesByChannel: {
           ...state.messagesByChannel,
-          [message.channelId]: [...existing, message],
+          [message.channelId]: updated,
         },
       };
     });
@@ -192,8 +262,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
     });
   },
 
-  setReplyingTo: (message) => {
-    set({ replyingTo: message });
+  setReplyingTo: (channelId, message) => {
+    set((state) => ({ replyingTo: { ...state.replyingTo, [channelId]: message } }));
   },
 
   focusComposer: () => {
@@ -201,6 +271,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   clearMessages: () => {
-    set({ messagesByChannel: {}, cursors: {}, hasMore: {}, replyingTo: null });
+    set({
+      messagesByChannel: {},
+      cursors: {},
+      hasMore: {},
+      hasNewer: {},
+      isLoading: {},
+      isLoadingMore: {},
+      replyingTo: {},
+    });
   },
 }));
