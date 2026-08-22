@@ -1,7 +1,8 @@
-import { app, BrowserWindow, shell, session, ipcMain, desktopCapturer, Tray, Menu, nativeImage, dialog, type DesktopCapturerSource } from 'electron';
+import { app, BrowserWindow, shell, session, ipcMain, desktopCapturer, Tray, Menu, nativeImage, dialog, protocol, net, type DesktopCapturerSource } from 'electron';
 import { autoUpdater } from 'electron-updater';
 import path from 'path';
 import fs from 'fs';
+import { pathToFileURL } from 'url';
 import { execFile } from 'child_process';
 import {
   isAvailable as isGamepadAvailable,
@@ -21,6 +22,22 @@ if (process.platform === 'linux') {
   app.commandLine.appendSwitch('ozone-platform-hint', 'auto');
   app.commandLine.appendSwitch('enable-features', 'WebRtcPipeWireCapturer');
 }
+
+// Serve o build de produção por um esquema customizado em vez de file://.
+// file:// não tem origem "de verdade" (é opaca) — e o postMessage entre
+// nossa página e o iframe do YouTube (IFrame Player API) depende de origem
+// pra funcionar. Sob file://, o handshake falhava em silêncio e o player
+// ficava "Carregando..." pra sempre. Registrar como standard+secure dá à
+// nossa própria página uma origem estável (app://zynk), tratada de forma
+// equivalente a https:// pra esse tipo de checagem — precisa acontecer
+// ANTES de app.whenReady().
+const APP_SCHEME = 'app';
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: APP_SCHEME,
+    privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true },
+  },
+]);
 
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
@@ -112,7 +129,7 @@ function createWindow() {
     mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL);
     mainWindow.webContents.openDevTools({ mode: 'detach' });
   } else {
-    mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
+    mainWindow.loadURL(`${APP_SCHEME}://zynk/index.html`);
   }
 
   mainWindow.on('close', (event) => {
@@ -496,6 +513,27 @@ ipcMain.handle('tunnel:delete-remote-file', async (_event, folderPath: string, r
 });
 
 app.whenReady().then(() => {
+  // Serve o dist/ pelo esquema app:// — mapeia app://zynk/<path> pra
+  // dist/<path> no disco. net.fetch sobre um file:// já faz o Chromium
+  // inferir o Content-Type certo pela extensão (mesma receita da doc oficial
+  // do Electron pra protocolos customizados), então JS/WASM/fontes servem
+  // com o mime type que cada um precisa.
+  protocol.handle(APP_SCHEME, (request) => {
+    const url = new URL(request.url);
+    let relPath = decodeURIComponent(url.pathname);
+    if (relPath === '' || relPath === '/') relPath = '/index.html';
+
+    const distDir = path.join(__dirname, '../dist');
+    const filePath = path.normalize(path.join(distDir, relPath));
+    // Contenção básica — nada aqui deveria pedir fora de dist/, mas não
+    // custa garantir que um ../ perdido não escape pro resto do disco.
+    if (!filePath.startsWith(distDir)) {
+      return new Response('Forbidden', { status: 403 });
+    }
+
+    return net.fetch(pathToFileURL(filePath).toString());
+  });
+
   // Handler para getDisplayMedia — pega a tela inteira automaticamente.
   // O renderer é que decide qual source via IPC, este handler só precisa
   // retornar um source válido para o Chromium aceitar a chamada.
@@ -530,7 +568,10 @@ app.whenReady().then(() => {
             // https://www.youtube.com carrega o script da IFrame Player API
             // (assistir junto sincronizado) — sem isso o <script src=...>
             // dinâmico era bloqueado silenciosamente em build de produção.
-            " script-src 'self' https://www.youtube.com;" +
+            // 'wasm-unsafe-eval' (não 'unsafe-eval' — não libera eval() de JS,
+            // só compilação de WebAssembly) é o que o worklet de supressão de
+            // ruído (RNNoise, rodando via WASM) precisa pra instanciar.
+            " script-src 'self' 'wasm-unsafe-eval' https://www.youtube.com;" +
             " style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;" +
             " font-src 'self' https://fonts.gstatic.com;" +
             " connect-src 'self' https://zynk.fooyer.com ws://zynk.fooyer.com wss://zynk.fooyer.com wss://signaling.yjs.dev;" +
