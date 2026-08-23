@@ -625,13 +625,15 @@ app.whenReady().then(async () => {
   // CSP apenas em produção
   if (!process.env.VITE_DEV_SERVER_URL) {
     session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
-      // onHeadersReceived intercepta TODA resposta da sessão — inclusive a
-      // própria página do YouTube dentro do iframe e todos os subrecursos
-      // dela (que rodam sob www.youtube.com, não sob nosso localhost). Sem
-      // esse filtro, a nossa CSP sobrescrevia a CSP que o YOUTUBE manda pra
-      // si mesmo (que libera os scripts inline do player via hash), quebrando
-      // o player por dentro mesmo já com o iframe liberado no frame-src.
-      if (!details.url.startsWith(`http://127.0.0.1:${localServerPort}/`)) {
+      // onHeadersReceived roda pra QUALQUER request da sessão, não só a
+      // nossa página — sem este filtro, a CSP era injetada também na
+      // resposta do próprio iframe do YouTube (o documento embed e o
+      // www-widgetapi.js dele), derrubando os scripts inline que o widget
+      // deles usa pra bootstrar. Resultado: player preso em "Carregando
+      // player..." e um monte de "Refused to execute inline script" com
+      // o ID do vídeo no console — nada disso é specífico de plataforma,
+      // só não tinha aparecido ainda em teste no Windows.
+      if (!details.url.startsWith(`${APP_SCHEME}://`)) {
         callback({ responseHeaders: details.responseHeaders });
         return;
       }
