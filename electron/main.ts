@@ -1,8 +1,8 @@
-import { app, BrowserWindow, shell, session, ipcMain, desktopCapturer, Tray, Menu, nativeImage, dialog, protocol, net, type DesktopCapturerSource } from 'electron';
+import { app, BrowserWindow, shell, session, ipcMain, desktopCapturer, Tray, Menu, nativeImage, dialog, type DesktopCapturerSource } from 'electron';
 import { autoUpdater } from 'electron-updater';
 import path from 'path';
 import fs from 'fs';
-import { pathToFileURL } from 'url';
+import http from 'http';
 import { execFile } from 'child_process';
 import {
   isAvailable as isGamepadAvailable,
@@ -23,21 +23,95 @@ if (process.platform === 'linux') {
   app.commandLine.appendSwitch('enable-features', 'WebRtcPipeWireCapturer');
 }
 
-// Serve o build de produção por um esquema customizado em vez de file://.
-// file:// não tem origem "de verdade" (é opaca) — e o postMessage entre
-// nossa página e o iframe do YouTube (IFrame Player API) depende de origem
-// pra funcionar. Sob file://, o handshake falhava em silêncio e o player
-// ficava "Carregando..." pra sempre. Registrar como standard+secure dá à
-// nossa própria página uma origem estável (app://zynk), tratada de forma
-// equivalente a https:// pra esse tipo de checagem — precisa acontecer
-// ANTES de app.whenReady().
-const APP_SCHEME = 'app';
-protocol.registerSchemesAsPrivileged([
-  {
-    scheme: APP_SCHEME,
-    privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true },
-  },
-]);
+// Serve o build de produção por um servidor HTTP local (127.0.0.1) em vez de
+// file:// — e não por um esquema customizado (app://) como numa tentativa
+// anterior, que resolvia o problema de origem "opaca" do file:// pro nosso
+// próprio CSP/postMessage, mas não pro YouTube: o embed do YouTube faz sua
+// PRÓPRIA validação de origem no servidor deles, e rejeita qualquer esquema
+// que não seja http:/https: com "Error 153 — Video player configuration
+// error", mesmo com o esquema registrado como standard+secure no Electron.
+// http://localhost é a solução padrão da comunidade Electron pra esse tipo
+// de embed sensível a origem — servido só em loopback, nunca exposto à rede.
+//
+// Porta fixa (não 0/efêmera): o backend precisa saber de antemão qual origem
+// liberar no CORS. Lista curta de fallback caso a porta principal esteja em
+// uso — todas já pré-liberadas no backend (ver app.ts e chat-gateway.ts).
+const LOCAL_SERVER_PORTS = [47823, 47824, 47825];
+let localServerPort: number | null = null;
+
+const MIME_TYPES: Record<string, string> = {
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.mjs': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.svg': 'image/svg+xml',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.ico': 'image/x-icon',
+  '.wasm': 'application/wasm',
+  '.woff': 'font/woff',
+  '.woff2': 'font/woff2',
+  '.ttf': 'font/ttf',
+  '.wav': 'audio/wav',
+  '.map': 'application/json; charset=utf-8',
+};
+
+function tryListen(server: http.Server, ports: number[]): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const attempt = (index: number) => {
+      if (index >= ports.length) {
+        reject(new Error('Nenhuma das portas locais candidatas ficou disponível.'));
+        return;
+      }
+      const port = ports[index];
+      server.once('error', (err: NodeJS.ErrnoException) => {
+        if (err.code === 'EADDRINUSE') attempt(index + 1);
+        else reject(err);
+      });
+      server.listen(port, '127.0.0.1', () => resolve(port));
+    };
+    attempt(0);
+  });
+}
+
+/** Serve dist/ estático em http://127.0.0.1:<porta> — sem client-side
+ *  routing nesse app (a navegação é toda por estado, não por URL), então não
+ *  precisa de fallback pra index.html em rotas desconhecidas: um arquivo que
+ *  não existe é mesmo um 404. */
+async function startLocalServer(): Promise<number> {
+  const distDir = path.join(__dirname, '../dist');
+
+  const server = http.createServer((req, res) => {
+    try {
+      const urlPath = decodeURIComponent((req.url || '/').split('?')[0]);
+      const relPath = urlPath === '/' ? '/index.html' : urlPath;
+      const filePath = path.normalize(path.join(distDir, relPath));
+
+      if (!filePath.startsWith(distDir)) {
+        res.writeHead(403);
+        res.end('Forbidden');
+        return;
+      }
+      if (!fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) {
+        res.writeHead(404);
+        res.end('Not found');
+        return;
+      }
+
+      const ext = path.extname(filePath).toLowerCase();
+      res.writeHead(200, { 'Content-Type': MIME_TYPES[ext] || 'application/octet-stream' });
+      fs.createReadStream(filePath).pipe(res);
+    } catch {
+      res.writeHead(500);
+      res.end('Internal error');
+    }
+  });
+
+  return tryListen(server, LOCAL_SERVER_PORTS);
+}
 
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
@@ -129,7 +203,8 @@ function createWindow() {
     mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL);
     mainWindow.webContents.openDevTools({ mode: 'detach' });
   } else {
-    mainWindow.loadURL(`${APP_SCHEME}://zynk/index.html`);
+    // startLocalServer() já rodou em app.whenReady(), antes de createWindow().
+    mainWindow.loadURL(`http://127.0.0.1:${localServerPort}/index.html`);
   }
 
   mainWindow.on('close', (event) => {
@@ -512,27 +587,17 @@ ipcMain.handle('tunnel:delete-remote-file', async (_event, folderPath: string, r
   }
 });
 
-app.whenReady().then(() => {
-  // Serve o dist/ pelo esquema app:// — mapeia app://zynk/<path> pra
-  // dist/<path> no disco. net.fetch sobre um file:// já faz o Chromium
-  // inferir o Content-Type certo pela extensão (mesma receita da doc oficial
-  // do Electron pra protocolos customizados), então JS/WASM/fontes servem
-  // com o mime type que cada um precisa.
-  protocol.handle(APP_SCHEME, (request) => {
-    const url = new URL(request.url);
-    let relPath = decodeURIComponent(url.pathname);
-    if (relPath === '' || relPath === '/') relPath = '/index.html';
-
-    const distDir = path.join(__dirname, '../dist');
-    const filePath = path.normalize(path.join(distDir, relPath));
-    // Contenção básica — nada aqui deveria pedir fora de dist/, mas não
-    // custa garantir que um ../ perdido não escape pro resto do disco.
-    if (!filePath.startsWith(distDir)) {
-      return new Response('Forbidden', { status: 403 });
+app.whenReady().then(async () => {
+  if (!process.env.VITE_DEV_SERVER_URL) {
+    try {
+      localServerPort = await startLocalServer();
+    } catch (err) {
+      console.error('[localServer] Não deu pra subir o servidor local:', err);
+      dialog.showErrorBox('Erro ao iniciar', 'Não foi possível iniciar o servidor local do Zynk. Feche outros programas que possam estar usando as portas 47823-47825 e tente novamente.');
+      app.quit();
+      return;
     }
-
-    return net.fetch(pathToFileURL(filePath).toString());
-  });
+  }
 
   // Handler para getDisplayMedia — pega a tela inteira automaticamente.
   // O renderer é que decide qual source via IPC, este handler só precisa
@@ -560,6 +625,16 @@ app.whenReady().then(() => {
   // CSP apenas em produção
   if (!process.env.VITE_DEV_SERVER_URL) {
     session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+      // onHeadersReceived intercepta TODA resposta da sessão — inclusive a
+      // própria página do YouTube dentro do iframe e todos os subrecursos
+      // dela (que rodam sob www.youtube.com, não sob nosso localhost). Sem
+      // esse filtro, a nossa CSP sobrescrevia a CSP que o YOUTUBE manda pra
+      // si mesmo (que libera os scripts inline do player via hash), quebrando
+      // o player por dentro mesmo já com o iframe liberado no frame-src.
+      if (!details.url.startsWith(`http://127.0.0.1:${localServerPort}/`)) {
+        callback({ responseHeaders: details.responseHeaders });
+        return;
+      }
       callback({
         responseHeaders: {
           ...details.responseHeaders,

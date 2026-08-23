@@ -123,6 +123,15 @@ export function WatchTogetherPlayer({
           disablekb: 1,
           modestbranding: 1,
           rel: 0,
+          // Sem isso, o widget tenta adivinhar a origem da página que o
+          // embutiu (via document.referrer ou heurística própria) pra saber
+          // pra onde mandar seus postMessage de onReady/onStateChange — e
+          // erra silenciosamente em contextos não-padrão (Electron com
+          // esquema customizado, ou até localhost em alguns casos), travando
+          // o handshake e quebrando a sincronização (getCurrentTime,
+          // eventos de estado) sem lançar nenhum erro visível no app.
+          // Passar explicitamente elimina a adivinhação.
+          origin: window.location.origin,
         },
         events: {
           onReady: (e) => {
