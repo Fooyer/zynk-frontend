@@ -189,7 +189,7 @@ function CallPanel({ dm, callStatus }: { dm: DmChannel; callStatus: 'calling' | 
       {/* Véu escurecendo o resto do app no modo cinema — o painel abaixo
           fica com z-index acima dele, só o chat por trás é que escurece */}
       {cinemaMode && (
-        <div className="fixed inset-0 z-[9970] bg-black/85" onClick={() => setCinemaMode(false)} />
+        <div className="fixed inset-0 z-[9970] bg-black/85 animate-fade-in" onClick={() => setCinemaMode(false)} />
       )}
       <div className={`bg-accent-900 border-b flex-shrink-0 relative ${cinemaMode ? 'z-[9971]' : ''} ${isGame ? 'border-warning/40' : 'border-white/[0.06]'}`}>
         {isCalling ? (

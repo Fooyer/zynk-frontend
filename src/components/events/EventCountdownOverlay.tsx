@@ -26,7 +26,7 @@ function CountdownFullScreen({ event, secondsLeft, onDismiss }: {
   onDismiss: () => void;
 }) {
   return (
-    <div className="fixed inset-0 z-[99999] bg-black/90 backdrop-blur-md flex flex-col items-center justify-center">
+    <div className="fixed inset-0 z-[99999] bg-black/90 backdrop-blur-md flex flex-col items-center justify-center animate-fade-in">
       <button
         onClick={onDismiss}
         className="absolute top-6 right-6 text-surface-400 hover:text-white text-sm transition-colors"
@@ -82,8 +82,8 @@ function JoinNowPrompt({ event, voice, onClose }: {
   };
 
   return (
-    <div className="fixed inset-0 z-[99999] bg-black/70 backdrop-blur-sm flex items-center justify-center">
-      <div className="zk-modal rounded-2xl w-[420px] p-6 text-center">
+    <div className="fixed inset-0 z-[99999] bg-black/70 backdrop-blur-sm flex items-center justify-center animate-fade-in">
+      <div className="zk-modal rounded-2xl w-[420px] p-6 text-center animate-scale-in">
         <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mx-auto text-accent-400 mb-3">
           <rect x="3" y="4" width="18" height="18" rx="2" />
           <line x1="16" y1="2" x2="16" y2="6" />

@@ -25,11 +25,11 @@ export function DialogHost() {
 
   return (
     <div
-      className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm"
+      className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in"
       onClick={() => close(false)}
     >
       <div
-        className="zk-modal rounded-2xl w-[380px] p-6"
+        className="zk-modal rounded-2xl w-[380px] p-6 animate-scale-in"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start gap-3 mb-5">

@@ -40,8 +40,8 @@ export function WatchTogetherModal({ onClose, onSubmit, mode }: Props) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50" onClick={onClose}>
-      <div className="zk-modal rounded-2xl w-96 p-6" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in" onClick={onClose}>
+      <div className="zk-modal rounded-2xl w-96 p-6 animate-scale-in" onClick={(e) => e.stopPropagation()}>
         <h2 className="text-lg font-bold text-surface-100 mb-1">{copy.title}</h2>
         <p className="text-xs text-surface-500 mb-4">{copy.hint}</p>
 

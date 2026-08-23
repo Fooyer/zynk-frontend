@@ -39,9 +39,9 @@ export function ScreenPicker({ onSelect, onCancel }: Props) {
   };
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm" onClick={onCancel}>
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm animate-fade-in" onClick={onCancel}>
       <div
-        className="bg-surface-800 rounded-2xl border border-white/[0.08] shadow-modal w-[640px] max-h-[80vh] flex flex-col"
+        className="bg-surface-800 rounded-2xl border border-white/[0.08] shadow-modal w-[640px] max-h-[80vh] flex flex-col animate-scale-in"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}

@@ -10,7 +10,7 @@ interface Props {
  *  CDN público do YouTube (img.youtube.com), sem precisar da Data API. */
 export function WatchQueuePanel({ queue, onRemove, onAdd, onSkip, onClose }: Props) {
   return (
-    <div className="absolute top-0 right-0 bottom-0 z-20 w-64 bg-surface-950/95 backdrop-blur-sm border-l border-white/[0.08] flex flex-col">
+    <div className="absolute top-0 right-0 bottom-0 z-20 w-64 bg-surface-950/95 backdrop-blur-sm border-l border-white/[0.08] flex flex-col animate-slide-in-right">
       <div className="flex items-center justify-between px-3 py-3 border-b border-white/[0.06] flex-shrink-0">
         <span className="text-sm font-semibold text-surface-100">Fila ({queue.length})</span>
         <button onClick={onClose} className="p-1 rounded-lg text-surface-400 hover:text-surface-100 hover:bg-white/[0.08] transition-colors">

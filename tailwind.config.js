@@ -101,12 +101,17 @@ export default {
           from: { opacity: '0', transform: 'translateY(12px) scale(0.98)' },
           to: { opacity: '1', transform: 'translateY(0) scale(1)' },
         },
+        'slide-in-right': {
+          from: { opacity: '0', transform: 'translateX(16px)' },
+          to: { opacity: '1', transform: 'translateX(0)' },
+        },
       },
       animation: {
         'fade-in': 'fade-in 0.2s ease-out',
         'scale-in': 'scale-in 0.22s cubic-bezier(0.16, 1, 0.3, 1)',
         'menu-in': 'menu-in 0.14s cubic-bezier(0.16, 1, 0.3, 1)',
         'toast-in': 'toast-in 0.28s cubic-bezier(0.16, 1, 0.3, 1)',
+        'slide-in-right': 'slide-in-right 0.22s cubic-bezier(0.16, 1, 0.3, 1)',
       },
     },
   },

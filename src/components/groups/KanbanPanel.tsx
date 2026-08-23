@@ -82,9 +82,9 @@ function CardDetail({ card, groupId, channelId, members, onUpdate, onDelete, onC
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in" onClick={onClose}>
       <div
-        className="zk-modal rounded-2xl w-[420px] p-5 flex flex-col gap-4"
+        className="zk-modal rounded-2xl w-[420px] p-5 flex flex-col gap-4 animate-scale-in"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Title */}

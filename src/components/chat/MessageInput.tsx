@@ -320,7 +320,7 @@ export function MessageInput({ channelId, placeholder = 'Envie uma mensagem...',
           </button>
 
           {showToolsMenu && (
-            <div className="absolute bottom-full left-0 mb-2 z-20 zk-elevated rounded-xl p-1 min-w-[200px]">
+            <div className="absolute bottom-full left-0 mb-2 z-20 zk-elevated rounded-xl p-1 min-w-[200px] animate-menu-in origin-bottom-left">
               <ContextMenuItem
                 icon={(
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

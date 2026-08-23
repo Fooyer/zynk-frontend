@@ -40,7 +40,7 @@ function NavRow({
       onClick={onClick}
       onContextMenu={onContextMenu}
       aria-current={active ? 'true' : undefined}
-      className={`w-full flex items-center gap-2.5 pl-2.5 pr-2 py-2 rounded-xl text-left transition-colors border-l-[3px] ${
+      className={`group w-full flex items-center gap-2.5 pl-2.5 pr-2 py-2 rounded-xl text-left transition-colors border-l-[3px] ${
         active
           ? 'bg-accent-600/15 border-accent-500 text-surface-50'
           : 'border-transparent text-surface-300 hover:bg-white/[0.05] hover:text-surface-100'
@@ -82,7 +82,7 @@ function NavIconButton({
       onContextMenu={onContextMenu}
       title={title}
       aria-label={title}
-      className={`relative w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 font-bold transition-all ${
+      className={`group relative w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 font-bold transition-all ${
         color
           ? `text-on-accent${active ? ' shadow-glow-accent' : ''}`
           : active
@@ -334,7 +334,7 @@ export function NavBar() {
 
             <div className="flex-shrink-0 border-t border-white/[0.06] py-2 flex flex-col items-center gap-1.5">
               <NavIconButton active={view === 'settings'} onClick={() => setView('settings')} title="Configurações">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="transition-transform duration-500 ease-out group-hover:rotate-90">
                   <circle cx="12" cy="12" r="3" />
                   <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
                 </svg>
@@ -481,7 +481,7 @@ export function NavBar() {
                 active={view === 'settings'}
                 onClick={() => setView('settings')}
                 icon={
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="transition-transform duration-500 ease-out group-hover:rotate-90">
                     <circle cx="12" cy="12" r="3" />
                     <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
                   </svg>

@@ -36,9 +36,9 @@ export function RenameGroupModal({ isOpen, onClose, groupId, currentName }: Prop
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in" onClick={onClose}>
       <div
-        className="zk-modal rounded-2xl w-[380px] p-6"
+        className="zk-modal rounded-2xl w-[380px] p-6 animate-scale-in"
         onClick={(e) => e.stopPropagation()}
       >
         <h2 className="text-lg font-bold text-surface-100 mb-4">Renomear grupo</h2>

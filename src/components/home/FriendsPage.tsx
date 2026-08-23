@@ -187,8 +187,8 @@ export function FriendsPage() {
         </div>
       </header>
 
-      {/* Content */}
-      <div className="flex-1 overflow-y-auto px-6 py-5">
+      {/* Content — key={tab} força remontar ao trocar de aba, pra reiniciar o fade */}
+      <div key={tab} className="flex-1 overflow-y-auto px-6 py-5 animate-fade-in">
         {tab === 'add' ? (
           <div className="max-w-md mx-auto text-center py-6">
             <div className="w-14 h-14 rounded-2xl bg-accent-600/15 text-accent-400 flex items-center justify-center mx-auto mb-4">

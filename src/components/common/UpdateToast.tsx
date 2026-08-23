@@ -33,7 +33,7 @@ export function UpdateToast() {
   if (state.phase === 'idle' || dismissed) return null;
 
   return (
-    <div className="fixed bottom-4 right-4 z-[150] w-72 zk-elevated rounded-2xl p-4">
+    <div className="fixed bottom-4 right-4 z-[150] w-72 zk-elevated rounded-2xl p-4 animate-toast-in">
       <div className="flex items-start gap-3">
         <div className="w-8 h-8 rounded-full bg-accent-600/15 text-accent-400 flex items-center justify-center flex-shrink-0">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

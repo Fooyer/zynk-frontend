@@ -27,7 +27,7 @@ export function ContextMenuHost() {
   return (
     <div
       style={{ top: request.pos.y, left: request.pos.x }}
-      className="fixed z-50 zk-elevated rounded-xl p-1 min-w-[160px]"
+      className="fixed z-50 zk-elevated rounded-xl p-1 min-w-[160px] animate-menu-in origin-top-left"
       onClick={(e) => e.stopPropagation()}
     >
       {request.content}

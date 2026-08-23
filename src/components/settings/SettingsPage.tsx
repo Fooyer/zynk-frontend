@@ -1028,7 +1028,7 @@ export function SettingsPage() {
                 ))}
               </div>
 
-              <div className="space-y-10 pb-8">
+              <div key={activeTab} className="space-y-10 pb-8 animate-fade-in">
                 {activeTab === 'account' && sectionNodes.account}
                 {activeTab === 'audio' && (
                   <>

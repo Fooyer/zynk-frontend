@@ -1,10 +1,14 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { useGroupStore } from './groupStore';
 
 interface LayoutState {
   // Menus recolhíveis — cada um lembra o último estado escolhido pelo usuário
   navCollapsed: boolean;
-  memberListCollapsed: boolean;
+  // Roster de membros: um estado por servidor (não um boolean global) — entrar
+  // num servidor que o usuário deixou recolhido deve vir já recolhido, sem
+  // "herdar" o estado de qualquer outro servidor visitado antes.
+  memberListCollapsedByGroup: Record<number, boolean>;
 
   // Ordem dos servidores (grupos) na barra da esquerda, escolhida por arrastar-e-soltar
   groupOrder: number[];
@@ -16,9 +20,10 @@ interface LayoutState {
   cinemaMode: boolean;
   prevNavCollapsed: boolean | null;
   prevMemberListCollapsed: boolean | null;
+  prevMemberListGroupId: number | null;
 
   setNavCollapsed: (v: boolean) => void;
-  setMemberListCollapsed: (v: boolean) => void;
+  setMemberListCollapsed: (groupId: number, v: boolean) => void;
   moveGroup: (groupId: number, targetId: number, position: 'before' | 'after', allIds: number[]) => void;
   enterCinemaMode: () => void;
   exitCinemaMode: () => void;
@@ -28,35 +33,48 @@ export const useLayoutStore = create<LayoutState>()(
   persist(
     (set, get) => ({
       navCollapsed: false,
-      memberListCollapsed: false,
+      memberListCollapsedByGroup: {},
       groupOrder: [],
       cinemaMode: false,
       prevNavCollapsed: null,
       prevMemberListCollapsed: null,
+      prevMemberListGroupId: null,
 
       setNavCollapsed: (navCollapsed) => set({ navCollapsed }),
-      setMemberListCollapsed: (memberListCollapsed) => set({ memberListCollapsed }),
+      setMemberListCollapsed: (groupId, collapsed) =>
+        set((state) => ({
+          memberListCollapsedByGroup: { ...state.memberListCollapsedByGroup, [groupId]: collapsed },
+        })),
 
       enterCinemaMode: () => {
         if (get().cinemaMode) return; // idempotente — não sobrescreve o snapshot já guardado
+        const groupId = useGroupStore.getState().activeGroupId;
         set({
           cinemaMode: true,
           prevNavCollapsed: get().navCollapsed,
-          prevMemberListCollapsed: get().memberListCollapsed,
+          prevMemberListCollapsed: groupId != null ? (get().memberListCollapsedByGroup[groupId] ?? false) : null,
+          prevMemberListGroupId: groupId,
           navCollapsed: true,
-          memberListCollapsed: true,
+          memberListCollapsedByGroup:
+            groupId != null
+              ? { ...get().memberListCollapsedByGroup, [groupId]: true }
+              : get().memberListCollapsedByGroup,
         });
       },
 
       exitCinemaMode: () => {
         if (!get().cinemaMode) return;
-        const { prevNavCollapsed, prevMemberListCollapsed } = get();
+        const { prevNavCollapsed, prevMemberListCollapsed, prevMemberListGroupId } = get();
         set({
           cinemaMode: false,
           navCollapsed: prevNavCollapsed ?? false,
-          memberListCollapsed: prevMemberListCollapsed ?? false,
+          memberListCollapsedByGroup:
+            prevMemberListGroupId != null
+              ? { ...get().memberListCollapsedByGroup, [prevMemberListGroupId]: prevMemberListCollapsed ?? false }
+              : get().memberListCollapsedByGroup,
           prevNavCollapsed: null,
           prevMemberListCollapsed: null,
+          prevMemberListGroupId: null,
         });
       },
 
@@ -86,7 +104,7 @@ export const useLayoutStore = create<LayoutState>()(
       // o nav/membros presos recolhidos "sem motivo aparente").
       partialize: (state) => ({
         navCollapsed: state.navCollapsed,
-        memberListCollapsed: state.memberListCollapsed,
+        memberListCollapsedByGroup: state.memberListCollapsedByGroup,
         groupOrder: state.groupOrder,
       }),
     },

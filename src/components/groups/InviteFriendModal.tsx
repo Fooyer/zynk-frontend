@@ -47,8 +47,8 @@ export function InviteFriendModal({ isOpen, onClose, groupId }: Props) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50" onClick={onClose}>
-      <div className="zk-modal rounded-2xl w-96 p-6 max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in" onClick={onClose}>
+      <div className="zk-modal rounded-2xl w-96 p-6 max-h-[80vh] flex flex-col animate-scale-in" onClick={(e) => e.stopPropagation()}>
         <h2 className="text-lg font-bold text-surface-100 mb-1">Convidar para o grupo</h2>
         <p className="text-xs text-surface-500 mb-4">Apenas amigos que ainda não estão no grupo aparecem aqui.</p>
 
