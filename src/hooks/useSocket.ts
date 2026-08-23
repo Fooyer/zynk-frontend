@@ -89,6 +89,9 @@ export function useSocket() {
     // Enquete criada/votada por outro membro do canal
     socket.on('poll:created', (poll: Poll) => usePollStore.getState().upsertPoll(poll));
     socket.on('poll:updated', (poll: Poll) => usePollStore.getState().upsertPoll(poll));
+    socket.on('poll:deleted', (data: { channelId: number; pollId: number }) => {
+      usePollStore.getState().removePoll(data.channelId, data.pollId);
+    });
 
     // Evento criado num servidor — o payload vem hidratado com o RSVP de
     // quem criou (sempre 'accepted'), não o meu. Pra quem só está recebendo
@@ -159,6 +162,7 @@ export function useSocket() {
       socket.off('group:member-left');
       socket.off('poll:created');
       socket.off('poll:updated');
+      socket.off('poll:deleted');
       socket.off('event:created');
       socket.off('event:deleted');
       socket.off('error');

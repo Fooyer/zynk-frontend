@@ -78,6 +78,8 @@ export const pollsAPI = {
     api.post(`/channels/${channelId}/polls`, data),
   vote: (pollId: number, optionId: number) => api.post(`/polls/${pollId}/vote`, { optionId }),
   close: (pollId: number) => api.post(`/polls/${pollId}/close`),
+  reopen: (pollId: number) => api.post(`/polls/${pollId}/reopen`),
+  remove: (pollId: number) => api.delete(`/polls/${pollId}`),
 };
 
 // ─── Friends ────────────────────────────────────

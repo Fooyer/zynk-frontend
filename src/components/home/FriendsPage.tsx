@@ -5,7 +5,7 @@ import { getInitials, getUserColor } from '../../utils/formatDate';
 import { FriendGridSkeleton } from '../common/Skeleton';
 import { ContextMenuItem, ContextMenuHeader } from '../common/ContextMenuItem';
 import { useEditableContextMenu } from '../../hooks/useEditableContextMenu';
-import type { FriendEntry, FriendRequest } from '../../types';
+import type { FriendEntry, FriendRequest, SentRequest } from '../../types';
 
 type Tab = 'online' | 'all' | 'requests' | 'add';
 
@@ -26,7 +26,7 @@ export function FriendsPage() {
   const handleRef = useRef<HTMLInputElement>(null);
   const handleHandleContextMenu = useEditableContextMenu(handleRef);
 
-  const { friends, requests, isLoading, error, loadAll, sendRequest, accept, reject, remove, openDm, clearError } =
+  const { friends, requests, sent, isLoading, error, loadAll, sendRequest, accept, reject, remove, openDm, clearError } =
     useFriendStore();
 
   useEffect(() => {
@@ -81,6 +81,26 @@ export function FriendsPage() {
             </svg>
           }
           label="Recusar"
+        />
+      </>
+    ));
+  };
+
+  const openSentMenu = (e: React.MouseEvent, r: SentRequest) => {
+    e.preventDefault();
+    e.stopPropagation();
+    useContextMenuStore.getState().open({ x: e.clientX, y: e.clientY }, (
+      <>
+        <ContextMenuHeader>{r.addressee.username}</ContextMenuHeader>
+        <ContextMenuItem
+          onClick={() => { useContextMenuStore.getState().close(); reject(r.id); }}
+          danger
+          icon={
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          }
+          label="Cancelar solicitação"
         />
       </>
     ));
@@ -214,52 +234,100 @@ export function FriendsPage() {
         ) : tab === 'requests' ? (
           isLoading ? (
             <FriendGridSkeleton />
-          ) : requests.length === 0 ? (
-            <div className="text-center py-16">
-              <p className="text-surface-400">Nenhuma solicitação pendente</p>
-            </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
-              {requests.map((r) => (
-                <div
-                  key={r.id}
-                  onContextMenu={(e) => openRequestMenu(e, r)}
-                  className="rounded-xl border-l-4 border-l-danger border border-white/[0.07] bg-surface-800/60 shadow-panel p-4"
-                >
-                  <div className="flex items-center gap-3 mb-3">
-                    <div
-                      className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-semibold flex-shrink-0"
-                      style={{ backgroundColor: getUserColor(r.requester.username) }}
-                    >
-                      {getInitials(r.requester.username)}
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold text-surface-100 truncate">{r.requester.username}</p>
-                      <p className="text-xs text-surface-400">quer ser seu amigo</p>
-                    </div>
+            <div className="space-y-6">
+              <div>
+                <h3 className="text-xs font-semibold text-surface-500 uppercase tracking-wide mb-3">
+                  Recebidas {requests.length > 0 && `(${requests.length})`}
+                </h3>
+                {requests.length === 0 ? (
+                  <p className="text-sm text-surface-400">Nenhuma solicitação pendente</p>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+                    {requests.map((r) => (
+                      <div
+                        key={r.id}
+                        onContextMenu={(e) => openRequestMenu(e, r)}
+                        className="rounded-xl border-l-4 border-l-danger border border-white/[0.07] bg-surface-800/60 shadow-panel p-4"
+                      >
+                        <div className="flex items-center gap-3 mb-3">
+                          <div
+                            className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-semibold flex-shrink-0"
+                            style={{ backgroundColor: getUserColor(r.requester.username) }}
+                          >
+                            {getInitials(r.requester.username)}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold text-surface-100 truncate">{r.requester.username}</p>
+                            <p className="text-xs text-surface-400">quer ser seu amigo</p>
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => accept(r.id)}
+                            className="flex-1 flex items-center justify-center gap-1.5 py-1.5 bg-success/15 hover:bg-success/25 text-success text-xs font-semibold rounded-lg transition-colors"
+                          >
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                              <polyline points="20 6 9 17 4 12" />
+                            </svg>
+                            Aceitar
+                          </button>
+                          <button
+                            onClick={() => reject(r.id)}
+                            className="flex-1 flex items-center justify-center gap-1.5 py-1.5 bg-white/[0.06] hover:bg-danger/20 text-surface-300 hover:text-danger text-xs font-semibold rounded-lg transition-colors"
+                          >
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                              <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                            </svg>
+                            Recusar
+                          </button>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => accept(r.id)}
-                      className="flex-1 flex items-center justify-center gap-1.5 py-1.5 bg-success/15 hover:bg-success/25 text-success text-xs font-semibold rounded-lg transition-colors"
-                    >
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                        <polyline points="20 6 9 17 4 12" />
-                      </svg>
-                      Aceitar
-                    </button>
-                    <button
-                      onClick={() => reject(r.id)}
-                      className="flex-1 flex items-center justify-center gap-1.5 py-1.5 bg-white/[0.06] hover:bg-danger/20 text-surface-300 hover:text-danger text-xs font-semibold rounded-lg transition-colors"
-                    >
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                        <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-                      </svg>
-                      Recusar
-                    </button>
+                )}
+              </div>
+
+              <div>
+                <h3 className="text-xs font-semibold text-surface-500 uppercase tracking-wide mb-3">
+                  Enviadas {sent.length > 0 && `(${sent.length})`}
+                </h3>
+                {sent.length === 0 ? (
+                  <p className="text-sm text-surface-400">Nenhuma solicitação enviada aguardando resposta</p>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+                    {sent.map((r) => (
+                      <div
+                        key={r.id}
+                        onContextMenu={(e) => openSentMenu(e, r)}
+                        className="rounded-xl border-l-4 border-l-accent-500 border border-white/[0.07] bg-surface-800/60 shadow-panel p-4"
+                      >
+                        <div className="flex items-center gap-3 mb-3">
+                          <div
+                            className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-semibold flex-shrink-0"
+                            style={{ backgroundColor: getUserColor(r.addressee.username) }}
+                          >
+                            {getInitials(r.addressee.username)}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold text-surface-100 truncate">{r.addressee.username}</p>
+                            <p className="text-xs text-surface-400">aguardando resposta</p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => reject(r.id)}
+                          className="w-full flex items-center justify-center gap-1.5 py-1.5 bg-white/[0.06] hover:bg-danger/20 text-surface-300 hover:text-danger text-xs font-semibold rounded-lg transition-colors"
+                        >
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                            <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                          </svg>
+                          Cancelar
+                        </button>
+                      </div>
+                    ))}
                   </div>
-                </div>
-              ))}
+                )}
+              </div>
             </div>
           )
         ) : isLoading ? (

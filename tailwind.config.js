@@ -77,6 +77,37 @@ export default {
         // panel/elevated/modal (avatares, chips) mas ainda devem ter o contorno "HUD".
         frame: '0 0 0 1px rgb(var(--color-accent-500) / 0.12), 0 1px 0 0 rgb(255 255 255 / 0.04) inset',
       },
+      // Entradas de UI reutilizáveis — nada no app deve simplesmente "aparecer".
+      // Curva cubic-bezier(0.16, 1, 0.3, 1) ("ease-out-expo") em vez de ease-out
+      // padrão: desacelera bem mais suave no final, sem nenhum bounce — o toque
+      // "confortável" pedido, não um efeito chamativo. Duração escala com o
+      // tamanho do elemento: menu/toast são rápidos (a intenção é não atrasar a
+      // interação), modal é um pouco mais lento (é o elemento mais dominante da
+      // tela quando abre).
+      keyframes: {
+        'fade-in': {
+          from: { opacity: '0' },
+          to: { opacity: '1' },
+        },
+        'scale-in': {
+          from: { opacity: '0', transform: 'scale(0.96) translateY(6px)' },
+          to: { opacity: '1', transform: 'scale(1) translateY(0)' },
+        },
+        'menu-in': {
+          from: { opacity: '0', transform: 'scale(0.96) translateY(-4px)' },
+          to: { opacity: '1', transform: 'scale(1) translateY(0)' },
+        },
+        'toast-in': {
+          from: { opacity: '0', transform: 'translateY(12px) scale(0.98)' },
+          to: { opacity: '1', transform: 'translateY(0) scale(1)' },
+        },
+      },
+      animation: {
+        'fade-in': 'fade-in 0.2s ease-out',
+        'scale-in': 'scale-in 0.22s cubic-bezier(0.16, 1, 0.3, 1)',
+        'menu-in': 'menu-in 0.14s cubic-bezier(0.16, 1, 0.3, 1)',
+        'toast-in': 'toast-in 0.28s cubic-bezier(0.16, 1, 0.3, 1)',
+      },
     },
   },
   plugins: [],

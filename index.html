@@ -29,7 +29,9 @@
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        background: #0c0d1a;
+        /* Mesmo neutro escuro do resto do app (--color-surface-950 em
+           themes.css), não um azul próprio da splash. */
+        background: #0a0a0b;
         border-radius: 10px;
         z-index: 9999;
         transition: opacity 0.3s ease;
@@ -46,36 +48,77 @@
         letter-spacing: -0.02em;
         margin-bottom: 1.5rem;
       }
-      #splash .spinner {
-        width: 28px;
-        height: 28px;
-        border: 2.5px solid rgba(139, 145, 167, 0.2);
-        border-top-color: #7c6bf5;
-        border-radius: 50%;
-        animation: spin 0.8s linear infinite;
+      /* Loader "orbit" — anel cônico giratório com núcleo pulsante e um anel
+         estático mais fraco por trás pra dar profundidade. As cores vêm de
+         --splash-accent(-2)-rgb, setadas pelo bootstrap.js a partir da cor
+         de destaque escolhida pelo usuário (ver comentário lá) — o fallback
+         aqui só entra em jogo se o localStorage estiver vazio/corrompido. */
+      #splash .loader {
+        position: relative;
+        width: 44px;
+        height: 44px;
       }
-      @keyframes spin { to { transform: rotate(360deg); } }
+      #splash .loader::before {
+        content: '';
+        position: absolute;
+        inset: -14px;
+        border-radius: 50%;
+        border: 1px solid rgb(var(--splash-accent-rgb, 124, 107, 245) / 0.15);
+      }
+      #splash .loader-ring {
+        position: absolute;
+        inset: 0;
+        border-radius: 50%;
+        background: conic-gradient(
+          from 0deg,
+          transparent 0deg,
+          rgb(var(--splash-accent-rgb, 124, 107, 245)) 45deg,
+          rgb(var(--splash-accent-2-rgb, 124, 107, 245)) 90deg,
+          transparent 150deg,
+          transparent 360deg
+        );
+        -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px));
+        mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px));
+        filter: drop-shadow(0 0 6px rgb(var(--splash-accent-rgb, 124, 107, 245) / 0.55));
+        animation: splash-spin 1s linear infinite;
+      }
+      #splash .loader-core {
+        position: absolute;
+        inset: 0;
+        margin: auto;
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: rgb(var(--splash-accent-rgb, 124, 107, 245));
+        box-shadow: 0 0 10px 2px rgb(var(--splash-accent-rgb, 124, 107, 245) / 0.8);
+        animation: splash-pulse 1.4s ease-in-out infinite;
+      }
+      @keyframes splash-spin { to { transform: rotate(360deg); } }
+      @keyframes splash-pulse {
+        0%, 100% { transform: scale(0.8); opacity: 0.6; }
+        50% { transform: scale(1.2); opacity: 1; }
+      }
       /* A splash tem paleta própria (fora do Tailwind/React) e continua fixa
          para os temas escuros — some em menos de 1s, ganho marginal em
          re-temar todas as 5 variantes. O modo claro é a exceção: sem este
          ajuste, a splash escura ficaria visivelmente errada logo antes do
-         fade para uma UI clara. */
+         fade para uma UI clara. O loader em si (cor de destaque) já funciona
+         igual nos dois temas, então só fundo/logo mudam aqui. */
       html[data-theme='light'] #splash {
         background: #f7f7f7;
       }
       html[data-theme='light'] #splash .logo {
         color: #111111;
       }
-      html[data-theme='light'] #splash .spinner {
-        border-color: rgba(0, 0, 0, 0.12);
-        border-top-color: #b3001d;
-      }
     </style>
   </head>
   <body class="text-surface-100">
     <div id="splash">
       <div class="logo">Zynk</div>
-      <div class="spinner"></div>
+      <div class="loader">
+        <span class="loader-ring"></span>
+        <span class="loader-core"></span>
+      </div>
     </div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>

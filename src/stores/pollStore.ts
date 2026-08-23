@@ -12,6 +12,9 @@ interface PollState {
   createPoll: (channelId: number, question: string, options: string[], allowMultiple: boolean) => Promise<void>;
   vote: (pollId: number, optionId: number) => Promise<void>;
   closePoll: (pollId: number) => Promise<void>;
+  reopenPoll: (pollId: number) => Promise<void>;
+  deletePoll: (pollId: number) => Promise<void>;
+  removePoll: (channelId: number, pollId: number) => void;
 }
 
 export const usePollStore = create<PollState>((set, get) => ({
@@ -56,5 +59,26 @@ export const usePollStore = create<PollState>((set, get) => ({
     const { data } = await pollsAPI.close(pollId);
     get().upsertPoll(data);
     getSocket().emit('poll:updated', { channelId: data.channelId, poll: data });
+  },
+
+  reopenPoll: async (pollId) => {
+    const { data } = await pollsAPI.reopen(pollId);
+    get().upsertPoll(data);
+    getSocket().emit('poll:updated', { channelId: data.channelId, poll: data });
+  },
+
+  deletePoll: async (pollId) => {
+    const { data } = await pollsAPI.remove(pollId);
+    get().removePoll(data.channelId, pollId);
+    getSocket().emit('poll:deleted', { channelId: data.channelId, pollId });
+  },
+
+  removePoll: (channelId, pollId) => {
+    set((state) => ({
+      pollsByChannel: {
+        ...state.pollsByChannel,
+        [channelId]: (state.pollsByChannel[channelId] || []).filter((p) => p.id !== pollId),
+      },
+    }));
   },
 }));

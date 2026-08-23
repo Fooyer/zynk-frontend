@@ -88,6 +88,17 @@ html.native-frame .window-shell {
   }
 }
 
+/* Quem pede menos movimento no SO some com toda entrada/transição do app —
+   inclusive as animate-fade-in/scale-in/menu-in/toast-in acima. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 /* ─── Range sliders — trilha fina + thumb pequeno, visual leve em vez do
    controle nativo grosso/3D do navegador. A cor de preenchimento vem via
    background inline (gradiente calculado no componente); aqui só o reset

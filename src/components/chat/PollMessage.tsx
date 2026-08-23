@@ -1,6 +1,8 @@
 import { useAuthStore } from '../../stores/authStore';
 import { usePollStore } from '../../stores/pollStore';
-import { alertDialog } from '../../stores/dialogStore';
+import { alertDialog, confirmDialog } from '../../stores/dialogStore';
+import { useContextMenuStore } from '../../stores/contextMenuStore';
+import { ContextMenuItem } from '../common/ContextMenuItem';
 import { getUserColor, getInitials, formatMessageDate } from '../../utils/formatDate';
 import type { Poll } from '../../types';
 
@@ -12,6 +14,8 @@ export function PollMessage({ poll }: Props) {
   const currentUser = useAuthStore((s) => s.user);
   const vote = usePollStore((s) => s.vote);
   const closePoll = usePollStore((s) => s.closePoll);
+  const reopenPoll = usePollStore((s) => s.reopenPoll);
+  const deletePoll = usePollStore((s) => s.deletePoll);
 
   const isCreator = Number(poll.creator.id) === Number(currentUser?.id);
   const isClosed = !!poll.closedAt;
@@ -28,8 +32,63 @@ export function PollMessage({ poll }: Props) {
     });
   };
 
+  const handleReopen = () => {
+    useContextMenuStore.getState().close();
+    reopenPoll(poll.id).catch(() => {
+      alertDialog('Não foi possível reabrir a enquete.', { title: 'Erro' });
+    });
+  };
+
+  const handleDelete = async () => {
+    useContextMenuStore.getState().close();
+    const ok = await confirmDialog('Essa ação não pode ser desfeita.', {
+      title: 'Excluir enquete?',
+      confirmLabel: 'Excluir',
+      danger: true,
+    });
+    if (!ok) return;
+    deletePoll(poll.id).catch(() => {
+      alertDialog('Não foi possível excluir a enquete.', { title: 'Erro' });
+    });
+  };
+
+  const handleContextMenu = (e: React.MouseEvent) => {
+    if (!isCreator) return;
+    e.preventDefault();
+    useContextMenuStore.getState().open({ x: e.clientX, y: e.clientY }, (
+      <>
+        {isClosed && (
+          <ContextMenuItem
+            icon={(
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="1 4 1 10 7 10" />
+                <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
+              </svg>
+            )}
+            label="Reabrir enquete"
+            onClick={handleReopen}
+          />
+        )}
+        <ContextMenuItem
+          icon={(
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="3 6 5 6 21 6" />
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+            </svg>
+          )}
+          label="Excluir enquete"
+          danger
+          onClick={handleDelete}
+        />
+      </>
+    ));
+  };
+
   return (
-    <div className="mx-2 my-2 px-4 py-3 rounded-xl bg-white/[0.03] border border-white/[0.06] max-w-md">
+    <div
+      className="mx-2 my-2 px-4 py-3 rounded-xl bg-white/[0.03] border border-white/[0.06] max-w-md"
+      onContextMenu={handleContextMenu}
+    >
       <div className="flex items-center gap-2 mb-2">
         <div
           className="w-6 h-6 rounded-full flex items-center justify-center text-white text-[10px] font-semibold flex-shrink-0"

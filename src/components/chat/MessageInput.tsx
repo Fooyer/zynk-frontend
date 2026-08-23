@@ -6,6 +6,7 @@ import { alertDialog } from '../../stores/dialogStore';
 import { getUserColor, formatFileSize } from '../../utils/formatDate';
 import { useEditableContextMenu } from '../../hooks/useEditableContextMenu';
 import { PollComposerModal } from './PollComposerModal';
+import { ContextMenuItem } from '../common/ContextMenuItem';
 import type { Message } from '../../types';
 
 interface Props {
@@ -26,10 +27,29 @@ export function MessageInput({ channelId, placeholder = 'Envie uma mensagem...',
   const [attachedFile, setAttachedFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [showPollComposer, setShowPollComposer] = useState(false);
+  const [showToolsMenu, setShowToolsMenu] = useState(false);
   const lastTypingEmit = useRef(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const toolsMenuRef = useRef<HTMLDivElement>(null);
   const handleEditContextMenu = useEditableContextMenu(textareaRef);
+
+  // Fecha o menu de ferramentas (+) em clique fora ou Esc.
+  useEffect(() => {
+    if (!showToolsMenu) return;
+    const handleClick = (e: MouseEvent) => {
+      if (!toolsMenuRef.current?.contains(e.target as Node)) setShowToolsMenu(false);
+    };
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setShowToolsMenu(false);
+    };
+    document.addEventListener('mousedown', handleClick);
+    document.addEventListener('keydown', handleKey);
+    return () => {
+      document.removeEventListener('mousedown', handleClick);
+      document.removeEventListener('keydown', handleKey);
+    };
+  }, [showToolsMenu]);
 
   const replyingTo = useChatStore((s) => s.replyingTo[channelId] ?? null);
   const setReplyingToRaw = useChatStore((s) => s.setReplyingTo);
@@ -278,55 +298,70 @@ export function MessageInput({ channelId, placeholder = 'Envie uma mensagem...',
       )}
 
       <div className="flex items-end gap-2 bg-surface-800/70 rounded-2xl px-4 py-2 border border-white/[0.08] shadow-panel focus-within:border-accent-500/50 focus-within:shadow-elevated transition-all">
-        {/* Botão de anexar arquivo (qualquer tipo) */}
-        <button
-          onClick={() => fileInputRef.current?.click()}
-          disabled={uploading}
-          className="p-2 rounded-lg text-surface-400 hover:text-accent-400 hover:bg-accent-500/10 disabled:opacity-30 transition-all flex-shrink-0"
-          aria-label="Anexar arquivo"
-          title="Anexar arquivo"
-        >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
-          </svg>
-        </button>
+        {/* Menu de ferramentas (anexar, bloco de código, enquete...) */}
+        <div className="relative flex-shrink-0" ref={toolsMenuRef}>
+          <button
+            onClick={() => setShowToolsMenu((v) => !v)}
+            disabled={uploading}
+            className={`p-2 rounded-lg hover:text-accent-400 hover:bg-accent-500/10 disabled:opacity-30 transition-all ${
+              showToolsMenu ? 'text-accent-400 bg-accent-500/10' : 'text-surface-400'
+            }`}
+            aria-label="Mais opções"
+            aria-expanded={showToolsMenu}
+            title="Mais opções"
+          >
+            <svg
+              width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+              className={`transition-transform ${showToolsMenu ? 'rotate-45' : ''}`}
+            >
+              <line x1="12" y1="5" x2="12" y2="19" />
+              <line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+          </button>
+
+          {showToolsMenu && (
+            <div className="absolute bottom-full left-0 mb-2 z-20 zk-elevated rounded-xl p-1 min-w-[200px]">
+              <ContextMenuItem
+                icon={(
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+                  </svg>
+                )}
+                label="Anexar arquivo"
+                onClick={() => { setShowToolsMenu(false); fileInputRef.current?.click(); }}
+              />
+              <ContextMenuItem
+                icon={(
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="16 18 22 12 16 6" />
+                    <polyline points="8 6 2 12 8 18" />
+                  </svg>
+                )}
+                label="Inserir bloco de código"
+                onClick={() => { setShowToolsMenu(false); handleInsertCodeBlock(); }}
+              />
+              {allowPolls && (
+                <ContextMenuItem
+                  icon={(
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="18" y1="20" x2="18" y2="10" />
+                      <line x1="12" y1="20" x2="12" y2="4" />
+                      <line x1="6" y1="20" x2="6" y2="14" />
+                    </svg>
+                  )}
+                  label="Criar enquete"
+                  onClick={() => { setShowToolsMenu(false); setShowPollComposer(true); }}
+                />
+              )}
+            </div>
+          )}
+        </div>
         <input
           ref={fileInputRef}
           type="file"
           onChange={handleFileSelect}
           className="hidden"
         />
-
-        {/* Bloco de código */}
-        <button
-          onClick={handleInsertCodeBlock}
-          disabled={uploading}
-          className="p-2 rounded-lg text-surface-400 hover:text-accent-400 hover:bg-accent-500/10 disabled:opacity-30 transition-all flex-shrink-0"
-          aria-label="Inserir bloco de código"
-          title="Inserir bloco de código"
-        >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="16 18 22 12 16 6" />
-            <polyline points="8 6 2 12 8 18" />
-          </svg>
-        </button>
-
-        {/* Enquete — só em canais de servidor */}
-        {allowPolls && (
-          <button
-            onClick={() => setShowPollComposer(true)}
-            disabled={uploading}
-            className="p-2 rounded-lg text-surface-400 hover:text-accent-400 hover:bg-accent-500/10 disabled:opacity-30 transition-all flex-shrink-0"
-            aria-label="Criar enquete"
-            title="Criar enquete"
-          >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="18" y1="20" x2="18" y2="10" />
-              <line x1="12" y1="20" x2="12" y2="4" />
-              <line x1="6" y1="20" x2="6" y2="14" />
-            </svg>
-          </button>
-        )}
 
         <textarea
           ref={textareaRef}
