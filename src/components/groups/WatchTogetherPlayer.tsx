@@ -108,6 +108,7 @@ export function WatchTogetherPlayer({
   // Cria o player uma única vez, mesmo que `state`/callbacks mudem depois.
   useEffect(() => {
     let destroyed = false;
+    let readyTimeout: ReturnType<typeof setTimeout> | undefined;
 
     loadYouTubeIframeAPI().then(() => {
       if (destroyed || !containerRef.current || !window.YT) return;
@@ -135,6 +136,7 @@ export function WatchTogetherPlayer({
         },
         events: {
           onReady: (e) => {
+            if (readyTimeout) clearTimeout(readyTimeout);
             isReadyRef.current = true;
             loadedVideoIdRef.current = stateRef.current.videoId;
             setIsLoading(false);
@@ -156,6 +158,17 @@ export function WatchTogetherPlayer({
         },
       });
       playerRef.current = player;
+
+      // O script da IFrame API pode carregar sem erro e ainda assim o
+      // handshake onReady nunca chegar (postMessage engolido por origem
+      // divergente, CSP do YOUTUBE bloqueando o script interno dele,
+      // extensão de bloqueio de anúncio, etc.) — sem isso o spinner de
+      // "Carregando player..." fica girando pra sempre, sem nenhuma pista.
+      readyTimeout = setTimeout(() => {
+        if (!destroyed && !isReadyRef.current) {
+          setLoadError('O player do YouTube não respondeu a tempo. Tente recarregar.');
+        }
+      }, 15_000);
     }).catch((err) => {
       console.error('[WatchTogether] falha ao carregar o player do YouTube:', err);
       if (!destroyed) setLoadError(err instanceof Error ? err.message : String(err));
@@ -163,6 +176,7 @@ export function WatchTogetherPlayer({
 
     return () => {
       destroyed = true;
+      if (readyTimeout) clearTimeout(readyTimeout);
       playerRef.current?.destroy();
       playerRef.current = null;
       isReadyRef.current = false;
