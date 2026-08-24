@@ -18,8 +18,10 @@ import { HomeLayout } from './components/home/HomeLayout';
 import { LoginForm } from './components/auth/LoginForm';
 import { RegisterForm } from './components/auth/RegisterForm';
 import { CallManager } from './components/call/CallManager';
+import { ShortcutManager } from './components/call/ShortcutManager';
 import { SettingsPage } from './components/settings/SettingsPage';
 import { GroupLayout } from './components/groups/GroupLayout';
+import { WatchTogetherFloatingPlayer } from './components/groups/WatchTogetherFloatingPlayer';
 import { EventsHub } from './components/events/EventsHub';
 import { EventInviteModal } from './components/events/EventInviteModal';
 import { EventCountdownOverlay } from './components/events/EventCountdownOverlay';
@@ -132,6 +134,8 @@ function AppLayout() {
           : <HomeLayout voice={voice} />}
       </div>
       <CallManager />
+      <ShortcutManager voice={voice} />
+      <WatchTogetherFloatingPlayer voice={voice} />
       {showFloatingCall && <ActiveCallOverlay />}
       <EventCountdownOverlay voice={voice} />
       <EventInviteModal />

@@ -77,4 +77,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
   tunnelOffFileChanged: () => {
     ipcRenderer.removeAllListeners('tunnel:file-changed');
   },
+
+  // Atalhos globais (system-wide) — funcionam mesmo com o Zynk minimizado/
+  // sem foco, ex.: mutar o microfone enquanto joga em tela cheia.
+  setGlobalShortcuts: (items: { action: string; accelerator: string }[]) =>
+    ipcRenderer.invoke('shortcuts:set', items) as Promise<{ failed: string[] }>,
+  onGlobalShortcut: (callback: (action: string) => void) => {
+    ipcRenderer.on('shortcut:triggered', (_event, action) => callback(action));
+  },
+  offGlobalShortcut: () => {
+    ipcRenderer.removeAllListeners('shortcut:triggered');
+  },
 });

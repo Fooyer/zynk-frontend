@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useAuthStore } from '../../stores/authStore';
 import { useLayoutStore } from '../../stores/layoutStore';
+import { useWatchTogetherUiStore, type MediaFocus } from '../../stores/watchTogetherUiStore';
 import { getInitials, getUserColor } from '../../utils/formatDate';
 import { ScreenPicker } from '../call/ScreenPicker';
 import { WatchTogetherPlayer } from './WatchTogetherPlayer';
@@ -13,17 +14,22 @@ interface Props {
   voice: ReturnType<typeof useVoiceRoom>;
 }
 
-function ParticipantTile({ participant, isSelf, isMuted }: {
+function ParticipantTile({ participant, isSelf, isMuted, isSpeaking }: {
   participant: VoiceParticipant;
   isSelf: boolean;
   isMuted: boolean;
+  isSpeaking: boolean;
 }) {
   return (
     <div className="flex flex-col items-center gap-2 w-28">
       <div className="relative">
         <div
-          className={`w-20 h-20 rounded-full ring-2 flex items-center justify-center text-white text-2xl font-bold overflow-hidden ${
-            participant.isSharingAudio ? 'ring-success' : 'ring-white/[0.10]'
+          className={`w-20 h-20 rounded-full ring-2 flex items-center justify-center text-white text-2xl font-bold overflow-hidden transition-all duration-150 ${
+            isSpeaking
+              ? 'ring-accent-500 shadow-glow-accent'
+              : participant.isSharingAudio
+              ? 'ring-success'
+              : 'ring-white/[0.10]'
           }`}
           style={{ backgroundColor: getUserColor(participant.username) }}
         >
@@ -60,10 +66,11 @@ function ParticipantTile({ participant, isSelf, isMuted }: {
   );
 }
 
-function ParticipantChip({ participant, isSharing, isFocused, onClick }: {
+function ParticipantChip({ participant, isSharing, isFocused, isSpeaking, onClick }: {
   participant: VoiceParticipant;
   isSharing: boolean;
   isFocused: boolean;
+  isSpeaking: boolean;
   onClick: () => void;
 }) {
   return (
@@ -73,9 +80,9 @@ function ParticipantChip({ participant, isSharing, isFocused, onClick }: {
       className={`flex flex-col items-center gap-1 flex-shrink-0 w-16 ${isSharing ? 'cursor-pointer' : 'cursor-default'}`}
     >
       <div
-        className={`relative w-12 h-12 rounded-full flex items-center justify-center text-white text-xs font-semibold overflow-hidden ${
-          isFocused ? 'ring-2 ring-accent-500' : 'ring-1 ring-white/[0.10]'
-        }`}
+        className={`relative w-12 h-12 rounded-full flex items-center justify-center text-white text-xs font-semibold overflow-hidden transition-all duration-150 ${
+          isFocused || isSpeaking ? 'ring-2 ring-accent-500' : 'ring-1 ring-white/[0.10]'
+        } ${isSpeaking ? 'shadow-glow-accent-sm' : ''}`}
         style={{ backgroundColor: getUserColor(participant.username) }}
       >
         {participant.avatarUrl ? (
@@ -94,6 +101,44 @@ function ParticipantChip({ participant, isSharing, isFocused, onClick }: {
       </div>
       <span className="text-[10px] text-surface-400 truncate max-w-full">{participant.username}</span>
     </button>
+  );
+}
+
+/**
+ * Seletor "Tela / YouTube" — só aparece quando as duas fontes estão ativas
+ * ao mesmo tempo (alguém compartilhando tela E um "assistir junto" rolando),
+ * já que só dá pra ver uma delas grande por vez. Fica dentro da mesma barra
+ * superior (hover) que já existe nas duas visões, pra não introduzir mais um
+ * elemento sempre visível ocupando espaço.
+ */
+function MediaSwitcher({ focus, onSelect }: { focus: MediaFocus; onSelect: (f: MediaFocus) => void }) {
+  return (
+    <div className="flex items-center gap-1 p-0.5 rounded-lg bg-black/40 backdrop-blur-sm">
+      <button
+        onClick={() => onSelect('screen')}
+        title="Tela compartilhada"
+        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
+          focus === 'screen' ? 'bg-accent-600 text-white' : 'text-surface-200 hover:bg-white/10'
+        }`}
+      >
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="2" y="3" width="20" height="14" rx="2" /><polyline points="8 21 12 17 16 21" /><line x1="12" y1="17" x2="12" y2="21" />
+        </svg>
+        Tela
+      </button>
+      <button
+        onClick={() => onSelect('watch')}
+        title="Assistir junto — YouTube"
+        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
+          focus === 'watch' ? 'bg-accent-600 text-white' : 'text-surface-200 hover:bg-white/10'
+        }`}
+      >
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="2" y="4" width="20" height="16" rx="3" /><polygon points="10 9 15 12 10 15" fill="currentColor" stroke="none" />
+        </svg>
+        YouTube
+      </button>
+    </div>
   );
 }
 
@@ -131,6 +176,10 @@ export function GroupCallView({ voice }: Props) {
   const vc = voice.activeVc;
   const currentUser = useAuthStore((s) => s.user);
   const [focusedUserId, setFocusedUserId] = useState<number | null>(null);
+  // Qual das duas fontes concorrentes (tela compartilhada vs "assistir
+  // junto") ganha a área grande quando as duas estão ativas — só importa
+  // nesse caso; com uma só, ela vira o foco sozinha (ver effectiveFocus).
+  const [focus, setFocus] = useState<MediaFocus>('screen');
   const [showPicker, setShowPicker] = useState(false);
   const [watchModalMode, setWatchModalMode] = useState<'add' | 'swap' | null>(null);
   const [showQueuePanel, setShowQueuePanel] = useState(false);
@@ -148,6 +197,48 @@ export function GroupCallView({ voice }: Props) {
   }, [voice.screenStreams, focusedUserId]);
 
   const focusedStream = focusedUserId !== null ? voice.screenStreams.get(focusedUserId) ?? null : null;
+  const hasScreen = focusedStream !== null;
+  const hasWatch = !!voice.watchState;
+
+  // Com as duas fontes ativas, quem decide qual aparece grande é o seletor
+  // (MediaSwitcher); com só uma, ela ganha o foco sozinha, sem escolha manual.
+  const effectiveFocus: MediaFocus | 'grid' =
+    !hasScreen && !hasWatch ? 'grid' : hasScreen && hasWatch ? focus : hasScreen ? 'screen' : 'watch';
+
+  // Uma fonte nova apareceu (0→1 telas ou watch começou agora) — pula pra
+  // ela automaticamente. Já era o comportamento da call pra tela
+  // compartilhada (uma nova apresentação sempre tomava a frente); agora
+  // vale nos dois sentidos.
+  const prevHasScreenRef = useRef(hasScreen);
+  const prevHasWatchRef = useRef(hasWatch);
+  useEffect(() => {
+    if (hasScreen && !prevHasScreenRef.current) setFocus('screen');
+    else if (hasWatch && !prevHasWatchRef.current) setFocus('watch');
+    prevHasScreenRef.current = hasScreen;
+    prevHasWatchRef.current = hasWatch;
+  }, [hasScreen, hasWatch]);
+
+  // "Expandir" no mini player flutuante (App.tsx) pede um foco específico ao
+  // (re)abrir esta aba — consumido uma vez (mesmo padrão do pendingChannelId
+  // de groupStore). Reage a MUDANÇAS de valor, não só ao montar: o pedido
+  // pode chegar com o componente já montado (ex.: você está vendo uma tela
+  // compartilhada e clica "expandir" no mini player do YouTube).
+  const pendingCallFocus = useWatchTogetherUiStore((s) => s.pendingCallFocus);
+  useEffect(() => {
+    if (pendingCallFocus) {
+      useWatchTogetherUiStore.getState().consumeCallFocus();
+      setFocus(pendingCallFocus);
+    }
+  }, [pendingCallFocus]);
+
+  // Anuncia globalmente quando O PLAYER GRANDE está mostrando o YouTube — é
+  // o que faz o mini player flutuante (App.tsx) se esconder. Essencial pra
+  // nunca ter dois embeds do YouTube tocando o mesmo vídeo ao mesmo tempo
+  // (áudio duplicado, os dois brigando pela mesma sincronização).
+  useEffect(() => {
+    useWatchTogetherUiStore.getState().setMainPlayerVisible(effectiveFocus === 'watch');
+    return () => useWatchTogetherUiStore.getState().setMainPlayerVisible(false);
+  }, [effectiveFocus]);
 
   useEffect(() => {
     if (focusedStream && focusedVideoRef.current) {
@@ -164,20 +255,19 @@ export function GroupCallView({ voice }: Props) {
     return () => document.removeEventListener('fullscreenchange', onFsChange);
   }, []);
 
-  // Sai da tela cheia sozinho se a tela em foco parar de ser compartilhada E
-  // não tiver um "assistir junto" tomando o lugar dela (mesma área/ref serve
-  // pros dois — só um está ativo por vez).
+  // Sai da tela cheia sozinho se não sobrar nenhuma fonte em foco (mesma
+  // área/ref serve pras duas — só uma está ativa por vez).
   useEffect(() => {
-    if (!focusedStream && !voice.watchState && document.fullscreenElement === focusedContainerRef.current) {
+    if (effectiveFocus === 'grid' && document.fullscreenElement === focusedContainerRef.current) {
       document.exitFullscreen().catch(() => {});
     }
-  }, [focusedStream, voice.watchState]);
+  }, [effectiveFocus]);
 
   // Sai do modo cinema/teatro junto se nem tela compartilhada nem "assistir
   // junto" estiverem mais ativos.
   useEffect(() => {
-    if (!focusedStream && !voice.watchState) setCinemaMode(false);
-  }, [focusedStream, voice.watchState]);
+    if (effectiveFocus === 'grid') setCinemaMode(false);
+  }, [effectiveFocus]);
 
   // Reflete o modo cinema local no layout global — recolhe nav/membros na
   // versão menor e esconde a sidebar de canais, restaurando o estado de
@@ -225,10 +315,16 @@ export function GroupCallView({ voice }: Props) {
 
   const gridCols = vc.participants.length <= 1 ? 1 : vc.participants.length <= 4 ? 2 : vc.participants.length <= 6 ? 3 : 4;
 
+  // Seletor "Tela / YouTube" (MediaSwitcher) só faz sentido quando as duas
+  // fontes competem pelo mesmo espaço — com uma só, não há o que escolher.
+  const showSwitcher = hasScreen && hasWatch;
+
+  const focusScreen = (uid: number) => { setFocusedUserId(uid); setFocus('screen'); };
+
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-surface-950">
       <div className={`flex-1 overflow-hidden flex items-center justify-center min-h-0 ${cinemaMode ? 'p-0' : 'p-6'}`}>
-        {focusedStream ? (
+        {effectiveFocus === 'screen' ? (
           <div className="w-full h-full flex flex-col gap-4">
             <div
               ref={focusedContainerRef}
@@ -251,6 +347,11 @@ export function GroupCallView({ voice }: Props) {
                     {Number(focusedUserId) === Number(currentUser?.id) ? 'Você' : nameFor(focusedUserId!)} — Tela compartilhada
                   </span>
                 </div>
+                {showSwitcher && (
+                  <div className="absolute left-1/2 -translate-x-1/2">
+                    <MediaSwitcher focus={focus} onSelect={setFocus} />
+                  </div>
+                )}
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => setCinemaMode((v) => !v)}
@@ -357,14 +458,15 @@ export function GroupCallView({ voice }: Props) {
                     key={p.userId}
                     participant={p}
                     isSharing={voice.screenStreams.has(p.userId)}
-                    isFocused={p.userId === focusedUserId}
-                    onClick={() => setFocusedUserId(p.userId)}
+                    isFocused={effectiveFocus === 'screen' && p.userId === focusedUserId}
+                    isSpeaking={voice.speakingUserIds.has(p.userId)}
+                    onClick={() => focusScreen(p.userId)}
                   />
                 ))}
               </div>
             )}
           </div>
-        ) : voice.watchState ? (
+        ) : effectiveFocus === 'watch' && voice.watchState ? (
           <div className="w-full h-full flex flex-col gap-4">
             <div
               ref={focusedContainerRef}
@@ -388,6 +490,11 @@ export function GroupCallView({ voice }: Props) {
                   <div className="w-2 h-2 rounded-full bg-danger animate-pulse" />
                   <span className="text-sm font-medium text-white">Assistindo junto — YouTube</span>
                 </div>
+                {showSwitcher && (
+                  <div className="absolute left-1/2 -translate-x-1/2">
+                    <MediaSwitcher focus={focus} onSelect={setFocus} />
+                  </div>
+                )}
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => setShowQueuePanel((v) => !v)}
@@ -445,7 +552,8 @@ export function GroupCallView({ voice }: Props) {
                     participant={p}
                     isSharing={voice.screenStreams.has(p.userId)}
                     isFocused={false}
-                    onClick={() => {}}
+                    isSpeaking={voice.speakingUserIds.has(p.userId)}
+                    onClick={() => focusScreen(p.userId)}
                   />
                 ))}
               </div>
@@ -456,21 +564,32 @@ export function GroupCallView({ voice }: Props) {
             className="grid gap-x-8 gap-y-6 justify-center content-center"
             style={{ gridTemplateColumns: `repeat(${gridCols}, minmax(0, max-content))` }}
           >
-            {vc.participants.map((p) => (
-              <ParticipantTile
-                key={p.userId}
-                participant={p}
-                isSelf={Number(p.userId) === Number(currentUser?.id)}
-                isMuted={Number(p.userId) === Number(currentUser?.id) && voice.isMuted}
-              />
-            ))}
+            {vc.participants.map((p) => {
+              const isSelf = Number(p.userId) === Number(currentUser?.id);
+              return (
+                <ParticipantTile
+                  key={p.userId}
+                  participant={p}
+                  isSelf={isSelf}
+                  // Espelha o meu próprio estado otimista (não espera o
+                  // round-trip do roster), mas confia no roster pra todo
+                  // mundo — é o roster que carrega isMuted de verdade pra
+                  // quem não sou eu (antes só aparecia o ícone pra mim mesmo).
+                  isMuted={isSelf ? voice.isMuted : !!p.isMuted}
+                  isSpeaking={voice.speakingUserIds.has(p.userId)}
+                />
+              );
+            })}
           </div>
         )}
       </div>
 
-      {/* Controles — escondidos no modo cinema, já que a barra inferior
-          dentro do vídeo em foco assume mute/compartilhar/sair nesse caso */}
-      {!(cinemaMode && focusedStream) && (
+      {/* Controles — escondidos quando a tela compartilhada está em foco
+          (com ou sem modo cinema), já que a barra inferior dentro do
+          próprio vídeo já assume mute/compartilhar/sair nesse caso. Segue
+          visível no foco "watch" (o player do YouTube não tem esses
+          controles embutidos) e na grade normal. */}
+      {effectiveFocus !== 'screen' && (
       <div className="flex-shrink-0 border-t border-white/[0.06] py-4 flex items-center justify-center gap-3">
         <ControlButton onClick={voice.toggleMute} title={voice.isMuted ? 'Ativar microfone' : 'Silenciar'} active={voice.isMuted ? false : undefined}>
           {voice.isMuted ? (

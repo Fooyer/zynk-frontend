@@ -3,6 +3,7 @@ import rnnoiseWasmPath from '@sapphi-red/web-noise-suppressor/rnnoise.wasm?url';
 import rnnoiseWasmSimdPath from '@sapphi-red/web-noise-suppressor/rnnoise_simd.wasm?url';
 import rnnoiseWorkletPath from '@sapphi-red/web-noise-suppressor/rnnoiseWorklet.js?url';
 import agcWorkletPath from './agcWorklet.js?url';
+import noiseGateWorkletPath from './noiseGateWorklet.js?url';
 import { useSettingsStore } from '../stores/settingsStore';
 import { LOW_LATENCY_AUDIO_CONSTRAINTS } from './lowLatencyAudio';
 import type { CallMode } from '../types';
@@ -174,6 +175,7 @@ export async function getProcessedStream(
       getRnnoiseWasmBinary(),
       audioCtx.audioWorklet.addModule(rnnoiseWorkletPath),
       audioCtx.audioWorklet.addModule(agcWorkletPath),
+      audioCtx.audioWorklet.addModule(noiseGateWorkletPath),
     ]);
 
     const rnnoise = forceMono(new RnnoiseWorkletNode(audioCtx, { maxChannels: 1, wasmBinary }));
@@ -198,6 +200,26 @@ export async function getProcessedStream(
     dryGain.connect(mixed);
 
     let lastNode: AudioNode = mixed;
+
+    // Isolamento de voz (expansor suave, não gate binário — ver comentário
+    // em noiseGateWorklet.js) — atenua o que sobra de ruído de fundo depois
+    // do RNNoise, principalmente o piso de 15% de sinal "seco" sempre
+    // presente na mixagem acima. Roda antes do compressor/AGC de propósito,
+    // pra eles nivelarem o sinal já mais limpo em vez de realçar ruído.
+    if (settings.noiseGateEnabled) {
+      const noiseGate = forceMono(
+        new AudioWorkletNode(audioCtx, 'noise-gate-processor', {
+          numberOfInputs: 1,
+          numberOfOutputs: 1,
+          channelCount: 1,
+          channelCountMode: 'explicit',
+          channelInterpretation: 'speakers',
+        }),
+      );
+      noiseGate.port.postMessage({ auto: settings.noiseGateAuto, thresholdDb: settings.noiseGateThreshold });
+      lastNode.connect(noiseGate);
+      lastNode = noiseGate;
+    }
 
     // Compressor suave — só pra nivelar volume, não faz parte da remoção
     // de ruído (isso é o RNNoise acima).

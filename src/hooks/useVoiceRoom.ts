@@ -49,6 +49,10 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
   // broadcast pro roster (diferente do isMuted, que é o próprio participante
   // se mutando pra todo mundo).
   const [locallyMutedIds, setLocallyMutedIds] = useState<Set<number>>(new Set());
+  // Quem está falando agora (eu incluído) — populado pelo polling de
+  // AnalyserNode logo abaixo, consumido pelos indicadores visuais (anel no
+  // avatar da grade da call, linha destacada na lista de participantes).
+  const [speakingUserIds, setSpeakingUserIds] = useState<Set<number>>(new Set());
 
   const localStream = useRef<MediaStream | null>(null);
   const localScreenStream = useRef<MediaStream | null>(null);
@@ -61,6 +65,15 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
   // substituir o srcObject do <audio> a cada novo track (senão o segundo
   // track — o áudio compartilhado — silenciava o mic desse peer pra todo mundo).
   const remoteAudioStreams = useRef<Map<number, MediaStream>>(new Map());
+  // Detecção de fala (indicador visual, tipo Discord) — um AnalyserNode por
+  // participante, tapeando o MediaStream sem interferir na reprodução (que
+  // continua pelo <audio> nativo, sem passar pelo Web Audio). O local usa o
+  // analyser que já sai pronto de getProcessedStream(); os remotos tapeiam o
+  // stream assim que o primeiro áudio (mic) chega, com um AudioContext único
+  // compartilhado entre todos os peers.
+  const localAnalyserRef = useRef<AnalyserNode | null>(null);
+  const remoteAnalysers = useRef<Map<number, AnalyserNode>>(new Map());
+  const remoteAnalyserCtxRef = useRef<AudioContext | null>(null);
   // Diagnóstico temporário: guarda o id do PRIMEIRO track de áudio recebido
   // de cada peer (sempre o mic, adicionado na entrada da call) só pra rotular
   // os logs de stats e não ficar adivinhando qual dos tracks acumulados no
@@ -184,6 +197,33 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
     socket.on('watch:state', onWatchState);
     return () => { socket.off('watch:state', onWatchState); };
   }, []);
+
+  // Detecção de fala — sondagem periódica de nível de áudio (mesmo padrão da
+  // call 1:1 em DMChatArea.tsx), aqui pra N participantes de uma vez. Preso
+  // ao connectedVc (não activeVc) pra não rodar sondando analysers já
+  // fechados enquanto a call está desconectando.
+  useEffect(() => {
+    if (!connectedVc) { setSpeakingUserIds(new Set()); return; }
+    const data = new Uint8Array(128);
+    const interval = setInterval(() => {
+      const next = new Set<number>();
+      if (localAnalyserRef.current && !isMuted && user?.id) {
+        localAnalyserRef.current.getByteFrequencyData(data);
+        const avg = data.reduce((a, b) => a + b, 0) / data.length;
+        if (avg > 8) next.add(user.id);
+      }
+      remoteAnalysers.current.forEach((analyser, uid) => {
+        analyser.getByteFrequencyData(data);
+        const avg = data.reduce((a, b) => a + b, 0) / data.length;
+        if (avg > 8) next.add(uid);
+      });
+      setSpeakingUserIds((prev) => {
+        if (prev.size === next.size && [...prev].every((id) => next.has(id))) return prev;
+        return next;
+      });
+    }, 100);
+    return () => clearInterval(interval);
+  }, [connectedVc, isMuted, user?.id]);
 
   const addScreenStream = (uid: number, stream: MediaStream) => {
     setScreenStreams((prev) => {
@@ -337,6 +377,20 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
             audio.setSinkId(outputId).catch(() => {});
           }
           audio.srcObject = stream;
+
+          // Tapeia esse mesmo MediaStream pra medir nível de áudio — só na
+          // criação (primeiro track = mic, ver comentário acima), pra não
+          // acabar analisando o track de compartilhamento de áudio do
+          // sistema como se fosse a voz da pessoa.
+          try {
+            if (!remoteAnalyserCtxRef.current) remoteAnalyserCtxRef.current = new AudioContext();
+            const ctx = remoteAnalyserCtxRef.current;
+            const source = ctx.createMediaStreamSource(stream);
+            const analyser = ctx.createAnalyser();
+            analyser.fftSize = 256;
+            source.connect(analyser);
+            remoteAnalysers.current.set(targetUserId, analyser);
+          } catch { /* medição de fala é cosmética — segue sem ela se falhar */ }
         }
         // `autoplay` sozinho não é confiável (política de autoplay do
         // Chromium/Electron pode bloquear silenciosamente) — era por isso
@@ -440,6 +494,7 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
     if (audio) { audio.srcObject = null; audioRefs.current.delete(uid); }
     remoteAudioStreams.current.delete(uid);
     firstAudioTrackIdByUser.current.delete(uid);
+    remoteAnalysers.current.delete(uid);
     screenSenders.current.delete(uid);
     audioShareSenders.current.delete(uid);
     removeScreenStream(uid);
@@ -462,6 +517,11 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
     setIsScreenSharing(false);
     setIsSharingAudio(false);
     peers.current.forEach((_, uid) => closePeer(uid));
+    localAnalyserRef.current = null;
+    remoteAnalysers.current.clear();
+    remoteAnalyserCtxRef.current?.close().catch(() => {});
+    remoteAnalyserCtxRef.current = null;
+    setSpeakingUserIds(new Set());
     setActiveVcId(null);
     setConnectedVc(null);
     setIsMuted(false);
@@ -479,8 +539,9 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
       // Mesmo pipeline de áudio da call 1:1 (RNNoise + noise gate nos
       // níveis médio/alto) — antes, canal de voz de grupo pegava o
       // microfone cru, sem nenhum filtro de ruído.
-      const { stream } = await getProcessedStream(vc.mode);
+      const { stream, analyser } = await getProcessedStream(vc.mode);
       localStream.current = stream;
+      localAnalyserRef.current = analyser;
       // Fixa o grupo/canal de texto do momento da entrada — se o usuário
       // navegar pra outro grupo depois, a saída ainda usa o grupo certo.
       connectedGroupChannelIdRef.current = groupChannelId;
@@ -776,6 +837,7 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
     isSharingAudio,
     screenStreams,
     locallyMutedIds,
+    speakingUserIds,
     watchState,
     join,
     leave,

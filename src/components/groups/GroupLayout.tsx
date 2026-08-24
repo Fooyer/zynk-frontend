@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useGroupStore } from '../../stores/groupStore';
 import { useUnreadStore } from '../../stores/unreadStore';
 import { useLayoutStore } from '../../stores/layoutStore';
+import { useWatchTogetherUiStore } from '../../stores/watchTogetherUiStore';
 import { useAuthStore } from '../../stores/authStore';
 import { useContextMenuStore } from '../../stores/contextMenuStore';
 import { useVoiceRoom } from '../../hooks/useVoiceRoom';
@@ -568,15 +569,22 @@ function ChannelSidebar({ group, voice, activeChannelId, onSelectChannel, onOpen
                           // isso aparece mesmo pra quem não está na call.
                           const isSharing = !!p.isSharing;
                           const isMuted = !!p.isMuted;
+                          // Só faz sentido medir quem está falando pra quem
+                          // está de fato conectado aqui (é o WebRTC que
+                          // alimenta os AnalyserNodes) — pra quem só aparece
+                          // no roster sem estar na call ativa, sempre false.
+                          const isSpeaking = isActive && voice.speakingUserIds.has(p.userId);
                           return (
                             <div
                               key={p.userId}
-                              className="flex items-center gap-2"
+                              className={`flex items-center gap-2 -mx-1.5 px-1.5 py-1 rounded-md transition-colors duration-150 ${
+                                isSpeaking ? 'bg-accent-500/15' : ''
+                              }`}
                               onContextMenu={(e) => openParticipantMenu(e, p, isActive)}
                             >
                               <div
-                                className={`w-5 h-5 rounded-full flex items-center justify-center text-white text-[8px] font-semibold flex-shrink-0 ring-2 ${
-                                  isActive ? 'ring-accent-500/60' : 'ring-white/[0.10]'
+                                className={`w-5 h-5 rounded-full flex items-center justify-center text-white text-[8px] font-semibold flex-shrink-0 ring-2 transition-all duration-150 ${
+                                  isSpeaking ? 'ring-accent-400 shadow-glow-accent-sm' : isActive ? 'ring-accent-500/60' : 'ring-white/[0.10]'
                                 }`}
                                 style={{ backgroundColor: getUserColor(p.username) }}
                               >
@@ -586,7 +594,7 @@ function ChannelSidebar({ group, voice, activeChannelId, onSelectChannel, onOpen
                                   getInitials(p.username)
                                 )}
                               </div>
-                              <span className="text-xs text-surface-100 font-medium truncate flex-1">{p.username}</span>
+                              <span className={`text-xs font-medium truncate flex-1 ${isSpeaking ? 'text-accent-200' : 'text-surface-100'}`}>{p.username}</span>
                               {isMuted && (
                                 <span title="Sem microfone" className="flex-shrink-0 text-danger">
                                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -713,6 +721,18 @@ export function GroupLayout({ voice }: { voice: ReturnType<typeof useVoiceRoom> 
     const pending = useGroupStore.getState().consumePendingChannelId();
     setActiveChannelId(pending ?? activeGroup?.channelId ?? null);
   }, [activeGroupId, activeGroup?.channelId]);
+
+  // "Expandir" no mini player flutuante do YouTube (App.tsx) pede pra abrir
+  // a aba Chamada — mesmo padrão de "pendente consumido uma vez" do canal
+  // acima. Assina o valor em si (não só activeGroupId): o pedido pode
+  // chegar mesmo já estando no grupo certo, só faltando trocar de aba.
+  const pendingCallTab = useWatchTogetherUiStore((s) => s.pendingCallTab);
+  useEffect(() => {
+    if (pendingCallTab) {
+      useWatchTogetherUiStore.getState().consumeCallTab();
+      setActiveTab('call');
+    }
+  }, [pendingCallTab]);
 
   return (
     <>

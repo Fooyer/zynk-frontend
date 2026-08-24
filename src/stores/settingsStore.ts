@@ -11,6 +11,13 @@ interface SettingsState {
   noiseSuppression: boolean; // liga/desliga só — RNNoise contínuo, sem níveis
   echoCancellation: boolean;
   autoGainControl: boolean;
+  // Isolamento de voz — atenua (não corta) o que sobra de ruído de fundo
+  // depois do RNNoise, principalmente nas pausas entre falas. Complementa a
+  // supressão de ruído, não substitui — só roda dentro do mesmo pipeline
+  // (exige noiseSuppression ligado).
+  noiseGateEnabled: boolean;
+  noiseGateAuto: boolean;    // true = calibra o piso de ruído sozinho; false = usa noiseGateThreshold
+  noiseGateThreshold: number; // dB, só usado quando noiseGateAuto=false (ex.: -40)
 
   // Notificações
   notifSound: boolean;
@@ -24,6 +31,9 @@ interface SettingsState {
   setNoiseSuppression: (v: boolean) => void;
   setEchoCancellation: (v: boolean) => void;
   setAutoGainControl: (v: boolean) => void;
+  setNoiseGateEnabled: (v: boolean) => void;
+  setNoiseGateAuto: (v: boolean) => void;
+  setNoiseGateThreshold: (v: number) => void;
   setNotifSound: (v: boolean) => void;
   setNotifPush: (v: boolean) => void;
   setNotifVolume: (v: number) => void;
@@ -38,6 +48,9 @@ export const useSettingsStore = create<SettingsState>()(
       noiseSuppression: true,
       echoCancellation: true,
       autoGainControl: true,
+      noiseGateEnabled: true,
+      noiseGateAuto: true,
+      noiseGateThreshold: -40,
 
       notifSound: true,
       notifPush: true,
@@ -49,6 +62,9 @@ export const useSettingsStore = create<SettingsState>()(
       setNoiseSuppression: (noiseSuppression) => set({ noiseSuppression }),
       setEchoCancellation: (echoCancellation) => set({ echoCancellation }),
       setAutoGainControl: (autoGainControl) => set({ autoGainControl }),
+      setNoiseGateEnabled: (noiseGateEnabled) => set({ noiseGateEnabled }),
+      setNoiseGateAuto: (noiseGateAuto) => set({ noiseGateAuto }),
+      setNoiseGateThreshold: (noiseGateThreshold) => set({ noiseGateThreshold }),
       setNotifSound: (notifSound) => set({ notifSound }),
       setNotifPush: (notifPush) => set({ notifPush }),
       setNotifVolume: (notifVolume) => set({ notifVolume }),

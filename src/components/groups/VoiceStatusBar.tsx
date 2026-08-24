@@ -57,7 +57,9 @@ export function VoiceStatusBar({ voice }: Props) {
         <div className="px-3 py-2 flex-shrink-0">
           <div className="flex items-center gap-2">
             <div
-              className="w-6 h-6 rounded-full flex items-center justify-center text-white text-[9px] font-semibold flex-shrink-0"
+              className={`w-6 h-6 rounded-full flex items-center justify-center text-white text-[9px] font-semibold flex-shrink-0 transition-all duration-150 ${
+                !voice.isMuted && voice.speakingUserIds.has(self.userId) ? 'ring-2 ring-accent-400 shadow-glow-accent-sm' : ''
+              }`}
               style={{ backgroundColor: getUserColor(self.username) }}
             >
               {self.avatarUrl ? (

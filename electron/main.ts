@@ -1,4 +1,4 @@
-import { app, BrowserWindow, shell, session, ipcMain, desktopCapturer, Tray, Menu, nativeImage, dialog, type DesktopCapturerSource } from 'electron';
+import { app, BrowserWindow, shell, session, ipcMain, desktopCapturer, Tray, Menu, nativeImage, dialog, globalShortcut, type DesktopCapturerSource } from 'electron';
 import { autoUpdater } from 'electron-updater';
 import path from 'path';
 import fs from 'fs';
@@ -374,6 +374,27 @@ ipcMain.handle('screen:select-source', async (_event, sourceId: string) => {
   }
 });
 
+// ─── Atalhos globais (system-wide) ─────────────────────────────
+// Registrados via globalShortcut — funcionam mesmo com o Zynk sem foco
+// (ex.: mutar durante um jogo em tela cheia). O renderer reenvia a lista
+// inteira a cada mudança (não incremental), então sempre começa do zero.
+ipcMain.handle('shortcuts:set', (_event, items: { action: string; accelerator: string }[]) => {
+  globalShortcut.unregisterAll();
+  const failed: string[] = [];
+  for (const { action, accelerator } of items) {
+    if (!accelerator) continue;
+    try {
+      const ok = globalShortcut.register(accelerator, () => {
+        mainWindow?.webContents.send('shortcut:triggered', action);
+      });
+      if (!ok) failed.push(action);
+    } catch {
+      failed.push(action);
+    }
+  }
+  return { failed };
+});
+
 // ─── Gamepad Emulation via IPC ─────────────────────────────────
 ipcMain.handle('gamepad:is-available', () => isGamepadAvailable());
 
@@ -712,6 +733,7 @@ app.whenReady().then(async () => {
 app.on('before-quit', () => {
   isQuitting = true;
   cleanupGamepad();
+  globalShortcut.unregisterAll();
 });
 
 app.on('window-all-closed', () => {

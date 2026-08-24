@@ -6,6 +6,10 @@ import { PRESET_SWATCH, PRESET_LABELS } from '../../utils/accentPresets';
 import { useAuthStore } from '../../stores/authStore';
 import { getProcessedStream } from '../../services/audioProcessing';
 import { useEditableContextMenu } from '../../hooks/useEditableContextMenu';
+import { useKeybindingsStore, type ShortcutActionId } from '../../stores/keybindingsStore';
+import { useShortcutStatusStore } from '../../stores/shortcutStatusStore';
+import { SHORTCUT_ACTIONS, SHORTCUT_ACTIONS_BY_ID, type ShortcutActionMeta } from '../../services/shortcutActions';
+import { formatKeyCombo, keyComboEquals, keyComboFromEvent } from '../../utils/keyCombo';
 
 interface DeviceInfo {
   deviceId: string;
@@ -432,8 +436,12 @@ function OutputSection({ outputs }: { outputs: DeviceInfo[] }) {
 }
 
 function ProcessingSection() {
-  const { noiseSuppression, echoCancellation, autoGainControl, setNoiseSuppression, setEchoCancellation, setAutoGainControl } =
-    useSettingsStore();
+  const {
+    noiseSuppression, echoCancellation, autoGainControl,
+    noiseGateEnabled, noiseGateAuto, noiseGateThreshold,
+    setNoiseSuppression, setEchoCancellation, setAutoGainControl,
+    setNoiseGateEnabled, setNoiseGateAuto, setNoiseGateThreshold,
+  } = useSettingsStore();
 
   return (
     <section className="space-y-4">
@@ -456,6 +464,64 @@ function ProcessingSection() {
 
         <div className="h-px bg-white/[0.06]" />
 
+        <div className={!noiseSuppression ? 'opacity-40 pointer-events-none' : ''}>
+          <Toggle
+            label="Isolamento de voz"
+            description="Atenua o que sobra de ruído de fundo nas pausas entre as falas (ventilador, trânsito, gente conversando ao fundo)"
+            checked={noiseGateEnabled}
+            onChange={setNoiseGateEnabled}
+          />
+
+          {noiseGateEnabled && (
+            <div className="mt-3 space-y-3">
+              <div className="flex items-center gap-0.5 p-0.5 bg-surface-900/60 border border-white/[0.08] rounded-lg w-fit">
+                <button
+                  type="button"
+                  onClick={() => setNoiseGateAuto(true)}
+                  className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
+                    noiseGateAuto ? 'bg-accent-600/20 text-accent-300' : 'text-surface-400 hover:text-surface-200'
+                  }`}
+                >
+                  Automático
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setNoiseGateAuto(false)}
+                  className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
+                    !noiseGateAuto ? 'bg-accent-600/20 text-accent-300' : 'text-surface-400 hover:text-surface-200'
+                  }`}
+                >
+                  Manual
+                </button>
+              </div>
+
+              {noiseGateAuto ? (
+                <p className="text-[11px] text-surface-500 leading-relaxed">
+                  Calibra sozinho acompanhando o ruído do seu ambiente — ideal na maioria dos casos.
+                </p>
+              ) : (
+                <>
+                  <SliderField
+                    label="Sensibilidade"
+                    value={noiseGateThreshold}
+                    min={-60}
+                    max={-10}
+                    step={1}
+                    format={(v) => `${v} dB`}
+                    onChange={setNoiseGateThreshold}
+                  />
+                  <p className="text-[11px] text-surface-500 leading-relaxed">
+                    Sons abaixo desse volume são atenuados. Valores menores (mais à esquerda) isolam mais,
+                    mas podem cortar sua voz quando ela fica baixa — use "Testar microfone" acima pra ajustar ouvindo o resultado.
+                  </p>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="h-px bg-white/[0.06]" />
+
         <Toggle
           label="Cancelamento de eco"
           description="Evita que o som do seu alto-falante volte pelo microfone"
@@ -469,6 +535,123 @@ function ProcessingSection() {
           checked={autoGainControl}
           onChange={setAutoGainControl}
         />
+      </div>
+    </section>
+  );
+}
+
+function ShortcutRow({ action }: { action: ShortcutActionMeta }) {
+  const combo = useKeybindingsStore((s) => s.bindings[action.id]);
+  const setBinding = useKeybindingsStore((s) => s.setBinding);
+  const failedGlobal = useShortcutStatusStore((s) => s.failedGlobalActions.has(action.id));
+  const [recording, setRecording] = useState(false);
+  const [conflict, setConflict] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!recording) return;
+    setConflict(null);
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      // Esc sozinho cancela a captura — só vira atalho de verdade com
+      // modificador junto (ex.: Ctrl+Esc).
+      if (e.code === 'Escape' && !e.ctrlKey && !e.shiftKey && !e.altKey && !e.metaKey) {
+        setRecording(false);
+        return;
+      }
+
+      const next = keyComboFromEvent(e);
+      if (!next) return; // só um modificador solto — ainda esperando a tecla de verdade
+
+      const bindings = useKeybindingsStore.getState().bindings;
+      const usedBy = Object.entries(bindings).find(
+        ([otherId, otherCombo]) => otherId !== action.id && otherCombo && keyComboEquals(otherCombo, next),
+      );
+      if (usedBy) {
+        const label = SHORTCUT_ACTIONS_BY_ID.get(usedBy[0] as ShortcutActionId)?.label ?? usedBy[0];
+        setConflict(`Já usado por "${label}"`);
+        return;
+      }
+
+      setBinding(action.id, next);
+      setRecording(false);
+    };
+
+    window.addEventListener('keydown', onKeyDown, true);
+    return () => window.removeEventListener('keydown', onKeyDown, true);
+  }, [recording, action.id, setBinding]);
+
+  return (
+    <div className="flex items-center justify-between gap-3 py-2.5">
+      <div className="min-w-0">
+        <p className="text-sm font-medium text-surface-200">{action.label}</p>
+        <p className="text-xs text-surface-500 mt-0.5">{action.description}</p>
+        {conflict ? (
+          <p className="text-[11px] text-danger mt-1">{conflict}</p>
+        ) : failedGlobal && !recording ? (
+          <p className="text-[11px] text-warning mt-1">
+            Não registrou como atalho global (talvez já esteja em uso por outro programa) — funciona só com o Zynk em foco.
+          </p>
+        ) : null}
+      </div>
+      <div className="flex items-center gap-1.5 flex-shrink-0">
+        <button
+          onClick={() => setRecording((r) => !r)}
+          className={`px-3 py-1.5 rounded-lg text-xs font-medium tabular-nums transition-colors min-w-[112px] text-center ${
+            recording
+              ? 'bg-accent-600/20 text-accent-300 ring-1 ring-accent-500'
+              : combo
+              ? 'bg-white/[0.08] text-surface-100 hover:bg-white/[0.14]'
+              : 'bg-white/[0.06] text-surface-500 hover:bg-white/[0.12]'
+          }`}
+        >
+          {recording ? 'Pressione uma tecla…' : combo ? formatKeyCombo(combo) : 'Definir atalho'}
+        </button>
+        {combo && !recording && (
+          <button
+            onClick={() => setBinding(action.id, null)}
+            title="Remover atalho"
+            className="w-7 h-7 flex items-center justify-center text-surface-500 hover:text-danger hover:bg-white/[0.06] rounded-lg transition-colors"
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ShortcutsSection() {
+  const isElectron = !!window.electronAPI?.setGlobalShortcuts;
+
+  return (
+    <section className="space-y-4">
+      <SectionHeader
+        title="Atalhos"
+        icon={
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="2" y="6" width="20" height="12" rx="2" />
+            <line x1="6" y1="10" x2="6" y2="10" /><line x1="10" y1="10" x2="10" y2="10" /><line x1="14" y1="10" x2="14" y2="10" /><line x1="18" y1="10" x2="18" y2="10" />
+            <line x1="6" y1="14" x2="18" y2="14" />
+          </svg>
+        }
+      />
+
+      <div className="bg-surface-800 rounded-2xl p-5 border border-white/[0.06] shadow-panel">
+        <p className="text-xs text-surface-500 mb-4 leading-relaxed">
+          {isElectron
+            ? 'Funcionam em qualquer lugar, mesmo com o Zynk minimizado ou sem foco — ideal pra mutar durante um jogo, por exemplo. Evite combinações de uma tecla só (ex.: só "M"), que também disparariam enquanto você digita em algum campo de texto.'
+            : 'Funcionam só com a janela do Zynk em foco.'}
+        </p>
+        <div className="divide-y divide-white/[0.06]">
+          {SHORTCUT_ACTIONS.map((action) => (
+            <ShortcutRow key={action.id} action={action} />
+          ))}
+        </div>
       </div>
     </section>
   );
@@ -835,7 +1018,7 @@ function UpdatesSection() {
   );
 }
 
-type TabId = 'account' | 'audio' | 'notifications' | 'theme' | 'about';
+type TabId = 'account' | 'audio' | 'shortcuts' | 'notifications' | 'theme' | 'about';
 
 const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
   {
@@ -857,6 +1040,17 @@ const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
         <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
         <line x1="12" y1="19" x2="12" y2="23" />
         <line x1="8" y1="23" x2="16" y2="23" />
+      </svg>
+    ),
+  },
+  {
+    id: 'shortcuts',
+    label: 'Atalhos',
+    icon: (
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="2" y="6" width="20" height="12" rx="2" />
+        <line x1="6" y1="10" x2="6" y2="10" /><line x1="10" y1="10" x2="10" y2="10" /><line x1="14" y1="10" x2="14" y2="10" /><line x1="18" y1="10" x2="18" y2="10" />
+        <line x1="6" y1="14" x2="18" y2="14" />
       </svg>
     ),
   },
@@ -899,7 +1093,8 @@ const SECTION_META: { id: string; tabId: TabId; label: string; keywords: string 
   { id: 'account', tabId: 'account', label: 'Conta', keywords: 'conta usuário username nome perfil account' },
   { id: 'mic', tabId: 'audio', label: 'Microfone', keywords: 'microfone entrada input volume mic teste' },
   { id: 'output', tabId: 'audio', label: 'Saída de áudio', keywords: 'saída output alto-falante speaker áudio' },
-  { id: 'processing', tabId: 'audio', label: 'Processamento de áudio', keywords: 'ruído noise supressão eco echo cancelamento ganho gain' },
+  { id: 'processing', tabId: 'audio', label: 'Processamento de áudio', keywords: 'ruído noise supressão eco echo cancelamento ganho gain isolamento voz gate sensibilidade fundo' },
+  { id: 'shortcuts', tabId: 'shortcuts', label: 'Atalhos', keywords: 'atalho shortcut tecla hotkey mutar desmutar mudo global teclado bind' },
   { id: 'notifications', tabId: 'notifications', label: 'Notificações', keywords: 'notificação som push volume' },
   { id: 'appearance', tabId: 'theme', label: 'Aparência', keywords: 'tema aparência claro escuro dark light modo' },
   { id: 'accent', tabId: 'theme', label: 'Cor de destaque', keywords: 'cor destaque acento accent gradiente personalizada predefinida paleta' },
@@ -920,6 +1115,7 @@ export function SettingsPage() {
     mic: <MicSection inputs={inputs} />,
     output: <OutputSection outputs={outputs} />,
     processing: <ProcessingSection />,
+    shortcuts: <ShortcutsSection />,
     notifications: <NotificationsSection />,
     appearance: <AppearanceSection />,
     accent: <AccentSection />,
@@ -1038,6 +1234,7 @@ export function SettingsPage() {
                     <InfoNote />
                   </>
                 )}
+                {activeTab === 'shortcuts' && sectionNodes.shortcuts}
                 {activeTab === 'notifications' && sectionNodes.notifications}
                 {activeTab === 'theme' && (
                   <>

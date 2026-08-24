@@ -152,7 +152,7 @@ function CallPanel({ dm, callStatus }: { dm: DmChannel; callStatus: 'calling' | 
     <div className="flex flex-col items-center gap-2 min-w-[100px]">
       <div className={`relative rounded-full transition-all duration-200 ${
         speaking
-          ? 'ring-[3px] ring-success shadow-[0_0_20px_rgba(67,181,129,0.35)]'
+          ? 'ring-[3px] ring-accent-500 shadow-glow-accent'
           : 'ring-[3px] ring-white/[0.1]'
       }`}>
         <div

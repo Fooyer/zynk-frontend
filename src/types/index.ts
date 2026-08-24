@@ -310,6 +310,11 @@ declare global {
       tunnelDeleteRemoteFile: (folderPath: string, relativePath: string) => Promise<boolean>;
       tunnelOnFileChanged: (callback: (data: { relativePath: string; action: 'change' | 'create' | 'delete'; content: string | null }) => void) => void;
       tunnelOffFileChanged: () => void;
+      // Atalhos globais (funcionam mesmo com o Zynk em segundo plano, ex.:
+      // mutar durante um jogo) — registrados via globalShortcut no main.
+      setGlobalShortcuts: (items: { action: string; accelerator: string }[]) => Promise<{ failed: string[] }>;
+      onGlobalShortcut: (callback: (action: string) => void) => void;
+      offGlobalShortcut: () => void;
     };
   }
 }
