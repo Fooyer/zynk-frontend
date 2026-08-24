@@ -1,6 +1,6 @@
 {
   "name": "zynk",
-  "version": "0.6.9",
+  "version": "0.6.11",
   "description": "Zynk — Electron + Vite + React",
   "main": "dist-electron/main.js",
   "scripts": {
@@ -35,8 +35,8 @@
     "@vitejs/plugin-react": "^4.2.1",
     "autoprefixer": "^10.4.17",
     "dotenv-cli": "^11.0.0",
-    "electron": "^28.2.0",
-    "electron-builder": "^24.9.1",
+    "electron": "^43.0.0",
+    "electron-builder": "^26.0.0",
     "postcss": "^8.4.33",
     "rcedit": "^5.0.2",
     "tailwindcss": "^3.4.1",
@@ -48,12 +48,12 @@
   "devEngines": {
     "packageManager": {
       "name": "npm",
-      "version": "12.0.2",
+      "version": "11.14.1",
       "onFail": "download"
     }
   },
   "allowScripts": {
     "esbuild@0.21.5": true,
-    "electron@28.3.3": true
+    "electron@43.4.1": true
   }
 }
