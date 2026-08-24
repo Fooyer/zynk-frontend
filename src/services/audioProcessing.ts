@@ -2,6 +2,7 @@ import { loadRnnoise, RnnoiseWorkletNode } from '@sapphi-red/web-noise-suppresso
 import rnnoiseWasmPath from '@sapphi-red/web-noise-suppressor/rnnoise.wasm?url';
 import rnnoiseWasmSimdPath from '@sapphi-red/web-noise-suppressor/rnnoise_simd.wasm?url';
 import rnnoiseWorkletPath from '@sapphi-red/web-noise-suppressor/rnnoiseWorklet.js?url';
+import agcWorkletPath from './agcWorklet.js?url';
 import { useSettingsStore } from '../stores/settingsStore';
 import { LOW_LATENCY_AUDIO_CONSTRAINTS } from './lowLatencyAudio';
 import type { CallMode } from '../types';
@@ -172,6 +173,7 @@ export async function getProcessedStream(
     const [wasmBinary] = await Promise.all([
       getRnnoiseWasmBinary(),
       audioCtx.audioWorklet.addModule(rnnoiseWorkletPath),
+      audioCtx.audioWorklet.addModule(agcWorkletPath),
     ]);
 
     const rnnoise = forceMono(new RnnoiseWorkletNode(audioCtx, { maxChannels: 1, wasmBinary }));
@@ -208,10 +210,25 @@ export async function getProcessedStream(
     lastNode.connect(compressor);
     lastNode = compressor;
 
-    const makeupGain = forceMono(audioCtx.createGain());
-    makeupGain.gain.value = 1.15;
-    lastNode.connect(makeupGain);
-    lastNode = makeupGain;
+    // AGC (Automatic Gain Control) — mede o RMS do sinal já limpo (pós
+    // RNNoise + compressor) e ajusta o ganho pra manter a voz numa faixa de
+    // volume alvo (-20dBFS), em vez de um ganho fixo. Sem isso, quem tem
+    // microfone baixo (comum em quem não tem supressão de ruído de
+    // hardware) fica bem mais baixo que o resto do canal; com ganho fixo
+    // isso nunca se resolvia. Implementado como AudioWorkletProcessor
+    // (agcWorklet.js) pra rodar na thread de áudio, sem round-trip pro
+    // main thread.
+    const agc = forceMono(
+      new AudioWorkletNode(audioCtx, 'agc-processor', {
+        numberOfInputs: 1,
+        numberOfOutputs: 1,
+        channelCount: 1,
+        channelCountMode: 'explicit',
+        channelInterpretation: 'speakers',
+      }),
+    );
+    lastNode.connect(agc);
+    lastNode = agc;
 
     // Analyser para detecção de fala (speaking indicator)
     const analyser = forceMono(audioCtx.createAnalyser());
