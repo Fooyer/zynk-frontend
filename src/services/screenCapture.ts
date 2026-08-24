@@ -49,5 +49,21 @@ export async function captureSystemAudio(): Promise<MediaStream> {
     stream.getTracks().forEach((t) => t.stop());
     throw new Error('Nenhum áudio do sistema disponível pra capturar.');
   }
+  // Diagnóstico: a faixa pode vir "viva" (não cai no erro acima) mas sem
+  // áudio real chegando — em geral sinal de que o Windows negou a captura de
+  // loopback silenciosamente (permissão de microfone do app nas configs de
+  // privacidade) em vez de estourar erro. `muted`/`onmute` aqui ajudam a
+  // distinguir "capturou mas tá tudo em silêncio no PC" de "Windows nunca
+  // entregou frame nenhum".
+  const audioTrack = stream.getAudioTracks()[0];
+  console.log('[captureSystemAudio] track capturada:', {
+    label: audioTrack.label,
+    readyState: audioTrack.readyState,
+    muted: audioTrack.muted,
+    enabled: audioTrack.enabled,
+    settings: audioTrack.getSettings(),
+  });
+  audioTrack.onmute = () => console.warn('[captureSystemAudio] track ficou muted (Windows parou de entregar áudio)');
+  audioTrack.onunmute = () => console.log('[captureSystemAudio] track voltou a entregar áudio');
   return stream;
 }

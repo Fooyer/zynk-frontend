@@ -335,7 +335,13 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
         // que só dava pra ouvir o outro depois de interagir com o picker de
         // tela (o clique ali "destravava" autoplay por acidente). Chamar
         // .play() explicitamente é o padrão que já funciona na call 1:1.
-        audio.play().catch(() => {});
+        console.log(`[voice-ontrack] áudio recebido de ${targetUserId}:`, {
+          trackId: track.id, muted: track.muted, readyState: track.readyState, tracksNoStream: stream.getAudioTracks().length,
+        });
+        audio.play().then(
+          () => console.log(`[voice-ontrack] audio.play() ok pra ${targetUserId}`),
+          (err) => console.error(`[voice-ontrack] audio.play() FALHOU pra ${targetUserId}:`, err),
+        );
       } else if (track.kind === 'video') {
         const stream = e.streams[0] ?? new MediaStream([track]);
         addScreenStream(targetUserId, stream);
@@ -547,6 +553,7 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
       const audioTrack = audioStream.getAudioTracks()[0];
       localAudioShareStream.current = audioStream;
 
+      console.log(`[voice-audio-share] enviando pra ${peers.current.size} peer(s)`);
       for (const [uid, pc] of peers.current) {
         audioShareSenders.current.set(uid, pc.addTrack(audioTrack, audioStream));
         await renegotiate(uid, pc);

@@ -183,7 +183,11 @@ export function CallManager() {
         if (track.kind === 'audio') {
           remoteAudioStream.addTrack(track);
           setupRemoteGain();
-          remoteAudioRef.current?.play().catch(() => {});
+          console.log('[call-ontrack] áudio recebido:', { trackId: track.id, muted: track.muted, readyState: track.readyState });
+          remoteAudioRef.current?.play().then(
+            () => console.log('[call-ontrack] audio.play() ok'),
+            (err) => console.error('[call-ontrack] audio.play() FALHOU:', err),
+          );
           if (!initialRemoteAudioTrackRef.current) {
             initialRemoteAudioTrackRef.current = track;
           }
