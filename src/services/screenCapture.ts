@@ -56,12 +56,20 @@ export async function captureSystemAudio(): Promise<MediaStream> {
   // distinguir "capturou mas tá tudo em silêncio no PC" de "Windows nunca
   // entregou frame nenhum".
   const audioTrack = stream.getAudioTracks()[0];
+  const settings = audioTrack.getSettings();
+  // channelCount/sampleRate primeiro de propósito: o preview inline do
+  // console do Chrome trunca depois de ~5 propriedades com "…", e um
+  // descompasso de canais/sample rate do loopback do WASAPI é a suspeita
+  // atual pra "captura real, mas chega zerada do outro lado" — precisa
+  // aparecer sem precisar expandir o objeto manualmente no devtools.
   console.log('[captureSystemAudio] track capturada:', {
+    channelCount: settings.channelCount,
+    sampleRate: settings.sampleRate,
+    sampleSize: settings.sampleSize,
     label: audioTrack.label,
     readyState: audioTrack.readyState,
     muted: audioTrack.muted,
     enabled: audioTrack.enabled,
-    settings: audioTrack.getSettings(),
   });
   audioTrack.onmute = () => console.warn('[captureSystemAudio] track ficou muted (Windows parou de entregar áudio)');
   audioTrack.onunmute = () => console.log('[captureSystemAudio] track voltou a entregar áudio');

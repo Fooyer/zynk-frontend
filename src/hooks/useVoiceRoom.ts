@@ -54,6 +54,14 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
   const localScreenStream = useRef<MediaStream | null>(null);
   const localAudioShareStream = useRef<MediaStream | null>(null);
   const localAudioMonitorRef = useRef<HTMLAudioElement | null>(null);
+  const stopLocalAudioMonitor = () => {
+    const monitor = localAudioMonitorRef.current;
+    if (!monitor) return;
+    monitor.pause();
+    (monitor.srcObject as MediaStream | null)?.getTracks().forEach((t) => t.stop());
+    monitor.srcObject = null;
+    localAudioMonitorRef.current = null;
+  };
   const peers = useRef<Map<number, RTCPeerConnection>>(new Map());
   const audioRefs = useRef<Map<number, HTMLAudioElement>>(new Map());
   // Stream persistente por peer que RECEBE áudio — o mic e um eventual
@@ -613,8 +621,18 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
       // própria máquina, sem passar pelo WebRTC — isola se o problema é na
       // captura (Windows pode negar loopback silenciosamente, entregando
       // uma track "viva" mas muda) ou em algo depois disso.
+      //
+      // Importante: usa um clone() pro monitor, NÃO a mesma instância de
+      // track que vai pro RTCRtpSender. Testamos e o áudio chegava real do
+      // outro lado só de bytes/pacotes (zero perda) mas com energia zerada
+      // mesmo com o monitor local tocando de verdade — suspeita é o loopback
+      // do WASAPI não aguentando dois consumidores lendo a MESMA instância
+      // de track ao mesmo tempo (um "rouba" as amostras reais do outro).
+      // clone() dá uma track independente vindo da mesma fonte, sem
+      // compartilhar esse cano de consumo.
+      const monitorTrack = audioTrack.clone();
       const monitor = new Audio();
-      monitor.srcObject = audioStream;
+      monitor.srcObject = new MediaStream([monitorTrack]);
       monitor.volume = 1;
       localAudioMonitorRef.current = monitor;
       monitor.play().then(
@@ -644,9 +662,7 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
       console.error('[voice-audio-share] erro ao iniciar:', e);
       localAudioShareStream.current?.getTracks().forEach((t) => t.stop());
       localAudioShareStream.current = null;
-      localAudioMonitorRef.current?.pause();
-      if (localAudioMonitorRef.current) localAudioMonitorRef.current.srcObject = null;
-      localAudioMonitorRef.current = null;
+      stopLocalAudioMonitor();
       if ((e as Error)?.name !== 'NotAllowedError') {
         alertDialog(
           (e as Error)?.message === 'Nenhum áudio do sistema disponível pra capturar.'
@@ -670,9 +686,7 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
     }
     localAudioShareStream.current.getTracks().forEach((t) => t.stop());
     localAudioShareStream.current = null;
-    localAudioMonitorRef.current?.pause();
-    if (localAudioMonitorRef.current) localAudioMonitorRef.current.srcObject = null;
-    localAudioMonitorRef.current = null;
+    stopLocalAudioMonitor();
 
     if (activeVcIdRef.current) {
       getSocket().emit('voice:audio-share-stop', {
