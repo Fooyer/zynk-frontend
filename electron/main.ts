@@ -633,7 +633,7 @@ app.whenReady().then(async () => {
       // player..." e um monte de "Refused to execute inline script" com
       // o ID do vídeo no console — nada disso é specífico de plataforma,
       // só não tinha aparecido ainda em teste no Windows.
-      if (!details.url.startsWith(`${APP_SCHEME}://`)) {
+      if (!details.url.startsWith(`http://127.0.0.1:${localServerPort}/`)) {
         callback({ responseHeaders: details.responseHeaders });
         return;
       }
