@@ -24,6 +24,10 @@ interface SettingsState {
   notifPush: boolean;
   notifVolume: number;  // 0–1
 
+  // "Assistir junto" (YouTube) — volume do player (mini flutuante ou grande,
+  // são o mesmo valor) salvo como padrão pro próximo vídeo/sessão.
+  watchTogetherVolume: number; // 0–100
+
   // Ações
   setInputDevice: (id: string) => void;
   setOutputDevice: (id: string) => void;
@@ -37,6 +41,7 @@ interface SettingsState {
   setNotifSound: (v: boolean) => void;
   setNotifPush: (v: boolean) => void;
   setNotifVolume: (v: number) => void;
+  setWatchTogetherVolume: (v: number) => void;
 }
 
 export const useSettingsStore = create<SettingsState>()(
@@ -56,6 +61,8 @@ export const useSettingsStore = create<SettingsState>()(
       notifPush: true,
       notifVolume: 0.5,
 
+      watchTogetherVolume: 80,
+
       setInputDevice: (inputDeviceId) => set({ inputDeviceId }),
       setOutputDevice: (outputDeviceId) => set({ outputDeviceId }),
       setInputVolume: (inputVolume) => set({ inputVolume }),
@@ -68,6 +75,7 @@ export const useSettingsStore = create<SettingsState>()(
       setNotifSound: (notifSound) => set({ notifSound }),
       setNotifPush: (notifPush) => set({ notifPush }),
       setNotifVolume: (notifVolume) => set({ notifVolume }),
+      setWatchTogetherVolume: (watchTogetherVolume) => set({ watchTogetherVolume }),
     }),
     {
       name: 'zynk-audio-settings',

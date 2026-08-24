@@ -11,6 +11,12 @@ interface Props {
 }
 
 const MARGIN = 16;
+// Tamanho de nascença do widget — também o PISO do redimensionamento (o
+// usuário pediu explicitamente pra nunca poder encolher além do padrão).
+const DEFAULT_WIDTH = 288;
+const MIN_WIDTH = DEFAULT_WIDTH;
+const MAX_WIDTH = 640;
+const HEADER_H = 32;
 
 function FloatingPlayerWidget({
   state, voice, onDismiss,
@@ -21,13 +27,15 @@ function FloatingPlayerWidget({
 }) {
   const widgetRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(null);
+  const resizeRef = useRef<{ startX: number; startWidth: number } | null>(null);
   // null = ainda não foi arrastado — fica ancorado no canto via classe CSS
   // (responsivo sozinho); só vira coordenada absoluta depois do 1º arrasto.
   const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
+  const [width, setWidth] = useState(DEFAULT_WIDTH);
 
   const {
-    containerRef, isLoading, loadError, isPlayingUI, isMuted,
-    togglePlay, toggleMute,
+    containerRef, isLoading, loadError, isPlayingUI, volume, isMuted,
+    togglePlay, changeVolume, toggleMute,
   } = useYouTubeSync(state, {
     onPlay: voice.playVideo,
     onPause: voice.pauseVideo,
@@ -37,8 +45,8 @@ function FloatingPlayerWidget({
 
   const clamp = (x: number, y: number) => {
     const el = widgetRef.current;
-    const w = el?.offsetWidth ?? 288;
-    const h = el?.offsetHeight ?? 194;
+    const w = el?.offsetWidth ?? width;
+    const h = el?.offsetHeight ?? HEADER_H + (width * 9) / 16;
     const maxX = Math.max(MARGIN, window.innerWidth - w - MARGIN);
     const maxY = Math.max(MARGIN, window.innerHeight - h - MARGIN);
     return { x: Math.min(Math.max(x, MARGIN), maxX), y: Math.min(Math.max(y, MARGIN), maxY) };
@@ -52,6 +60,14 @@ function FloatingPlayerWidget({
     return () => window.removeEventListener('resize', onResize);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Mesma correção quando o próprio widget cresce/encolhe (redimensionado
+  // pelo usuário) — sem isso, aumentar o tamanho perto de uma borda podia
+  // empurrar parte do widget pra fora da tela.
+  useEffect(() => {
+    setPos((p) => (p ? clamp(p.x, p.y) : p));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [width]);
 
   const startDrag = (e: React.PointerEvent) => {
     const rect = widgetRef.current?.getBoundingClientRect();
@@ -69,6 +85,21 @@ function FloatingPlayerWidget({
   // também movia o widget (o pointerdown borbulha pro handler do cabeçalho).
   const stopDragStart = (e: React.PointerEvent) => e.stopPropagation();
 
+  // Redimensionar — só a largura (a altura do vídeo acompanha sozinha via
+  // `aspect-video`), evitando esticar/distorcer o vídeo. Alça no canto
+  // inferior direito, mesma convenção visual de qualquer janela do SO.
+  const startResize = (e: React.PointerEvent) => {
+    e.stopPropagation();
+    resizeRef.current = { startX: e.clientX, startWidth: width };
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+  };
+  const onResizeMove = (e: React.PointerEvent) => {
+    if (!resizeRef.current) return;
+    const { startX, startWidth } = resizeRef.current;
+    setWidth(Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, startWidth + (e.clientX - startX))));
+  };
+  const endResize = () => { resizeRef.current = null; };
+
   const handleExpand = () => {
     const vc = voice.activeVc;
     if (!vc) return;
@@ -83,8 +114,8 @@ function FloatingPlayerWidget({
   return (
     <div
       ref={widgetRef}
-      className={`fixed z-[85] w-72 rounded-xl overflow-hidden bg-black shadow-elevated border border-white/[0.10] select-none ${pos ? '' : 'bottom-4 right-4'}`}
-      style={pos ? { left: pos.x, top: pos.y } : undefined}
+      className={`fixed z-[85] rounded-xl overflow-hidden bg-black shadow-elevated border border-white/[0.10] select-none ${pos ? '' : 'bottom-4 right-4'}`}
+      style={{ width, ...(pos ? { left: pos.x, top: pos.y } : null) }}
     >
       {/* Cabeçalho — arrastável (Pointer Events cobre mouse e toque juntos) */}
       <div
@@ -142,25 +173,54 @@ function FloatingPlayerWidget({
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 3 20 12 6 21 6 3" /></svg>
               )}
             </button>
-            <button onClick={toggleMute} className="text-white hover:text-accent-300 transition-colors flex-shrink-0">
-              {isMuted ? (
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                  <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="currentColor" stroke="none" />
-                  <line x1="23" y1="9" x2="17" y2="15" /><line x1="17" y1="9" x2="23" y2="15" />
-                </svg>
-              ) : (
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                  <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="currentColor" stroke="none" />
-                  <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
-                </svg>
-              )}
-            </button>
+            <div className="flex items-center gap-1.5 group/volume flex-shrink-0">
+              <button onClick={toggleMute} className="text-white hover:text-accent-300 transition-colors flex-shrink-0">
+                {isMuted || volume === 0 ? (
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="currentColor" stroke="none" />
+                    <line x1="23" y1="9" x2="17" y2="15" /><line x1="17" y1="9" x2="23" y2="15" />
+                  </svg>
+                ) : (
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="currentColor" stroke="none" />
+                    <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+                  </svg>
+                )}
+              </button>
+              <input
+                type="range"
+                min={0}
+                max={100}
+                value={isMuted ? 0 : volume}
+                onChange={(e) => changeVolume(Number(e.target.value))}
+                title="Volume"
+                className="w-0 group-hover/volume:w-14 focus:w-14 transition-[width] duration-150 cursor-pointer"
+                style={{
+                  background: `linear-gradient(to right, rgb(var(--color-accent-500)) ${isMuted ? 0 : volume}%, rgba(255,255,255,0.15) ${isMuted ? 0 : volume}%)`,
+                }}
+              />
+            </div>
             <div className="flex-1" />
             <button onClick={handleSkip} title="Pular vídeo" className="text-white hover:text-accent-300 transition-colors flex-shrink-0">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 4 15 12 5 20 5 4" /><rect x="17" y="4" width="3" height="16" /></svg>
             </button>
           </div>
         )}
+
+        {/* Alça de redimensionar — só cresce, nunca encolhe além do padrão
+            (MIN_WIDTH = tamanho de nascença, pedido explícito). */}
+        <div
+          onPointerDown={startResize}
+          onPointerMove={onResizeMove}
+          onPointerUp={endResize}
+          onPointerCancel={endResize}
+          title="Redimensionar"
+          className="absolute bottom-0 right-0 w-4 h-4 cursor-nwse-resize touch-none flex items-end justify-end p-0.5 opacity-40 hover:opacity-90 transition-opacity"
+        >
+          <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round">
+            <line x1="21" y1="9" x2="9" y2="21" /><line x1="21" y1="16" x2="16" y2="21" />
+          </svg>
+        </div>
       </div>
     </div>
   );

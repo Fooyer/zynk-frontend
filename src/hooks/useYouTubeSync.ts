@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { loadYouTubeIframeAPI } from '../services/youtube';
 import type { YT } from '../services/youtube';
+import { useSettingsStore } from '../stores/settingsStore';
 import type { WatchTogetherState } from '../types';
 
 const DRIFT_THRESHOLD_SEC = 1.5;
@@ -58,7 +59,10 @@ export function useYouTubeSync(state: WatchTogetherState, { onPlay, onPause, onS
   const [duration, setDuration] = useState(0);
   const [displayPosition, setDisplayPosition] = useState(0);
   const [isScrubbing, setIsScrubbing] = useState(false);
-  const [volume, setVolumeState] = useState(80);
+  // Semeado com o volume salvo (mesmo valor pro mini player e pro grande,
+  // qualquer um dos dois que tiver sido usado por último) — persistido a
+  // cada mudança em changeVolume, pra virar o padrão do próximo vídeo/sessão.
+  const [volume, setVolumeState] = useState(() => useSettingsStore.getState().watchTogetherVolume);
   const [isMuted, setIsMuted] = useState(false);
 
   const applyRemoteState = (s: WatchTogetherState) => {
@@ -209,6 +213,7 @@ export function useYouTubeSync(state: WatchTogetherState, { onPlay, onPause, onS
 
   const changeVolume = (value: number) => {
     setVolumeState(value);
+    useSettingsStore.getState().setWatchTogetherVolume(value);
     playerRef.current?.setVolume(value);
     if (value === 0) { playerRef.current?.mute(); setIsMuted(true); }
     else if (isMuted) { playerRef.current?.unMute(); setIsMuted(false); }

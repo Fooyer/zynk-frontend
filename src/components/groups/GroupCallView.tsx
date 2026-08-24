@@ -66,38 +66,37 @@ function ParticipantTile({ participant, isSelf, isMuted, isSpeaking }: {
   );
 }
 
-function ParticipantChip({ participant, isSharing, isFocused, isSpeaking, onClick }: {
+function ParticipantChip({ participant, isFocused, isSpeaking, onClick }: {
   participant: VoiceParticipant;
-  isSharing: boolean;
   isFocused: boolean;
   isSpeaking: boolean;
   onClick: () => void;
 }) {
   return (
-    <button
-      onClick={onClick}
-      disabled={!isSharing}
-      className={`flex flex-col items-center gap-1 flex-shrink-0 w-16 ${isSharing ? 'cursor-pointer' : 'cursor-default'}`}
-    >
-      <div
-        className={`relative w-12 h-12 rounded-full flex items-center justify-center text-white text-xs font-semibold overflow-hidden transition-all duration-150 ${
-          isFocused || isSpeaking ? 'ring-2 ring-accent-500' : 'ring-1 ring-white/[0.10]'
-        } ${isSpeaking ? 'shadow-glow-accent-sm' : ''}`}
-        style={{ backgroundColor: getUserColor(participant.username) }}
-      >
-        {participant.avatarUrl ? (
-          <img src={participant.avatarUrl} alt="" className="w-full h-full object-cover" />
-        ) : (
-          getInitials(participant.username)
-        )}
-        {isSharing && (
-          <span className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-success flex items-center justify-center border border-surface-950">
-            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="2" y="3" width="20" height="14" rx="2" />
-              <polyline points="8 21 12 17 16 21" />
-            </svg>
-          </span>
-        )}
+    <button onClick={onClick} className="flex flex-col items-center gap-1 flex-shrink-0 w-16 cursor-pointer">
+      {/* Wrapper "relative" próprio, SEM overflow-hidden — o distintivo de
+          compartilhamento abaixo é posicionado com offset negativo (sai um
+          pouco do círculo), e antes ele vivia dentro do mesmo elemento que
+          recorta o avatar (overflow-hidden), cortando um pedaço do ícone. */}
+      <div className="relative">
+        <div
+          className={`w-12 h-12 rounded-full flex items-center justify-center text-white text-xs font-semibold overflow-hidden transition-all duration-150 ${
+            isFocused || isSpeaking ? 'ring-2 ring-accent-500' : 'ring-1 ring-white/[0.10]'
+          } ${isSpeaking ? 'shadow-glow-accent-sm' : ''}`}
+          style={{ backgroundColor: getUserColor(participant.username) }}
+        >
+          {participant.avatarUrl ? (
+            <img src={participant.avatarUrl} alt="" className="w-full h-full object-cover" />
+          ) : (
+            getInitials(participant.username)
+          )}
+        </div>
+        <span className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-success flex items-center justify-center border border-surface-950">
+          <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="2" y="3" width="20" height="14" rx="2" />
+            <polyline points="8 21 12 17 16 21" />
+          </svg>
+        </span>
       </div>
       <span className="text-[10px] text-surface-400 truncate max-w-full">{participant.username}</span>
     </button>
@@ -197,7 +196,17 @@ export function GroupCallView({ voice }: Props) {
   }, [voice.screenStreams, focusedUserId]);
 
   const focusedStream = focusedUserId !== null ? voice.screenStreams.get(focusedUserId) ?? null : null;
-  const hasScreen = focusedStream !== null;
+  // De propósito NÃO é `focusedStream !== null` — focusedUserId é estado
+  // local que só se popula um render depois do mount (via o efeito acima),
+  // então logo ao abrir a aba com uma tela já ativa, `focusedStream` ficava
+  // null por um instante. Isso fazia hasScreen nascer falso e virar
+  // verdadeiro um tick depois, e essa transição disparava o "fonte nova
+  // apareceu" (efeito abaixo) sem ter aparecido nada de novo de verdade —
+  // sequestrando o foco de volta pra tela bem na hora que você tinha acabado
+  // de pedir pra ver o YouTube (ex.: clicando "expandir" no mini player).
+  // `voice.screenStreams` já vem certo desde o primeiro render (vive no
+  // hook `voice`, não reseta com este componente), sem esse atraso.
+  const hasScreen = voice.screenStreams.size > 0;
   const hasWatch = !!voice.watchState;
 
   // Com as duas fontes ativas, quem decide qual aparece grande é o seletor
@@ -318,6 +327,11 @@ export function GroupCallView({ voice }: Props) {
   // Seletor "Tela / YouTube" (MediaSwitcher) só faz sentido quando as duas
   // fontes competem pelo mesmo espaço — com uma só, não há o que escolher.
   const showSwitcher = hasScreen && hasWatch;
+
+  // Tira de miniaturas abaixo do vídeo em foco — só quem está compartilhando
+  // a tela (não o roster inteiro): serve pra escolher ENTRE apresentações
+  // simultâneas, não é mais uma lista geral de participantes.
+  const sharers = vc.participants.filter((p) => voice.screenStreams.has(p.userId));
 
   const focusScreen = (uid: number) => { setFocusedUserId(uid); setFocus('screen'); };
 
@@ -451,13 +465,12 @@ export function GroupCallView({ voice }: Props) {
               </div>
             </div>
 
-            {vc.participants.length > 1 && !cinemaMode && (
+            {sharers.length > 1 && !cinemaMode && (
               <div className="flex-shrink-0 flex items-center gap-3 overflow-x-auto pb-1">
-                {vc.participants.map((p) => (
+                {sharers.map((p) => (
                   <ParticipantChip
                     key={p.userId}
                     participant={p}
-                    isSharing={voice.screenStreams.has(p.userId)}
                     isFocused={effectiveFocus === 'screen' && p.userId === focusedUserId}
                     isSpeaking={voice.speakingUserIds.has(p.userId)}
                     onClick={() => focusScreen(p.userId)}
@@ -544,13 +557,12 @@ export function GroupCallView({ voice }: Props) {
               )}
             </div>
 
-            {vc.participants.length > 1 && !cinemaMode && (
+            {sharers.length > 0 && !cinemaMode && (
               <div className="flex-shrink-0 flex items-center gap-3 overflow-x-auto pb-1">
-                {vc.participants.map((p) => (
+                {sharers.map((p) => (
                   <ParticipantChip
                     key={p.userId}
                     participant={p}
-                    isSharing={voice.screenStreams.has(p.userId)}
                     isFocused={false}
                     isSpeaking={voice.speakingUserIds.has(p.userId)}
                     onClick={() => focusScreen(p.userId)}
