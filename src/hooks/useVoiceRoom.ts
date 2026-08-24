@@ -342,6 +342,33 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
           () => console.log(`[voice-ontrack] audio.play() ok pra ${targetUserId}`),
           (err) => console.error(`[voice-ontrack] audio.play() FALHOU pra ${targetUserId}:`, err),
         );
+
+        // Diagnóstico temporário: `.play()` resolver não prova que áudio
+        // está audível — só que o elemento começou a tentar tocar. Se
+        // bytesReceived/audioLevel ficarem sempre em 0 aqui, o problema é
+        // de rede/ICE (pacote nunca chega); se eles sobem normalmente mas
+        // ainda assim não dá pra ouvir, o problema é no roteamento de saída
+        // de áudio do SO/dispositivo, não no código.
+        let statsChecks = 0;
+        const statsInterval = setInterval(async () => {
+          statsChecks += 1;
+          try {
+            const stats = await pc.getStats(track);
+            stats.forEach((report) => {
+              if (report.type === 'inbound-rtp' && report.kind === 'audio') {
+                console.log(`[voice-audio-stats] de ${targetUserId}:`, {
+                  bytesReceived: report.bytesReceived,
+                  packetsReceived: report.packetsReceived,
+                  audioLevel: report.audioLevel,
+                  totalAudioEnergy: report.totalAudioEnergy,
+                  jitterBufferDelay: report.jitterBufferDelay,
+                });
+              }
+            });
+          } catch { /* ignore */ }
+          if (statsChecks >= 6) clearInterval(statsInterval);
+        }, 2000);
+        track.addEventListener('ended', () => clearInterval(statsInterval));
       } else if (track.kind === 'video') {
         const stream = e.streams[0] ?? new MediaStream([track]);
         addScreenStream(targetUserId, stream);

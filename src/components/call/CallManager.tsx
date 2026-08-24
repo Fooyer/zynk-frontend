@@ -188,6 +188,30 @@ export function CallManager() {
             () => console.log('[call-ontrack] audio.play() ok'),
             (err) => console.error('[call-ontrack] audio.play() FALHOU:', err),
           );
+
+          // Diagnóstico temporário — ver comentário equivalente em
+          // useVoiceRoom.ts: distingue pacote nunca chegou (rede/ICE) de
+          // pacote chegou mas não deu pra ouvir (saída de áudio do SO).
+          let statsChecks = 0;
+          const statsInterval = setInterval(async () => {
+            statsChecks += 1;
+            try {
+              const stats = await pc.getStats(track);
+              stats.forEach((report) => {
+                if (report.type === 'inbound-rtp' && report.kind === 'audio') {
+                  console.log('[call-audio-stats]:', {
+                    bytesReceived: report.bytesReceived,
+                    packetsReceived: report.packetsReceived,
+                    audioLevel: report.audioLevel,
+                    totalAudioEnergy: report.totalAudioEnergy,
+                    jitterBufferDelay: report.jitterBufferDelay,
+                  });
+                }
+              });
+            } catch { /* ignore */ }
+            if (statsChecks >= 6) clearInterval(statsInterval);
+          }, 2000);
+          track.addEventListener('ended', () => clearInterval(statsInterval));
           if (!initialRemoteAudioTrackRef.current) {
             initialRemoteAudioTrackRef.current = track;
           }
