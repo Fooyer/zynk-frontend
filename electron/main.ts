@@ -23,6 +23,20 @@ if (process.platform === 'linux') {
   app.commandLine.appendSwitch('enable-features', 'WebRtcPipeWireCapturer');
 }
 
+// Chromium's default autoplay policy (document-user-activation-required)
+// blocks `<audio>.play()` with sound until the page has seen a user gesture
+// — silently: the promise still resolves and no error is ever thrown. That
+// was making remote call audio and screen/audio-share audio inaudible
+// whenever the call started from something that isn't a plain in-page click
+// (answering from a tray/notification action, a global shortcut, etc.), and
+// only "fixed itself" by accident once the user happened to click something
+// else in the window (e.g. the screen picker), which counted as the gesture
+// that unlocked autoplay for the rest of the session. This is a private
+// desktop app, not a public page trying to avoid autoplay abuse, so we just
+// disable the restriction outright instead of chasing gesture timing in
+// every call/voice-room code path.
+app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
+
 // Serve o build de produção por um servidor HTTP local (127.0.0.1) em vez de
 // file:// — e não por um esquema customizado (app://) como numa tentativa
 // anterior, que resolvia o problema de origem "opaca" do file:// pro nosso
