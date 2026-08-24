@@ -53,6 +53,7 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
   const localStream = useRef<MediaStream | null>(null);
   const localScreenStream = useRef<MediaStream | null>(null);
   const localAudioShareStream = useRef<MediaStream | null>(null);
+  const localAudioMonitorRef = useRef<HTMLAudioElement | null>(null);
   const peers = useRef<Map<number, RTCPeerConnection>>(new Map());
   const audioRefs = useRef<Map<number, HTMLAudioElement>>(new Map());
   // Stream persistente por peer que RECEBE áudio — o mic e um eventual
@@ -61,6 +62,11 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
   // substituir o srcObject do <audio> a cada novo track (senão o segundo
   // track — o áudio compartilhado — silenciava o mic desse peer pra todo mundo).
   const remoteAudioStreams = useRef<Map<number, MediaStream>>(new Map());
+  // Diagnóstico temporário: guarda o id do PRIMEIRO track de áudio recebido
+  // de cada peer (sempre o mic, adicionado na entrada da call) só pra rotular
+  // os logs de stats e não ficar adivinhando qual dos tracks acumulados no
+  // mesmo <audio> é o mic e qual é o compartilhamento de áudio do sistema.
+  const firstAudioTrackIdByUser = useRef<Map<number, string>>(new Map());
   const locallyMutedIdsRef = useRef<Set<number>>(new Set());
   locallyMutedIdsRef.current = locallyMutedIds;
   const screenSenders = useRef<Map<number, ScreenSenders>>(new Map());
@@ -317,6 +323,9 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
           remoteAudioStreams.current.set(targetUserId, stream);
         }
         stream.addTrack(track);
+        if (!firstAudioTrackIdByUser.current.has(targetUserId)) {
+          firstAudioTrackIdByUser.current.set(targetUserId, track.id);
+        }
 
         let audio = audioRefs.current.get(targetUserId);
         if (!audio) {
@@ -353,15 +362,34 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
         const statsInterval = setInterval(async () => {
           statsChecks += 1;
           try {
-            const stats = await pc.getStats(track);
+            // Sem seletor de track aqui de propósito: com seletor o
+            // getStats() só devolve os relatórios daquele track (inbound-rtp
+            // etc.) e omite candidate-pair — que é o que diz se a conexão tá
+            // indo direto P2P ou caindo pro TURN de fallback (relay1.
+            // expressturn.com, público e sem garantia de capacidade).
+            const stats = await pc.getStats();
             stats.forEach((report) => {
               if (report.type === 'inbound-rtp' && report.kind === 'audio') {
-                console.log(`[voice-audio-stats] de ${targetUserId}:`, {
+                const isMic = report.trackIdentifier === firstAudioTrackIdByUser.current.get(targetUserId);
+                console.log(`[voice-audio-stats] de ${targetUserId} (${isMic ? 'MIC' : 'COMPARTILHADO'}):`, {
+                  trackIdentifier: report.trackIdentifier,
                   bytesReceived: report.bytesReceived,
                   packetsReceived: report.packetsReceived,
+                  packetsLost: report.packetsLost,
                   audioLevel: report.audioLevel,
                   totalAudioEnergy: report.totalAudioEnergy,
                   jitterBufferDelay: report.jitterBufferDelay,
+                });
+              }
+              if (report.type === 'candidate-pair' && report.state === 'succeeded' && report.nominated) {
+                const local = stats.get(report.localCandidateId);
+                const remote = stats.get(report.remoteCandidateId);
+                console.log(`[voice-audio-stats] par ICE ativo com ${targetUserId}:`, {
+                  localType: local?.candidateType,
+                  remoteType: remote?.candidateType,
+                  bytesSent: report.bytesSent,
+                  bytesReceived: report.bytesReceived,
+                  currentRoundTripTime: report.currentRoundTripTime,
                 });
               }
             });
@@ -412,6 +440,7 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
     const audio = audioRefs.current.get(uid);
     if (audio) { audio.srcObject = null; audioRefs.current.delete(uid); }
     remoteAudioStreams.current.delete(uid);
+    firstAudioTrackIdByUser.current.delete(uid);
     screenSenders.current.delete(uid);
     audioShareSenders.current.delete(uid);
     removeScreenStream(uid);
@@ -580,6 +609,19 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
       const audioTrack = audioStream.getAudioTracks()[0];
       localAudioShareStream.current = audioStream;
 
+      // Diagnóstico temporário: toca o que foi capturado direto na sua
+      // própria máquina, sem passar pelo WebRTC — isola se o problema é na
+      // captura (Windows pode negar loopback silenciosamente, entregando
+      // uma track "viva" mas muda) ou em algo depois disso.
+      const monitor = new Audio();
+      monitor.srcObject = audioStream;
+      monitor.volume = 1;
+      localAudioMonitorRef.current = monitor;
+      monitor.play().then(
+        () => console.log('[voice-audio-share] monitor local: play() ok — você deveria estar ouvindo o áudio do sistema agora'),
+        (err) => console.error('[voice-audio-share] monitor local: play() FALHOU:', err),
+      );
+
       console.log(`[voice-audio-share] enviando pra ${peers.current.size} peer(s)`);
       for (const [uid, pc] of peers.current) {
         audioShareSenders.current.set(uid, pc.addTrack(audioTrack, audioStream));
@@ -602,6 +644,9 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
       console.error('[voice-audio-share] erro ao iniciar:', e);
       localAudioShareStream.current?.getTracks().forEach((t) => t.stop());
       localAudioShareStream.current = null;
+      localAudioMonitorRef.current?.pause();
+      if (localAudioMonitorRef.current) localAudioMonitorRef.current.srcObject = null;
+      localAudioMonitorRef.current = null;
       if ((e as Error)?.name !== 'NotAllowedError') {
         alertDialog(
           (e as Error)?.message === 'Nenhum áudio do sistema disponível pra capturar.'
@@ -625,6 +670,9 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
     }
     localAudioShareStream.current.getTracks().forEach((t) => t.stop());
     localAudioShareStream.current = null;
+    localAudioMonitorRef.current?.pause();
+    if (localAudioMonitorRef.current) localAudioMonitorRef.current.srcObject = null;
+    localAudioMonitorRef.current = null;
 
     if (activeVcIdRef.current) {
       getSocket().emit('voice:audio-share-stop', {

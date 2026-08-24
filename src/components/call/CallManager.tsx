@@ -196,15 +196,27 @@ export function CallManager() {
           const statsInterval = setInterval(async () => {
             statsChecks += 1;
             try {
-              const stats = await pc.getStats(track);
+              const stats = await pc.getStats();
               stats.forEach((report) => {
                 if (report.type === 'inbound-rtp' && report.kind === 'audio') {
                   console.log('[call-audio-stats]:', {
                     bytesReceived: report.bytesReceived,
                     packetsReceived: report.packetsReceived,
+                    packetsLost: report.packetsLost,
                     audioLevel: report.audioLevel,
                     totalAudioEnergy: report.totalAudioEnergy,
                     jitterBufferDelay: report.jitterBufferDelay,
+                  });
+                }
+                if (report.type === 'candidate-pair' && report.state === 'succeeded' && report.nominated) {
+                  const local = stats.get(report.localCandidateId);
+                  const remote = stats.get(report.remoteCandidateId);
+                  console.log('[call-audio-stats] par ICE ativo:', {
+                    localType: local?.candidateType,
+                    remoteType: remote?.candidateType,
+                    bytesSent: report.bytesSent,
+                    bytesReceived: report.bytesReceived,
+                    currentRoundTripTime: report.currentRoundTripTime,
                   });
                 }
               });
