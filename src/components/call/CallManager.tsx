@@ -8,6 +8,7 @@ import { captureScreen, captureSystemAudio } from '../../services/screenCapture'
 import { ICE_SERVERS } from '../../services/iceServers';
 import { applyLowLatencySenderParams, withLowLatencyOpus } from '../../services/lowLatencyAudio';
 import { getProcessedStream } from '../../services/audioProcessing';
+import { alertDialog } from '../../stores/dialogStore';
 import {
   playJoinCallSound,
   playLeaveCallSound,
@@ -442,6 +443,14 @@ export function CallManager() {
         console.error('[audio-share] ERRO:', e);
         localScreenStreamRef.current?.getTracks().forEach((t) => t.stop());
         localScreenStreamRef.current = null;
+        if ((e as Error)?.name !== 'NotAllowedError') {
+          alertDialog(
+            (e as Error)?.message === 'Nenhum áudio do sistema disponível pra capturar.'
+              ? 'Nenhum áudio do sistema disponível pra capturar. Verifique se algo está tocando e tente de novo.'
+              : 'Não foi possível compartilhar o áudio do sistema. Tente novamente.',
+            { title: 'Erro ao compartilhar áudio' },
+          );
+        }
       }
     };
 
@@ -481,6 +490,9 @@ export function CallManager() {
         console.error('[screen-share] ERRO:', e);
         localScreenStreamRef.current?.getTracks().forEach((t) => t.stop());
         localScreenStreamRef.current = null;
+        if ((e as Error)?.name !== 'NotAllowedError') {
+          alertDialog('Não foi possível compartilhar a tela. Tente novamente.', { title: 'Erro ao compartilhar' });
+        }
       }
     };
 

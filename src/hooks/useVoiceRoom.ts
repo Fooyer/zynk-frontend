@@ -206,24 +206,33 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
     getSocket().emit('voice:offer', { targetUserId, offer, voiceChannelId });
   };
 
-  // Socket: WebRTC signaling
+  // Socket: WebRTC signaling — registrado incondicionalmente (sem gate em
+  // activeVcId) e sempre montado. `join()` emite 'voice:join' e o servidor
+  // pode responder com 'voice:room-state' antes que o re-render disparado
+  // por setActiveVcId(vc.id) chegasse a rodar este efeito — se o listener só
+  // fosse anexado depois disso, esse 'voice:room-state' chegava com ninguém
+  // ouvindo e era perdido pra sempre (socket.io não bufferiza eventos sem
+  // listener), fazendo o recém-entrado nunca criar nenhum peer connection:
+  // não ouvia ninguém e ninguém via a tela dele — e o inverso, ele não via
+  // tela/ouvia áudio de quem já estava na call. Por isso os handlers filtram
+  // por activeVcIdRef.current (sempre atual) em vez de depender de quando o
+  // efeito foi (re)criado.
   useEffect(() => {
-    if (!activeVcId) return;
     const socket = getSocket();
 
     const onRoomState = async (data: { voiceChannelId: number; participants: VoiceParticipant[] }) => {
-      if (data.voiceChannelId !== activeVcId) return;
+      if (data.voiceChannelId !== activeVcIdRef.current) return;
       for (const p of data.participants) {
         if (p.userId === user?.id) continue;
         const pc = createPeer(p.userId);
         const offer = await pc.createOffer();
         if (activeModeRef.current === 'game' && offer.sdp) offer.sdp = withLowLatencyOpus(offer.sdp);
         await pc.setLocalDescription(offer);
-        socket.emit('voice:offer', { targetUserId: p.userId, offer, voiceChannelId: activeVcId });
+        socket.emit('voice:offer', { targetUserId: p.userId, offer, voiceChannelId: data.voiceChannelId });
       }
     };
     const onOffer = async (data: { from: number; offer: RTCSessionDescriptionInit; voiceChannelId: number }) => {
-      if (data.voiceChannelId !== activeVcId) return;
+      if (data.voiceChannelId !== activeVcIdRef.current) return;
       let pc = peers.current.get(data.from);
       const isNewPeer = !pc;
       if (!pc) pc = createPeer(data.from);
@@ -231,7 +240,7 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
       const answer = await pc.createAnswer();
       if (activeModeRef.current === 'game' && answer.sdp) answer.sdp = withLowLatencyOpus(answer.sdp);
       await pc.setLocalDescription(answer);
-      socket.emit('voice:answer', { targetUserId: data.from, answer, voiceChannelId: activeVcId });
+      socket.emit('voice:answer', { targetUserId: data.from, answer, voiceChannelId: data.voiceChannelId });
 
       // createPeer() já tinha adicionado os tracks da minha tela/áudio (se eu
       // estiver compartilhando), mas uma resposta não pode introduzir
@@ -261,7 +270,7 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
       socket.off('voice:answer', onAnswer);
       socket.off('voice:ice', onIce);
     };
-  }, [activeVcId, user?.id]);
+  }, [user?.id]);
 
   // Socket: servidor recusou a entrada (sala já no limite de participantes)
   // — desfaz o estado otimista que `join()` já tinha setado e libera o mic.
@@ -494,6 +503,9 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
       console.error('[voice-screen-share] erro ao iniciar:', e);
       localScreenStream.current?.getTracks().forEach((t) => t.stop());
       localScreenStream.current = null;
+      if ((e as Error)?.name !== 'NotAllowedError') {
+        alertDialog('Não foi possível compartilhar a tela. Tente novamente.', { title: 'Erro ao compartilhar' });
+      }
     }
   };
 
@@ -556,6 +568,14 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
       console.error('[voice-audio-share] erro ao iniciar:', e);
       localAudioShareStream.current?.getTracks().forEach((t) => t.stop());
       localAudioShareStream.current = null;
+      if ((e as Error)?.name !== 'NotAllowedError') {
+        alertDialog(
+          (e as Error)?.message === 'Nenhum áudio do sistema disponível pra capturar.'
+            ? 'Nenhum áudio do sistema disponível pra capturar. Verifique se algo está tocando e tente de novo.'
+            : 'Não foi possível compartilhar o áudio do sistema. Tente novamente.',
+          { title: 'Erro ao compartilhar áudio' },
+        );
+      }
     }
   };
 
