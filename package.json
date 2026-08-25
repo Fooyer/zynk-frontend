@@ -1,6 +1,6 @@
 {
   "name": "zynk",
-  "version": "0.7.1",
+  "version": "0.7.2",
   "description": "Zynk — Electron + Vite + React",
   "main": "dist-electron/main.js",
   "scripts": {
@@ -8,9 +8,7 @@
     "build": "tsc && vite build && electron-builder --publish never",
     "build:linux": "tsc && vite build && electron-builder --linux --publish never",
     "build:win": "tsc && vite build && electron-builder --win --publish never",
-    "release": "npm run release:win && dotenv -e .env -- node scripts/wait-for-release.js && npm run release:linux",
-    "release:linux": "tsc && vite build && dotenv -e .env -- electron-builder --linux --publish always",
-    "release:win": "tsc && vite build && dotenv -e .env -- electron-builder --win --publish always",
+    "release": "npm run build:win && npm run build:linux && dotenv -e .env -- node scripts/publish-release.js",
     "preview": "vite preview",
     "electron:dev": "vite build && electron ."
   },

@@ -185,6 +185,14 @@ function createWindow() {
     return { action: 'deny' };
   });
 
+  // F12/Ctrl+Shift+I abrem o DevTools mesmo em build de produção — sem isso,
+  // só dava pra inspecionar rodando via `npm run electron:dev` (que abre
+  // sozinho), o que não reproduz bugs que só aparecem sob a CSP de produção.
+  mainWindow.webContents.on('before-input-event', (_event, input) => {
+    const isToggle = input.key === 'F12' || (input.control && input.shift && input.key.toUpperCase() === 'I');
+    if (isToggle) mainWindow?.webContents.toggleDevTools();
+  });
+
   // Menu de contexto nativo (Recortar/Copiar/Colar) para campos de texto —
   // Electron não mostra isso por padrão como um navegador normal mostraria.
   // Não dispara em elementos que já têm seu próprio menu React (eles chamam
@@ -686,7 +694,16 @@ app.whenReady().then(async () => {
             " script-src 'self' 'wasm-unsafe-eval' https://www.youtube.com;" +
             " style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;" +
             " font-src 'self' https://fonts.gstatic.com;" +
-            " connect-src 'self' https://zynk.fooyer.com ws://zynk.fooyer.com wss://zynk.fooyer.com wss://signaling.yjs.dev;" +
+            // stun:/turn: (sem host fixo) — connect-src também rege a quais
+            // servidores ICE o RTCPeerConnection pode conectar, não só
+            // fetch/WebSocket. Sem isso, o Chromium recusa silenciosamente
+            // (nem sempre loga violação) qualquer stun:/turn: usado em
+            // ICE_SERVERS (ver services/iceServers.ts), sobrando só
+            // candidatos "host" — que só conectam entre pares na mesma rede
+            // local, quebrando a call pra qualquer um atrás de NAT/rede
+            // diferente (era exatamente esse o sintoma: call sem áudio nem
+            // vídeo pra quem entra depois, sem nenhum erro no console).
+            " connect-src 'self' https://zynk.fooyer.com ws://zynk.fooyer.com wss://zynk.fooyer.com wss://signaling.yjs.dev stun: turn:;" +
             " img-src 'self' data: blob: https://zynk.fooyer.com;" +
             // Sem frame-src, default-src 'self' bloqueia o próprio <iframe>
             // que a IFrame Player API cria pra embutir o vídeo.

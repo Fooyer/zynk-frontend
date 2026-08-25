@@ -82,4 +82,14 @@ export default defineConfig({
   server: {
     port: 5173,
   },
+  build: {
+    // Sem isso, os AudioWorklets importados com `?url` (agcWorklet.js,
+    // rnnoiseWorklet.js, noiseGateWorklet.js — todos pequenos) saem do build
+    // inlinados como `data:` URI. A CSP de produção não libera `data:` em
+    // script-src (ver electron/main.ts) — mesma classe de problema que o
+    // MonacoEnvironment resolveu virando arquivo externo, em vez de afrouxar
+    // a CSP. Aqui a correção é impedir o inlining: força todo asset a sair
+    // como arquivo de verdade, servido por 'self'.
+    assetsInlineLimit: 0,
+  },
 });

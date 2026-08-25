@@ -353,6 +353,14 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
     pc.onicecandidate = (e) => {
       if (e.candidate) getSocket().emit('voice:ice', { targetUserId, candidate: e.candidate });
     };
+    // Sem isso, uma falha de ICE (ex.: CSP bloqueando os servidores STUN/TURN,
+    // ou os dois lados atrás de NAT sem candidato viável) é totalmente muda —
+    // nem áudio/vídeo chegam (então nenhum log de ontrack dispara) nem o
+    // WebRTC lança exceção nenhuma, só fica preso em "failed"/"disconnected"
+    // pra sempre e ninguém percebe olhando o console.
+    pc.oniceconnectionstatechange = () => {
+      console.log(`[voice-ice] estado da conexão com ${targetUserId}: ${pc.iceConnectionState}`);
+    };
     pc.ontrack = (e) => {
       const track = e.track;
       if (track.kind === 'audio') {
