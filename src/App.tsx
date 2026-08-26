@@ -30,6 +30,7 @@ import { ContextMenuHost } from './components/common/ContextMenuHost';
 import { UpdateToast } from './components/common/UpdateToast';
 import { AppShellSkeleton } from './components/common/Skeleton';
 
+// Teste Para Code-review.
 
 function TitleBar() {
   // Botões de controle da janela são sempre os nossos (React + IPC) em vez do
