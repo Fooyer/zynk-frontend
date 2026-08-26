@@ -17,6 +17,7 @@ jobs:
       - uses: actions/checkout@v6
         with:
           persist-credentials: false
+
       - uses: anomalyco/opencode/github@latest
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -24,57 +25,57 @@ jobs:
         with:
           model: anthropic/claude-sonnet-4-6
           use_github_token: true
-         prompt: |
+          prompt: |
             Revise APENAS o diff deste PR (linhas adicionadas/modificadas) —
             não analise arquivos ou trechos que não mudaram, mesmo que estejam
             no mesmo arquivo. Ignore qualquer alteração fora de src/ (config,
             CI, docs) a menos que quebre o build.
-          
+
             Critérios de avaliação:
-          
+
             **Arquitetura**: componente fora do lugar (pages/, components/,
             hooks/, contexts/, services/); lógica de negócio/fetch dentro do
             componente em vez de custom hook ou services/; duplicação de
             lógica já existente.
-          
+
             **State management**: props drilling que devia ser Context;
             Context usado onde useState resolveria; Provider sem memoização
             do value, causando re-render da árvore inteira.
-          
+
             **Performance**: dependências erradas/faltando em useEffect;
             função/objeto recriado a cada render quebrando React.memo;
             useMemo/useCallback faltando em ponto custoso OU usado sem
             necessidade; fetch ou loop pesado fora de efeito.
-          
+
             **Integração REST**: fetch fora de services/ ou hook dedicado;
             sem tratamento de erro (status HTTP, try/catch); resposta não
             validada contra o formato { success, data, error }; token exposto
             ou mal manuseado no client.
-          
+
             **Segurança**: dangerouslySetInnerHTML sem sanitização; dado de
             API renderizado sem escaping; segredo ou URL interna hardcoded;
             innerHTML/eval.
-          
+
             **TypeScript**: `any` evitável; tipo de resposta de API divergente
             do formato real; prop sem interface/type.
-          
+
             **Convenções**: hook sem prefixo `use`; componente fora de
             PascalCase; CSS vazando escopo; import desorganizado onde haveria
             alias do Vite.
-          
+
             Não comente formatação (espaçamento, ponto e vírgula) — assuma
             linter/formatter cobrindo isso.
-          
+
             ## Formato da resposta
             Responda em markdown, direto ao ponto, sem introdução, sem
             conclusão, sem elogios. Um item por problema, nesta forma:
-          
+
             **`arquivo:linha`** — [categoria] descrição objetiva do problema
             e do impacto real (1-2 frases). Correção sugerida:
             ```lang
-              trecho de código
+                        trecho de código
             ```
-          
+
             Se não houver correção de código relevante, omita o bloco de
             código. Se o diff estiver limpo, responda apenas:
             "Sem problemas relevantes no diff." — sem listar ressalvas
