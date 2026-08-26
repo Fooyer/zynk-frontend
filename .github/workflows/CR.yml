@@ -25,7 +25,69 @@ jobs:
           model: anthropic/claude-sonnet-4-6
           use_github_token: true
           prompt: |
-            Revise este PR focando em:
-            - Segurança (SQL Injection, XSS)
-            - Regras de negócio vazando pra camada REST
-            - Convenções ObjectScript/React do projeto
+            Revise este PR de front-end (React + TypeScript + Vite). Ignore
+            qualquer alteração fora de src/ (ex: arquivos de config, CI, docs)
+            a menos que quebrem o build.
+      
+            ## Arquitetura e organização
+            - Componentes fora do lugar certo (pages/, components/, hooks/,
+              contexts/, services/)
+            - Lógica de UI misturada com lógica de negócio/fetch dentro do
+              componente — deveria estar em um custom hook ou em services/
+            - Componentes grandes demais que deveriam ser quebrados
+            - Duplicação de lógica que já existe em outro hook/componente
+      
+            ## State management
+            - Props drilling que deveria virar Context API
+            - Context sendo usado onde state local (useState) resolveria —
+              overengineering
+            - Providers de Context re-renderizando a árvore inteira
+              desnecessariamente (falta de memoização do value passado ao
+              Provider)
+      
+            ## Performance
+            - useEffect com array de dependências incorreto ou faltando
+            - Funções/objetos recriados a cada render sendo passados como
+              prop para componentes memoizados (quebra o React.memo)
+            - Falta de useMemo/useCallback em cálculo custoso ou callback
+              passado pra lista grande — mas também aponte useMemo/useCallback
+              usado sem necessidade real (custo de leitura sem ganho)
+            - Loops ou fetch dentro de render, fora de efeito
+      
+            ## Integração com backend (REST)
+            - Chamadas fetch fora de services/ ou de um hook dedicado
+            - Ausência de tratamento de erro no fetch (status HTTP não
+              verificado, sem try/catch)
+            - Não validar o formato de resposta esperado:
+              { success, data, error }
+            - Token de autenticação/sessão exposto ou manuseado de forma
+              insegura no client
+      
+            ## Segurança (frontend)
+            - dangerouslySetInnerHTML sem sanitização — risco de XSS
+            - Dados vindos da API renderizados sem escaping
+            - Segredos, chaves de API ou URLs internas hardcoded no código
+            - Uso de innerHTML, eval, ou similar
+      
+            ## TypeScript
+            - uso de `any` que poderia ser tipado
+            - Tipos de resposta de API não refletindo o formato real do
+              backend
+            - Props de componente sem interface/type definida
+      
+            ## Convenções do projeto
+            - Nomenclatura inconsistente (hooks sem prefixo `use`, componentes
+              fora de PascalCase)
+            - CSS inline ou global vazando estilo pra fora do componente
+              (deveria ser modular/scoped)
+            - Imports desorganizados ou paths relativos longos onde haveria
+              alias configurado no Vite
+      
+            Para cada problema encontrado: aponte o arquivo e a linha, explique
+            o impacto real (não só "má prática"), e sugira a correção com
+            um trecho de código quando fizer sentido. Não comente sobre
+            formatação pura (espaçamento, ponto e vírgula) — assuma que
+            isso já é coberto por linter/formatter. Seja direto, sem
+            elogios genéricos tipo "bom trabalho" — só liste o que precisa
+            mudar. Se o PR estiver limpo, diga isso em uma frase e não
+            invente ressalvas.
