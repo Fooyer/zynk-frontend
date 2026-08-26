@@ -24,70 +24,59 @@ jobs:
         with:
           model: anthropic/claude-sonnet-4-6
           use_github_token: true
-          prompt: |
-            Revise este PR de front-end (React + TypeScript + Vite). Ignore
-            qualquer alteração fora de src/ (ex: arquivos de config, CI, docs)
-            a menos que quebrem o build.
-      
-            ## Arquitetura e organização
-            - Componentes fora do lugar certo (pages/, components/, hooks/,
-              contexts/, services/)
-            - Lógica de UI misturada com lógica de negócio/fetch dentro do
-              componente — deveria estar em um custom hook ou em services/
-            - Componentes grandes demais que deveriam ser quebrados
-            - Duplicação de lógica que já existe em outro hook/componente
-      
-            ## State management
-            - Props drilling que deveria virar Context API
-            - Context sendo usado onde state local (useState) resolveria —
-              overengineering
-            - Providers de Context re-renderizando a árvore inteira
-              desnecessariamente (falta de memoização do value passado ao
-              Provider)
-      
-            ## Performance
-            - useEffect com array de dependências incorreto ou faltando
-            - Funções/objetos recriados a cada render sendo passados como
-              prop para componentes memoizados (quebra o React.memo)
-            - Falta de useMemo/useCallback em cálculo custoso ou callback
-              passado pra lista grande — mas também aponte useMemo/useCallback
-              usado sem necessidade real (custo de leitura sem ganho)
-            - Loops ou fetch dentro de render, fora de efeito
-      
-            ## Integração com backend (REST)
-            - Chamadas fetch fora de services/ ou de um hook dedicado
-            - Ausência de tratamento de erro no fetch (status HTTP não
-              verificado, sem try/catch)
-            - Não validar o formato de resposta esperado:
-              { success, data, error }
-            - Token de autenticação/sessão exposto ou manuseado de forma
-              insegura no client
-      
-            ## Segurança (frontend)
-            - dangerouslySetInnerHTML sem sanitização — risco de XSS
-            - Dados vindos da API renderizados sem escaping
-            - Segredos, chaves de API ou URLs internas hardcoded no código
-            - Uso de innerHTML, eval, ou similar
-      
-            ## TypeScript
-            - uso de `any` que poderia ser tipado
-            - Tipos de resposta de API não refletindo o formato real do
-              backend
-            - Props de componente sem interface/type definida
-      
-            ## Convenções do projeto
-            - Nomenclatura inconsistente (hooks sem prefixo `use`, componentes
-              fora de PascalCase)
-            - CSS inline ou global vazando estilo pra fora do componente
-              (deveria ser modular/scoped)
-            - Imports desorganizados ou paths relativos longos onde haveria
-              alias configurado no Vite
-      
-            Para cada problema encontrado: aponte o arquivo e a linha, explique
-            o impacto real (não só "má prática"), e sugira a correção com
-            um trecho de código quando fizer sentido. Não comente sobre
-            formatação pura (espaçamento, ponto e vírgula) — assuma que
-            isso já é coberto por linter/formatter. Seja direto, sem
-            elogios genéricos tipo "bom trabalho" — só liste o que precisa
-            mudar. Se o PR estiver limpo, diga isso em uma frase e não
-            invente ressalvas.
+         prompt: |
+            Revise APENAS o diff deste PR (linhas adicionadas/modificadas) —
+            não analise arquivos ou trechos que não mudaram, mesmo que estejam
+            no mesmo arquivo. Ignore qualquer alteração fora de src/ (config,
+            CI, docs) a menos que quebre o build.
+          
+            Critérios de avaliação:
+          
+            **Arquitetura**: componente fora do lugar (pages/, components/,
+            hooks/, contexts/, services/); lógica de negócio/fetch dentro do
+            componente em vez de custom hook ou services/; duplicação de
+            lógica já existente.
+          
+            **State management**: props drilling que devia ser Context;
+            Context usado onde useState resolveria; Provider sem memoização
+            do value, causando re-render da árvore inteira.
+          
+            **Performance**: dependências erradas/faltando em useEffect;
+            função/objeto recriado a cada render quebrando React.memo;
+            useMemo/useCallback faltando em ponto custoso OU usado sem
+            necessidade; fetch ou loop pesado fora de efeito.
+          
+            **Integração REST**: fetch fora de services/ ou hook dedicado;
+            sem tratamento de erro (status HTTP, try/catch); resposta não
+            validada contra o formato { success, data, error }; token exposto
+            ou mal manuseado no client.
+          
+            **Segurança**: dangerouslySetInnerHTML sem sanitização; dado de
+            API renderizado sem escaping; segredo ou URL interna hardcoded;
+            innerHTML/eval.
+          
+            **TypeScript**: `any` evitável; tipo de resposta de API divergente
+            do formato real; prop sem interface/type.
+          
+            **Convenções**: hook sem prefixo `use`; componente fora de
+            PascalCase; CSS vazando escopo; import desorganizado onde haveria
+            alias do Vite.
+          
+            Não comente formatação (espaçamento, ponto e vírgula) — assuma
+            linter/formatter cobrindo isso.
+          
+            ## Formato da resposta
+            Responda em markdown, direto ao ponto, sem introdução, sem
+            conclusão, sem elogios. Um item por problema, nesta forma:
+          
+            **`arquivo:linha`** — [categoria] descrição objetiva do problema
+            e do impacto real (1-2 frases). Correção sugerida:
+            ```lang
+              trecho de código
+            ```
+          
+            Se não houver correção de código relevante, omita o bloco de
+            código. Se o diff estiver limpo, responda apenas:
+            "Sem problemas relevantes no diff." — sem listar ressalvas
+            inventadas. Não repita o diff, não resuma o que o PR faz, não
+            adicione seção de "resumo geral" no final.
