@@ -490,6 +490,7 @@ export function DMChatArea({ dm }: Props) {
   const getStatusDotClass = (status: string) => {
     if (status === 'online') return 'bg-online';
     if (status === 'in_call') return 'bg-warning';
+    if (status === 'away') return 'bg-away';
     return 'bg-offline';
   };
 
@@ -535,7 +536,7 @@ export function DMChatArea({ dm }: Props) {
         <div className="min-w-0">
           <span className="font-semibold text-surface-100 text-sm">{friend.username}</span>
           <span className="ml-1.5 text-xs text-surface-500">
-            {friend.status === 'online' ? '● Online' : friend.status === 'in_call' ? '● Em chamada' : '● Offline'}
+            {friend.status === 'online' ? '● Online' : friend.status === 'in_call' ? '● Em chamada' : friend.status === 'away' ? '● Ausente' : '● Offline'}
           </span>
         </div>
 

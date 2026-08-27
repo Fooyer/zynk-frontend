@@ -33,7 +33,7 @@ export function FriendsPage() {
     loadAll();
   }, []);
 
-  const onlineFriends = friends.filter((f) => f.friend.status === 'online' || f.friend.status === 'in_call');
+  const onlineFriends = friends.filter((f) => f.friend.status !== 'offline');
 
   const parsedHandle = parseHandle(handle);
 
@@ -365,7 +365,8 @@ export function FriendsPage() {
                   <div
                     className={`absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-surface-900 ${
                       f.friend.status === 'online' ? 'bg-online' :
-                      f.friend.status === 'in_call' ? 'bg-warning' : 'bg-offline'
+                      f.friend.status === 'in_call' ? 'bg-warning' :
+                      f.friend.status === 'away' ? 'bg-away' : 'bg-offline'
                     }`}
                   />
                 </div>
@@ -374,11 +375,13 @@ export function FriendsPage() {
                   <p
                     className={`text-xs font-medium ${
                       f.friend.status === 'online' ? 'text-success' :
-                      f.friend.status === 'in_call' ? 'text-warning' : 'text-surface-400'
+                      f.friend.status === 'in_call' ? 'text-warning' :
+                      f.friend.status === 'away' ? 'text-away' : 'text-surface-400'
                     }`}
                   >
                     {f.friend.status === 'online' ? 'Online' :
-                     f.friend.status === 'in_call' ? 'Em chamada' : 'Offline'}
+                     f.friend.status === 'in_call' ? 'Em chamada' :
+                     f.friend.status === 'away' ? 'Ausente' : 'Offline'}
                   </p>
                 </div>
                 <div className="flex gap-1 flex-shrink-0">

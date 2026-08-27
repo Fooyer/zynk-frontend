@@ -5,6 +5,7 @@ import { useLayoutStore } from '../../stores/layoutStore';
 import { useWatchTogetherUiStore } from '../../stores/watchTogetherUiStore';
 import { useAuthStore } from '../../stores/authStore';
 import { useContextMenuStore } from '../../stores/contextMenuStore';
+import { useUserVolumeStore } from '../../stores/userVolumeStore';
 import { useVoiceRoom } from '../../hooks/useVoiceRoom';
 import { useEditableContextMenu } from '../../hooks/useEditableContextMenu';
 import { GroupView } from './GroupView';
@@ -31,6 +32,32 @@ type ChannelRow =
   | { type: 'text'; channel: GroupTextChannel };
 
 const rowKey = (row: ChannelRow) => `${row.type}-${row.channel.id}`;
+
+/** Slider de volume local (0-200%) de um participante — dentro do menu de contexto dele, tipo Discord. */
+function ParticipantVolumeSlider({ userId, onChange }: { userId: number; onChange: (pct: number) => void }) {
+  const volume = useUserVolumeStore((s) => s.volumes[userId] ?? 100);
+  const pct = (volume / 200) * 100;
+  return (
+    <div className="px-2 pt-1 pb-1.5">
+      <div className="flex items-center justify-between text-[11px] text-surface-400 mb-1">
+        <span>Volume</span>
+        <span className="tabular-nums">{volume}%</span>
+      </div>
+      <input
+        type="range"
+        min={0}
+        max={200}
+        step={5}
+        value={volume}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="w-full h-1.5 cursor-pointer"
+        style={{
+          background: `linear-gradient(to right, rgb(var(--color-accent-500)) ${pct}%, rgb(var(--color-surface-700)) ${pct}%)`,
+        }}
+      />
+    </div>
+  );
+}
 
 interface ChannelSidebarProps {
   group: { id: number; name: string; channelId: number | null; features: string[] } | null;
@@ -273,7 +300,7 @@ function ChannelSidebar({ group, voice, activeChannelId, onSelectChannel, onOpen
     ));
   };
 
-  /** Menu de opções de um participante da call (silenciar localmente/copiar nome). */
+  /** Menu de opções de um participante da call (volume local/silenciar localmente/copiar nome). */
   const openParticipantMenu = (e: React.MouseEvent, p: VoiceChannel['participants'][number], isConnectedHere: boolean) => {
     e.preventDefault();
     e.stopPropagation();
@@ -283,6 +310,13 @@ function ChannelSidebar({ group, voice, activeChannelId, onSelectChannel, onOpen
     useContextMenuStore.getState().open({ x: e.clientX, y: e.clientY }, (
       <>
         <ContextMenuHeader>{p.username}</ContextMenuHeader>
+
+        {!isSelf && isConnectedHere && (
+          <>
+            <ParticipantVolumeSlider userId={p.userId} onChange={(pct) => voice.setUserVolume(p.userId, pct)} />
+            <ContextMenuSeparator />
+          </>
+        )}
 
         {!isSelf && isConnectedHere && (
           <ContextMenuItem

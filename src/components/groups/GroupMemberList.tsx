@@ -24,6 +24,7 @@ function StatusAvatar({ status, username, avatarUrl, size = 36 }: {
   const ringClass =
     status === 'online' ? 'bg-success' :
     status === 'in_call' ? 'bg-accent-500' :
+    status === 'away' ? 'bg-away' :
     'bg-surface-600';
   const inner = size - 6;
 

@@ -119,35 +119,63 @@ export function useSocket() {
     );
 
     // ── Away detection ─────────────────────────────────────────
-    // Marca como "away" após 5 min sem foco na janela
+    // Marca como "away" após 5 min sem atividade (mouse/teclado/scroll),
+    // igual ao Discord — não depende da janela estar em foco ou não.
+    const AWAY_TIMEOUT = 5 * 60 * 1000;
+    const ACTIVITY_THROTTLE = 15 * 1000;
+
     let awayTimer: ReturnType<typeof setTimeout> | null = null;
+    let isAway = false;
+    let lastActivityReset = 0;
 
     const emitStatus = (status: 'online' | 'away') => {
       if (socket.connected) socket.emit('user:status_update', { status });
     };
 
-    const onBlur = () => {
-      awayTimer = setTimeout(() => emitStatus('away'), 5 * 60 * 1000);
+    const goAway = () => {
+      isAway = true;
+      emitStatus('away');
     };
 
-    const onFocus = () => {
-      if (awayTimer) { clearTimeout(awayTimer); awayTimer = null; }
-      emitStatus('online');
+    const resetAwayTimer = () => {
+      if (awayTimer) clearTimeout(awayTimer);
+      awayTimer = setTimeout(goAway, AWAY_TIMEOUT);
+    };
 
-      // Recuperou o foco com a conversa certa já aberta — zera o não lida
-      // dela em vez de esperar o usuário trocar de canal.
-      const { view } = useUiStore.getState();
-      if (view === 'home') {
-        const { activeDmChannelId } = useFriendStore.getState();
-        if (activeDmChannelId) useUnreadStore.getState().clear(activeDmChannelId);
-      } else if (view === 'group') {
-        const { activeChannelId } = useGroupStore.getState();
-        if (activeChannelId) useUnreadStore.getState().clear(activeChannelId);
+    const onActivity = () => {
+      const now = Date.now();
+
+      if (isAway) {
+        isAway = false;
+        emitStatus('online');
+
+        // Voltou a interagir com a conversa certa já aberta — zera o não
+        // lida dela em vez de esperar o usuário trocar de canal.
+        const { view } = useUiStore.getState();
+        if (view === 'home') {
+          const { activeDmChannelId } = useFriendStore.getState();
+          if (activeDmChannelId) useUnreadStore.getState().clear(activeDmChannelId);
+        } else if (view === 'group') {
+          const { activeChannelId } = useGroupStore.getState();
+          if (activeChannelId) useUnreadStore.getState().clear(activeChannelId);
+        }
+
+        lastActivityReset = now;
+        resetAwayTimer();
+        return;
       }
+
+      // Throttla os resets: mousemove dispara dezenas de vezes por segundo,
+      // não precisamos rearmar o timer a cada evento.
+      if (now - lastActivityReset < ACTIVITY_THROTTLE) return;
+      lastActivityReset = now;
+      resetAwayTimer();
     };
 
-    window.addEventListener('blur', onBlur);
-    window.addEventListener('focus', onFocus);
+    const activityEvents = ['mousemove', 'mousedown', 'keydown', 'wheel', 'touchstart', 'focus'] as const;
+    activityEvents.forEach((ev) => window.addEventListener(ev, onActivity, { passive: true }));
+
+    resetAwayTimer();
 
     return () => {
       socket.off('message:new');
@@ -169,8 +197,7 @@ export function useSocket() {
       socket.off('connect');
       socket.off('disconnect');
       socket.off('reconnect');
-      window.removeEventListener('blur', onBlur);
-      window.removeEventListener('focus', onFocus);
+      activityEvents.forEach((ev) => window.removeEventListener(ev, onActivity));
       if (awayTimer) clearTimeout(awayTimer);
       hasSetup.current = false;
     };

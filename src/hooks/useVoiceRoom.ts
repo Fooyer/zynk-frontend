@@ -3,6 +3,7 @@ import { groupsAPI } from '../services/api';
 import { getSocket } from '../services/socket';
 import { useAuthStore } from '../stores/authStore';
 import { useSettingsStore } from '../stores/settingsStore';
+import { useUserVolumeStore } from '../stores/userVolumeStore';
 import { captureScreen, captureSystemAudio } from '../services/screenCapture';
 import { alertDialog } from '../stores/dialogStore';
 import { ICE_SERVERS } from '../services/iceServers';
@@ -17,6 +18,16 @@ import {
   playScreenShareStopSound,
 } from '../services/callSounds';
 import type { CallMode, VoiceChannel, VoiceParticipant, WatchTogetherState } from '../types';
+
+// `createMediaStreamTrackSource` roteia um MediaStreamTrack específico pro
+// grafo do Web Audio (diferente de `createMediaStreamSource`, que é ambíguo
+// quando o MediaStream tem mais de uma track) — suportado no Chromium (base
+// do Electron), mas ainda não declarado no lib.dom.d.ts do TypeScript.
+declare global {
+  interface AudioContext {
+    createMediaStreamTrackSource(track: MediaStreamTrack): MediaStreamAudioSourceNode;
+  }
+}
 
 interface ScreenSenders {
   video: RTCRtpSender;
@@ -74,6 +85,14 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
   const localAnalyserRef = useRef<AnalyserNode | null>(null);
   const remoteAnalysers = useRef<Map<number, AnalyserNode>>(new Map());
   const remoteAnalyserCtxRef = useRef<AudioContext | null>(null);
+  // GainNode por peer — permite volume local acima de 100% (o <audio>.volume
+  // nativo satura em 1.0), lido de userVolumeStore e persistido pra sempre.
+  // Cada track de áudio do peer (mic + eventual compartilhamento de áudio do
+  // sistema) entra nesse mesmo GainNode via sua própria
+  // MediaStreamTrackAudioSourceNode; a saída dele alimenta uma
+  // MediaStreamAudioDestinationNode cujo stream é o srcObject real do
+  // <audio> (em vez do MediaStream cru vindo do WebRTC).
+  const remoteGainNodes = useRef<Map<number, GainNode>>(new Map());
   // Diagnóstico temporário: guarda o id do PRIMEIRO track de áudio recebido
   // de cada peer (sempre o mic, adicionado na entrada da call) só pra rotular
   // os logs de stats e não ficar adivinhando qual dos tracks acumulados no
@@ -384,21 +403,47 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
           if (outputId && typeof audio.setSinkId === 'function') {
             audio.setSinkId(outputId).catch(() => {});
           }
-          audio.srcObject = stream;
 
-          // Tapeia esse mesmo MediaStream pra medir nível de áudio — só na
-          // criação (primeiro track = mic, ver comentário acima), pra não
-          // acabar analisando o track de compartilhamento de áudio do
-          // sistema como se fosse a voz da pessoa.
+          // Roteia a reprodução por um GainNode (por usuário) em vez do
+          // MediaStream cru — é o que permite volume local acima de 100%.
+          // Tapeia o mesmo track (via MediaStreamTrackAudioSourceNode, não
+          // um MediaStreamSource no MediaStream acumulado — ambíguo quando
+          // ele ganha uma segunda track) pra medir nível de áudio também,
+          // só na primeira track (mic; ver comentário acima), pra não
+          // acabar analisando o compartilhamento de áudio do sistema como
+          // se fosse a voz da pessoa.
           try {
             if (!remoteAnalyserCtxRef.current) remoteAnalyserCtxRef.current = new AudioContext();
             const ctx = remoteAnalyserCtxRef.current;
-            const source = ctx.createMediaStreamSource(stream);
+            const gainNode = ctx.createGain();
+            gainNode.gain.value = useUserVolumeStore.getState().getVolume(targetUserId) / 100;
+            const dest = ctx.createMediaStreamDestination();
+            gainNode.connect(dest);
+            remoteGainNodes.current.set(targetUserId, gainNode);
+            audio.srcObject = dest.stream;
+
+            const trackSource = ctx.createMediaStreamTrackSource(track);
+            trackSource.connect(gainNode);
             const analyser = ctx.createAnalyser();
             analyser.fftSize = 256;
-            source.connect(analyser);
+            trackSource.connect(analyser);
             remoteAnalysers.current.set(targetUserId, analyser);
-          } catch { /* medição de fala é cosmética — segue sem ela se falhar */ }
+          } catch {
+            // Web Audio indisponível/falhou — volta pro caminho nativo (sem
+            // volume acima de 100%, mas áudio continua tocando).
+            audio.srcObject = stream;
+          }
+        } else {
+          // Track adicional pro mesmo peer (ex.: compartilhamento de áudio
+          // do sistema, que chega depois do mic) — entra no GainNode já
+          // existente pra também respeitar o volume local.
+          const gainNode = remoteGainNodes.current.get(targetUserId);
+          const ctx = remoteAnalyserCtxRef.current;
+          if (gainNode && ctx) {
+            try {
+              ctx.createMediaStreamTrackSource(track).connect(gainNode);
+            } catch { /* segue sem essa track no grafo — já está no <audio> nativo se o fallback acima rodou */ }
+          }
         }
         // `autoplay` sozinho não é confiável (política de autoplay do
         // Chromium/Electron pode bloquear silenciosamente) — era por isso
@@ -503,6 +548,7 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
     remoteAudioStreams.current.delete(uid);
     firstAudioTrackIdByUser.current.delete(uid);
     remoteAnalysers.current.delete(uid);
+    remoteGainNodes.current.delete(uid);
     screenSenders.current.delete(uid);
     audioShareSenders.current.delete(uid);
     removeScreenStream(uid);
@@ -527,6 +573,7 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
     peers.current.forEach((_, uid) => closePeer(uid));
     localAnalyserRef.current = null;
     remoteAnalysers.current.clear();
+    remoteGainNodes.current.clear();
     remoteAnalyserCtxRef.current?.close().catch(() => {});
     remoteAnalyserCtxRef.current = null;
     setSpeakingUserIds(new Set());
@@ -577,6 +624,18 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
     setLocallyMutedIds(next);
     const audio = audioRefs.current.get(userId);
     if (audio) audio.muted = nowMuted;
+  };
+
+  /**
+   * Volume local (0-200%) de uma pessoa — persiste pra sempre em
+   * userVolumeStore (localStorage) e, se ela estiver conectada agora, aplica
+   * na hora no GainNode dela.
+   */
+  const setUserVolume = (userId: number, pct: number) => {
+    useUserVolumeStore.getState().setVolume(userId, pct);
+    const clamped = useUserVolumeStore.getState().getVolume(userId);
+    const gainNode = remoteGainNodes.current.get(userId);
+    if (gainNode) gainNode.gain.value = clamped / 100;
   };
 
   const toggleMute = () => {
@@ -851,6 +910,7 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
     leave,
     toggleMute,
     toggleLocalMute,
+    setUserVolume,
     startScreenShare,
     stopScreenShare,
     startAudioShare,

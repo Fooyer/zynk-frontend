@@ -99,18 +99,21 @@ export function DMSidebar({ voice }: DMSidebarProps) {
   const getStatusDotClass = (status: string) => {
     if (status === 'online') return 'bg-online';
     if (status === 'in_call') return 'bg-warning';
+    if (status === 'away') return 'bg-away';
     return 'bg-offline';
   };
 
   const getStatusText = (status: string) => {
     if (status === 'online') return 'Online';
     if (status === 'in_call') return 'Em chamada';
+    if (status === 'away') return 'Ausente';
     return 'Offline';
   };
 
   const getStatusTextClass = (status: string) => {
     if (status === 'online') return 'text-success';
     if (status === 'in_call') return 'text-warning';
+    if (status === 'away') return 'text-away';
     return 'text-surface-500';
   };
 

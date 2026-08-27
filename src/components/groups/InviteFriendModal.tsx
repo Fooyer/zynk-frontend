@@ -76,7 +76,10 @@ export function InviteFriendModal({ isOpen, onClose, groupId }: Props) {
                     <p className="text-sm text-surface-100 truncate">{f.friend.username}</p>
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
-                    <span className={`w-2 h-2 rounded-full ${f.friend.status === 'online' ? 'bg-success' : 'bg-surface-500'}`} />
+                    <span className={`w-2 h-2 rounded-full ${
+                      f.friend.status === 'online' ? 'bg-success' :
+                      f.friend.status === 'away' ? 'bg-away' : 'bg-surface-500'
+                    }`} />
                     {wasInvited ? (
                       <span className="px-3 py-1 text-xs text-green-400 bg-green-900/20 border border-green-800/40 rounded-md">
                         Convidado
