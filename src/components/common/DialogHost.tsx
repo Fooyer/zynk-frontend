@@ -14,8 +14,10 @@ export function DialogHost() {
   useEffect(() => {
     if (!request) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') close(false);
-      if (e.key === 'Enter') close(true);
+      if (e.key === 'Escape') close(request.kind === 'select' ? null : false);
+      // Enter não tem "escolha padrão" num diálogo de seleção — só fecha
+      // confirm/alert, que têm um único botão de ação óbvio.
+      if (e.key === 'Enter' && request.kind !== 'select') close(true);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -26,7 +28,7 @@ export function DialogHost() {
   return (
     <div
       className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in"
-      onClick={() => close(false)}
+      onClick={() => close(request.kind === 'select' ? null : false)}
     >
       <div
         className="zk-modal rounded-2xl w-[380px] p-6 animate-scale-in"
@@ -58,26 +60,42 @@ export function DialogHost() {
           </div>
         </div>
 
+        {request.kind === 'select' && (
+          <div className="space-y-1.5 mb-2">
+            {request.choices?.map((choice) => (
+              <button
+                key={choice.value}
+                onClick={() => close(choice.value)}
+                className="w-full text-left px-3 py-2 rounded-lg text-sm text-surface-200 bg-white/[0.04] hover:bg-white/[0.09] transition-colors"
+              >
+                {choice.label}
+              </button>
+            ))}
+          </div>
+        )}
+
         <div className="flex gap-3 justify-end">
-          {request.kind === 'confirm' && (
+          {(request.kind === 'confirm' || request.kind === 'select') && (
             <button
-              onClick={() => close(false)}
+              onClick={() => close(request.kind === 'select' ? null : false)}
               className="px-4 py-2 text-sm text-surface-300 hover:text-surface-100 transition-colors"
             >
               {request.cancelLabel}
             </button>
           )}
-          <button
-            onClick={() => close(true)}
-            autoFocus
-            className={`px-4 py-2 text-sm font-semibold uppercase tracking-wide rounded-xl transition-all ${
-              request.danger
-                ? 'bg-danger hover:bg-red-700 text-white'
-                : 'zk-btn-primary'
-            }`}
-          >
-            {request.confirmLabel}
-          </button>
+          {request.kind !== 'select' && (
+            <button
+              onClick={() => close(true)}
+              autoFocus
+              className={`px-4 py-2 text-sm font-semibold uppercase tracking-wide rounded-xl transition-all ${
+                request.danger
+                  ? 'bg-danger hover:bg-red-700 text-white'
+                  : 'zk-btn-primary'
+              }`}
+            >
+              {request.confirmLabel}
+            </button>
+          )}
         </div>
       </div>
     </div>

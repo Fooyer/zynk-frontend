@@ -14,9 +14,6 @@ interface CallState {
   volume: number;
   isScreenSharing: boolean;
   remoteHasScreen: boolean;
-  // Compartilhamento de só o áudio do sistema (sem vídeo) — mutuamente
-  // exclusivo com isScreenSharing (um desliga o outro na UI).
-  isSharingAudio: boolean;
   // Timestamp de início da chamada — fica na store (não em estado local de
   // componente) porque a barra flutuante e o painel inline montam/desmontam
   // conforme a navegação, e um estado local reiniciaria o cronômetro do zero.
@@ -28,7 +25,6 @@ interface CallState {
   setMuted: (muted: boolean) => void;
   setVolume: (volume: number) => void;
   setScreenSharing: (v: boolean) => void;
-  setSharingAudio: (v: boolean) => void;
   setRemoteHasScreen: (v: boolean) => void;
   reset: () => void;
 }
@@ -44,7 +40,6 @@ export const useCallStore = create<CallState>((set) => ({
   volume: 1,
   isScreenSharing: false,
   remoteHasScreen: false,
-  isSharingAudio: false,
   callStartedAt: null,
 
   initCall: (peerId, peerUsername, channelId, mode = 'normal') =>
@@ -57,11 +52,10 @@ export const useCallStore = create<CallState>((set) => ({
   setMuted: (isMuted) => set({ isMuted }),
   setVolume: (volume) => set({ volume }),
   setScreenSharing: (isScreenSharing) => set({ isScreenSharing }),
-  setSharingAudio: (isSharingAudio) => set({ isSharingAudio }),
   setRemoteHasScreen: (remoteHasScreen) => set({ remoteHasScreen }),
   reset: () => set({
     status: 'idle', peerId: null, peerUsername: null, channelId: null, mode: 'normal',
     pendingOffer: null, isMuted: false, volume: 1, isScreenSharing: false, remoteHasScreen: false,
-    isSharingAudio: false, callStartedAt: null,
+    callStartedAt: null,
   }),
 }));

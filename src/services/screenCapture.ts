@@ -1,3 +1,5 @@
+import { selectDialog } from '../stores/dialogStore';
+
 /**
  * Captura a tela usando getDisplayMedia.
  * Se sourceId é fornecido (Electron), avisa o main process antes para que o
@@ -14,8 +16,9 @@ export async function captureScreen(sourceId?: string): Promise<MediaStream> {
     // áudio que o main process concede via `audio: 'loopback'` no
     // setDisplayMediaRequestHandler — sem pedir áudio na constraint da
     // própria chamada, o loopback do main é ignorado e o stream sempre
-    // volta só com vídeo (era por isso que captureSystemAudio() nunca
-    // achava nenhuma faixa de áudio pra capturar).
+    // volta só com vídeo. Mesmo assim, no Linux o stream ainda volta sem
+    // áudio (loopback só existe no Windows/macOS) — ver
+    // captureScreenWithAudioFallback logo abaixo.
     return await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
   } catch (e) {
     console.error('[captureScreen] getDisplayMedia falhou:', e);
@@ -24,54 +27,48 @@ export async function captureScreen(sourceId?: string): Promise<MediaStream> {
 }
 
 /**
- * Captura só o áudio do sistema (loopback), sem vídeo, pra compartilhar com
- * o outro participante sem expor a tela — ex: tocar uma música ou o áudio de
- * um jogo pra call sem mostrar nada visualmente.
- *
- * O Chromium não permite pedir só áudio via getDisplayMedia (`video` é
- * obrigatório), então a captura passa pelo mesmo fluxo de tela — o main
- * process (setDisplayMediaRequestHandler) sempre inclui `audio: 'loopback'`
- * automaticamente — e a faixa de vídeo é descartada assim que o stream
- * chega, antes de qualquer track ser adicionada à chamada.
- *
- * Importante: o loopback captura o áudio do SISTEMA INTEIRO (o que estiver
- * tocando no computador), não de um app específico isolado — o Windows não
- * expõe captura de áudio por processo através da API que o Electron usa.
+ * Pergunta qual dispositivo de áudio usar quando a captura de tela não veio
+ * com áudio nenhum — o loopback de áudio do sistema que o main process pede
+ * via `audio: 'loopback'` (electron/main.ts) só existe no Windows e macOS;
+ * no Linux `getDisplayMedia` simplesmente devolve zero faixas de áudio, sem
+ * erro. Dispositivos com "monitor" no nome (PulseAudio/PipeWire) capturam o
+ * que está tocando no sistema e aparecem como entrada de áudio comum — por
+ * isso ficam no topo da lista. Resolve `null` se não achar nenhum
+ * dispositivo ou se o usuário cancelar.
  */
-export async function captureSystemAudio(): Promise<MediaStream> {
-  const stream = await captureScreen();
-  const videoTrack = stream.getVideoTracks()[0];
-  if (videoTrack) {
-    videoTrack.stop();
-    stream.removeTrack(videoTrack);
-  }
-  if (stream.getAudioTracks().length === 0) {
-    stream.getTracks().forEach((t) => t.stop());
-    throw new Error('Nenhum áudio do sistema disponível pra capturar.');
-  }
-  // Diagnóstico: a faixa pode vir "viva" (não cai no erro acima) mas sem
-  // áudio real chegando — em geral sinal de que o Windows negou a captura de
-  // loopback silenciosamente (permissão de microfone do app nas configs de
-  // privacidade) em vez de estourar erro. `muted`/`onmute` aqui ajudam a
-  // distinguir "capturou mas tá tudo em silêncio no PC" de "Windows nunca
-  // entregou frame nenhum".
-  const audioTrack = stream.getAudioTracks()[0];
-  const settings = audioTrack.getSettings();
-  // channelCount/sampleRate primeiro de propósito: o preview inline do
-  // console do Chrome trunca depois de ~5 propriedades com "…", e um
-  // descompasso de canais/sample rate do loopback do WASAPI é a suspeita
-  // atual pra "captura real, mas chega zerada do outro lado" — precisa
-  // aparecer sem precisar expandir o objeto manualmente no devtools.
-  console.log('[captureSystemAudio] track capturada:', {
-    channelCount: settings.channelCount,
-    sampleRate: settings.sampleRate,
-    sampleSize: settings.sampleSize,
-    label: audioTrack.label,
-    readyState: audioTrack.readyState,
-    muted: audioTrack.muted,
-    enabled: audioTrack.enabled,
+async function pickFallbackAudioTrack(): Promise<MediaStreamTrack | null> {
+  const devices = await navigator.mediaDevices.enumerateDevices();
+  const audioInputs = devices.filter((d) => d.kind === 'audioinput');
+  if (audioInputs.length === 0) return null;
+
+  const sorted = [...audioInputs].sort((a, b) => {
+    const aMonitor = a.label.toLowerCase().includes('monitor') ? 0 : 1;
+    const bMonitor = b.label.toLowerCase().includes('monitor') ? 0 : 1;
+    return aMonitor - bMonitor;
   });
-  audioTrack.onmute = () => console.warn('[captureSystemAudio] track ficou muted (Windows parou de entregar áudio)');
-  audioTrack.onunmute = () => console.log('[captureSystemAudio] track voltou a entregar áudio');
+
+  const deviceId = await selectDialog(
+    'Não conseguimos capturar o áudio do sistema automaticamente. Escolha um dispositivo de áudio pra compartilhar junto com a tela — no Linux, dispositivos com "monitor" no nome costumam captar o som do sistema.',
+    sorted.map((d) => ({ value: d.deviceId, label: d.label || 'Dispositivo de áudio' })),
+    { title: 'Áudio da tela compartilhada', cancelLabel: 'Continuar sem áudio' },
+  );
+  if (!deviceId) return null;
+
+  const stream = await navigator.mediaDevices.getUserMedia({ audio: { deviceId: { exact: deviceId } } });
+  return stream.getAudioTracks()[0] ?? null;
+}
+
+/**
+ * Captura a tela e, se o stream não vier com áudio (comum no Linux — ver
+ * pickFallbackAudioTrack acima), pergunta ao usuário um dispositivo
+ * alternativo e anexa a faixa resultante ao mesmo stream antes de devolver —
+ * assim quem chama continua lendo `getAudioTracks()[0]` normalmente.
+ */
+export async function captureScreenWithAudioFallback(sourceId?: string): Promise<MediaStream> {
+  const stream = await captureScreen(sourceId);
+  if (stream.getAudioTracks().length === 0) {
+    const fallbackTrack = await pickFallbackAudioTrack();
+    if (fallbackTrack) stream.addTrack(fallbackTrack);
+  }
   return stream;
 }

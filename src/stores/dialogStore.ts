@@ -11,20 +11,32 @@ interface AlertOptions {
   title?: string;
 }
 
+export interface SelectChoice {
+  value: string;
+  label: string;
+}
+
+interface SelectOptions {
+  title?: string;
+  cancelLabel?: string;
+}
+
 interface DialogRequest {
-  kind: 'confirm' | 'alert';
+  kind: 'confirm' | 'alert' | 'select';
   message: string;
   title?: string;
   confirmLabel: string;
   cancelLabel: string;
   danger: boolean;
-  resolve: (value: boolean) => void;
+  /** Só usado quando kind === 'select'. */
+  choices?: SelectChoice[];
+  resolve: (value: boolean | string | null) => void;
 }
 
 interface DialogState {
   request: DialogRequest | null;
   open: (request: DialogRequest) => void;
-  close: (result: boolean) => void;
+  close: (result: boolean | string | null) => void;
 }
 
 /**
@@ -50,7 +62,7 @@ export function confirmDialog(message: string, options: ConfirmOptions = {}): Pr
       confirmLabel: options.confirmLabel ?? 'Confirmar',
       cancelLabel: options.cancelLabel ?? 'Cancelar',
       danger: options.danger ?? false,
-      resolve,
+      resolve: (value) => resolve(value as boolean),
     });
   });
 }
@@ -66,6 +78,22 @@ export function alertDialog(message: string, options: AlertOptions = {}): Promis
       cancelLabel: '',
       danger: false,
       resolve: () => resolve(),
+    });
+  });
+}
+
+/** Pede pra escolher um entre N valores — resolve o `value` clicado, ou `null` se cancelar. */
+export function selectDialog(message: string, choices: SelectChoice[], options: SelectOptions = {}): Promise<string | null> {
+  return new Promise((resolve) => {
+    useDialogStore.getState().open({
+      kind: 'select',
+      message,
+      title: options.title,
+      confirmLabel: '',
+      cancelLabel: options.cancelLabel ?? 'Cancelar',
+      danger: false,
+      choices,
+      resolve: (value) => resolve(value as string | null),
     });
   });
 }

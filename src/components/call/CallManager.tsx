@@ -4,7 +4,7 @@ import { useChatStore } from '../../stores/chatStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { getSocket } from '../../services/socket';
 import { remoteScreenStreamRef, localScreenStreamRef, localAnalyserRef, remoteAnalyserRef } from '../../services/callStream';
-import { captureScreen, captureSystemAudio } from '../../services/screenCapture';
+import { captureScreenWithAudioFallback } from '../../services/screenCapture';
 import { ICE_SERVERS } from '../../services/iceServers';
 import { applyLowLatencySenderParams, withLowLatencyOpus } from '../../services/lowLatencyAudio';
 import { getProcessedStream } from '../../services/audioProcessing';
@@ -35,7 +35,7 @@ async function applyScreenVideoParams(sender: RTCRtpSender) {
 export function CallManager() {
   const {
     status, peerId, peerUsername, pendingOffer, volume, mode,
-    setActive, setMuted, setScreenSharing, setSharingAudio, setRemoteHasScreen, reset,
+    setActive, setMuted, setScreenSharing, setRemoteHasScreen, reset,
   } = useCallStore();
   const [showScreenPicker, setShowScreenPicker] = useState(false);
   const startScreenShareRef = useRef<((sourceId: string) => Promise<void>) | null>(null);
@@ -430,7 +430,6 @@ export function CallManager() {
       localScreenStreamRef.current?.getTracks().forEach((t) => t.stop());
       localScreenStreamRef.current = null;
       setScreenSharing(false);
-      setSharingAudio(false);
       playScreenShareStopSound();
       notifyScreenStop(targetPeerId);
       await renegotiate(targetPeerId);
@@ -438,60 +437,16 @@ export function CallManager() {
 
     // ── Screen share toggle ──
     const onScreenShareToggle = async () => {
-      const { isScreenSharing, isSharingAudio, peerId } = useCallStore.getState();
+      const { isScreenSharing, peerId } = useCallStore.getState();
       if (!pcRef.current || !peerId) return;
 
       if (isScreenSharing) {
         await stopScreenShare(peerId);
         return;
       }
-      if (isSharingAudio) return; // já compartilhando áudio — pare primeiro
 
       // Abre o picker — a captura real acontece via startScreenShareRef
       setShowScreenPicker(true);
-    };
-
-    // ── Compartilhar só o áudio do sistema (sem vídeo) ──
-    const onAudioShareToggle = async () => {
-      const { isScreenSharing, isSharingAudio, peerId } = useCallStore.getState();
-      if (!pcRef.current || !peerId) return;
-
-      if (isSharingAudio) {
-        await stopScreenShare(peerId);
-        return;
-      }
-      if (isScreenSharing) return; // já compartilhando tela — pare primeiro
-
-      try {
-        const audioStream = await captureSystemAudio();
-        const audioTrack = audioStream.getAudioTracks()[0];
-
-        localScreenStreamRef.current = audioStream;
-        screenAudioSenderRef.current = pcRef.current.addTrack(audioTrack, audioStream);
-
-        setSharingAudio(true);
-        playScreenShareStartSound();
-        await renegotiate(peerId);
-
-        audioTrack.onended = async () => {
-          const currentPeerId = useCallStore.getState().peerId;
-          if (currentPeerId && pcRef.current) {
-            await stopScreenShare(currentPeerId);
-          }
-        };
-      } catch (e) {
-        console.error('[audio-share] ERRO:', e);
-        localScreenStreamRef.current?.getTracks().forEach((t) => t.stop());
-        localScreenStreamRef.current = null;
-        if ((e as Error)?.name !== 'NotAllowedError') {
-          alertDialog(
-            (e as Error)?.message === 'Nenhum áudio do sistema disponível pra capturar.'
-              ? 'Nenhum áudio do sistema disponível pra capturar. Verifique se algo está tocando e tente de novo.'
-              : 'Não foi possível compartilhar o áudio do sistema. Tente novamente.',
-            { title: 'Erro ao compartilhar áudio' },
-          );
-        }
-      }
     };
 
     // Função chamada pelo picker após o usuário escolher o source
@@ -502,7 +457,7 @@ export function CallManager() {
       if (!pid) return;
 
       try {
-        const screenStream = await captureScreen(sourceId);
+        const screenStream = await captureScreenWithAudioFallback(sourceId);
 
         const videoTrack = screenStream.getVideoTracks()[0];
         if (!videoTrack) return;
@@ -547,7 +502,6 @@ export function CallManager() {
     window.addEventListener('call:toggle-mute', onToggleMute);
     window.addEventListener('call:hangup', onHangupEvent);
     window.addEventListener('call:screen-share-toggle', onScreenShareToggle as EventListener);
-    window.addEventListener('call:audio-share-toggle', onAudioShareToggle as EventListener);
 
     return () => {
       socket.off('call:incoming', onIncoming);
@@ -561,7 +515,6 @@ export function CallManager() {
       window.removeEventListener('call:toggle-mute', onToggleMute);
       window.removeEventListener('call:hangup', onHangupEvent);
       window.removeEventListener('call:screen-share-toggle', onScreenShareToggle as EventListener);
-      window.removeEventListener('call:audio-share-toggle', onAudioShareToggle as EventListener);
       startScreenShareRef.current = null;
     };
   }, []);

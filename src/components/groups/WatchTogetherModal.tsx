@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { extractYouTubeVideoId } from '../../services/youtube';
+import { parseVideoSource } from '../../services/videoSource';
+import type { VideoSource } from '../../types';
 
 interface Props {
   onClose: () => void;
-  onSubmit: (videoId: string) => void;
+  onSubmit: (source: VideoSource) => void;
   /** 'swap' força tocar na hora, interrompendo o vídeo atual — usado pelo
    *  botão "trocar vídeo". 'add' entra na fila (ou toca na hora se nada
    *  estiver rolando ainda) — usado pelo botão principal e pelo "+" da fila. */
@@ -13,12 +14,12 @@ interface Props {
 const COPY = {
   add: {
     title: 'Adicionar à fila',
-    hint: 'Cole o link de um vídeo — entra no fim da fila (ou toca na hora, se ninguém estiver assistindo nada ainda).',
+    hint: 'Cole o link de um vídeo do YouTube ou um link direto (mp4/webm/m3u8) — entra no fim da fila (ou toca na hora, se ninguém estiver assistindo nada ainda).',
     submitLabel: 'Adicionar',
   },
   swap: {
     title: 'Trocar vídeo',
-    hint: 'Cole o link de um vídeo — troca o que está passando agora pra todo mundo na call. A fila continua intacta.',
+    hint: 'Cole o link de um vídeo do YouTube ou um link direto (mp4/webm/m3u8) — troca o que está passando agora pra todo mundo na call. A fila continua intacta.',
     submitLabel: 'Trocar agora',
   },
 };
@@ -30,12 +31,12 @@ export function WatchTogetherModal({ onClose, onSubmit, mode }: Props) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const videoId = extractYouTubeVideoId(value);
-    if (!videoId) {
-      setError('Link do YouTube inválido. Cole a URL completa do vídeo.');
+    const source = parseVideoSource(value);
+    if (!source) {
+      setError('Link inválido. Cole a URL completa do vídeo (YouTube ou link direto http/https).');
       return;
     }
-    onSubmit(videoId);
+    onSubmit(source);
     onClose();
   };
 

@@ -4,7 +4,7 @@ import { getSocket } from '../services/socket';
 import { useAuthStore } from '../stores/authStore';
 import { useSettingsStore } from '../stores/settingsStore';
 import { useUserVolumeStore } from '../stores/userVolumeStore';
-import { captureScreen, captureSystemAudio } from '../services/screenCapture';
+import { captureScreenWithAudioFallback } from '../services/screenCapture';
 import { alertDialog } from '../stores/dialogStore';
 import { ICE_SERVERS } from '../services/iceServers';
 import { applyLowLatencySenderParams, withLowLatencyOpus } from '../services/lowLatencyAudio';
@@ -17,7 +17,7 @@ import {
   playScreenShareStartSound,
   playScreenShareStopSound,
 } from '../services/callSounds';
-import type { CallMode, VoiceChannel, VoiceParticipant, WatchTogetherState } from '../types';
+import type { CallMode, VideoSource, VoiceChannel, VoiceParticipant, WatchTogetherState } from '../types';
 
 // `createMediaStreamTrackSource` roteia um MediaStreamTrack específico pro
 // grafo do Web Audio (diferente de `createMediaStreamSource`, que é ambíguo
@@ -51,7 +51,6 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
   const [isMuted, setIsMuted] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [isScreenSharing, setIsScreenSharing] = useState(false);
-  const [isSharingAudio, setIsSharingAudio] = useState(false);
   const [screenStreams, setScreenStreams] = useState<Map<number, MediaStream>>(new Map());
   // "Assistir junto" (YouTube) — autoritativo no servidor, null quando não
   // há sessão ativa no canal de voz conectado.
@@ -67,7 +66,6 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
 
   const localStream = useRef<MediaStream | null>(null);
   const localScreenStream = useRef<MediaStream | null>(null);
-  const localAudioShareStream = useRef<MediaStream | null>(null);
   const peers = useRef<Map<number, RTCPeerConnection>>(new Map());
   const audioRefs = useRef<Map<number, HTMLAudioElement>>(new Map());
   // Stream persistente por peer que RECEBE áudio — o mic e um eventual
@@ -101,7 +99,6 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
   const locallyMutedIdsRef = useRef<Set<number>>(new Set());
   locallyMutedIdsRef.current = locallyMutedIds;
   const screenSenders = useRef<Map<number, ScreenSenders>>(new Map());
-  const audioShareSenders = useRef<Map<number, RTCRtpSender>>(new Map());
   const activeVcIdRef = useRef<number | null>(null);
   activeVcIdRef.current = activeVcId;
   // Ids dos outros participantes da call conectada — usado só pra decidir
@@ -306,12 +303,12 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
       await pc.setLocalDescription(answer);
       socket.emit('voice:answer', { targetUserId: data.from, answer, voiceChannelId: data.voiceChannelId });
 
-      // createPeer() já tinha adicionado os tracks da minha tela/áudio (se eu
+      // createPeer() já tinha adicionado os tracks da minha tela (se eu
       // estiver compartilhando), mas uma resposta não pode introduzir
       // m-lines que não vieram no offer de quem acabou de entrar — sem
-      // essa renegociação extra, a tela/áudio nunca chegava pra quem chegou
+      // essa renegociação extra, a tela nunca chegava pra quem chegou
       // depois que o compartilhamento já tinha começado.
-      if (isNewPeer && (localScreenStream.current || localAudioShareStream.current)) {
+      if (isNewPeer && localScreenStream.current) {
         await renegotiate(data.from, pc);
       }
     };
@@ -528,14 +525,6 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
       }
     }
 
-    // Mesma ideia pro compartilhamento de só áudio.
-    if (localAudioShareStream.current) {
-      const audioTrack = localAudioShareStream.current.getAudioTracks()[0];
-      if (audioTrack) {
-        audioShareSenders.current.set(targetUserId, pc.addTrack(audioTrack, localAudioShareStream.current));
-      }
-    }
-
     peers.current.set(targetUserId, pc);
     return pc;
   };
@@ -550,7 +539,6 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
     remoteAnalysers.current.delete(uid);
     remoteGainNodes.current.delete(uid);
     screenSenders.current.delete(uid);
-    audioShareSenders.current.delete(uid);
     removeScreenStream(uid);
   };
 
@@ -563,13 +551,9 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
     localStream.current = null;
     localScreenStream.current?.getTracks().forEach((t) => t.stop());
     localScreenStream.current = null;
-    localAudioShareStream.current?.getTracks().forEach((t) => t.stop());
-    localAudioShareStream.current = null;
     screenSenders.current.clear();
-    audioShareSenders.current.clear();
     setScreenStreams(new Map());
     setIsScreenSharing(false);
-    setIsSharingAudio(false);
     peers.current.forEach((_, uid) => closePeer(uid));
     localAnalyserRef.current = null;
     remoteAnalysers.current.clear();
@@ -656,9 +640,9 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
   };
 
   const startScreenShare = async (sourceId?: string) => {
-    if (!activeVcId || isScreenSharing || isSharingAudio) return;
+    if (!activeVcId || isScreenSharing) return;
     try {
-      const screenStream = await captureScreen(sourceId);
+      const screenStream = await captureScreenWithAudioFallback(sourceId);
       const videoTrack = screenStream.getVideoTracks()[0];
       if (!videoTrack) return;
       videoTrack.contentHint = 'detail';
@@ -725,86 +709,17 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
   };
 
   /**
-   * Compartilha só o áudio do sistema (sem vídeo) — útil pra tocar uma
-   * música/áudio de jogo pra call sem expor a tela. Mutuamente exclusivo
-   * com startScreenShare (a UI desabilita um enquanto o outro está ativo).
+   * "Assistir junto" (YouTube ou link direto) — o estado de verdade fica no
+   * servidor (watchState acima só reflete o último `watch:state` recebido);
+   * estas funções só emitem a intenção, sem otimismo local, pra nunca
+   * divergir do que o servidor manda pro resto da call.
    */
-  const startAudioShare = async () => {
-    if (!activeVcId || isSharingAudio || isScreenSharing) return;
-    try {
-      const audioStream = await captureSystemAudio();
-      const audioTrack = audioStream.getAudioTracks()[0];
-      localAudioShareStream.current = audioStream;
-
-      console.log(`[voice-audio-share] enviando pra ${peers.current.size} peer(s)`);
-      for (const [uid, pc] of peers.current) {
-        audioShareSenders.current.set(uid, pc.addTrack(audioTrack, audioStream));
-        await renegotiate(uid, pc);
-      }
-
-      // Mesmo padrão do compartilhamento de tela: avisa o roster (não é
-      // sinal WebRTC) — é o que faz o indicador aparecer mesmo pra quem
-      // não está na call.
-      getSocket().emit('voice:audio-share-start', {
-        voiceChannelId: activeVcIdRef.current,
-        groupChannelId: connectedGroupChannelIdRef.current,
-      });
-
-      setIsSharingAudio(true);
-      playScreenShareStartSound();
-
-      audioTrack.onended = () => { stopAudioShare(); };
-    } catch (e) {
-      console.error('[voice-audio-share] erro ao iniciar:', e);
-      localAudioShareStream.current?.getTracks().forEach((t) => t.stop());
-      localAudioShareStream.current = null;
-      if ((e as Error)?.name !== 'NotAllowedError') {
-        alertDialog(
-          (e as Error)?.message === 'Nenhum áudio do sistema disponível pra capturar.'
-            ? 'Nenhum áudio do sistema disponível pra capturar. Verifique se algo está tocando e tente de novo.'
-            : 'Não foi possível compartilhar o áudio do sistema. Tente novamente.',
-          { title: 'Erro ao compartilhar áudio' },
-        );
-      }
-    }
-  };
-
-  const stopAudioShare = async () => {
-    if (!localAudioShareStream.current) return;
-    for (const [uid, pc] of peers.current) {
-      const sender = audioShareSenders.current.get(uid);
-      if (sender) {
-        pc.removeTrack(sender);
-        audioShareSenders.current.delete(uid);
-        await renegotiate(uid, pc);
-      }
-    }
-    localAudioShareStream.current.getTracks().forEach((t) => t.stop());
-    localAudioShareStream.current = null;
-
-    if (activeVcIdRef.current) {
-      getSocket().emit('voice:audio-share-stop', {
-        voiceChannelId: activeVcIdRef.current,
-        groupChannelId: connectedGroupChannelIdRef.current,
-      });
-    }
-
-    setIsSharingAudio(false);
-    playScreenShareStopSound();
-  };
-
-  /**
-   * "Assistir junto" (YouTube) — o estado de verdade fica no servidor
-   * (watchState acima só reflete o último `watch:state` recebido); estas
-   * funções só emitem a intenção, sem otimismo local, pra nunca divergir do
-   * que o servidor manda pro resto da call.
-   */
-  const loadVideo = (videoId: string) => {
+  const loadVideo = (source: VideoSource) => {
     if (!activeVcIdRef.current) return;
     getSocket().emit('watch:load', {
       voiceChannelId: activeVcIdRef.current,
       groupChannelId: connectedGroupChannelIdRef.current,
-      videoId,
+      source,
     });
   };
 
@@ -844,12 +759,12 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
   };
 
   /** Toca na hora se nada estiver rolando ainda, ou entra no fim da fila se já tem vídeo tocando. */
-  const addToQueue = (videoId: string) => {
+  const addToQueue = (source: VideoSource) => {
     if (!activeVcIdRef.current) return;
     getSocket().emit('watch:add', {
       voiceChannelId: activeVcIdRef.current,
       groupChannelId: connectedGroupChannelIdRef.current,
-      videoId,
+      source,
     });
   };
 
@@ -862,13 +777,13 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
     });
   };
 
-  /** `endedVideoId` deixa a chamada idempotente — ver comentário do handler no gateway. */
-  const playNextInQueue = (endedVideoId?: string) => {
+  /** `endedSource` deixa a chamada idempotente — ver comentário do handler no gateway. */
+  const playNextInQueue = (endedSource?: VideoSource) => {
     if (!activeVcIdRef.current) return;
     getSocket().emit('watch:next', {
       voiceChannelId: activeVcIdRef.current,
       groupChannelId: connectedGroupChannelIdRef.current,
-      endedVideoId,
+      endedSource,
     });
   };
 
@@ -901,7 +816,6 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
     isMuted,
     isConnecting,
     isScreenSharing,
-    isSharingAudio,
     screenStreams,
     locallyMutedIds,
     speakingUserIds,
@@ -913,8 +827,6 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
     setUserVolume,
     startScreenShare,
     stopScreenShare,
-    startAudioShare,
-    stopAudioShare,
     loadVideo,
     playVideo,
     pauseVideo,

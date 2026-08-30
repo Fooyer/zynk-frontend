@@ -1,13 +1,35 @@
+import type { VideoSource } from '../../types';
+
 interface Props {
-  queue: string[];
+  queue: VideoSource[];
   onRemove: (index: number) => void;
   onAdd: () => void;
   onSkip: () => void;
   onClose: () => void;
 }
 
-/** Painel lateral com a fila de próximos vídeos — thumbnails vêm direto do
- *  CDN público do YouTube (img.youtube.com), sem precisar da Data API. */
+/** Rótulo de cada item da fila — o vídeo do YouTube mostra thumbnail do CDN
+ *  público (img.youtube.com, sem precisar da Data API); link direto não tem
+ *  thumbnail disponível, então mostra um ícone genérico de vídeo. */
+function QueueItemThumb({ source }: { source: VideoSource }) {
+  if (source.type === 'youtube') {
+    return (
+      <img
+        src={`https://img.youtube.com/vi/${source.value}/mqdefault.jpg`}
+        alt=""
+        className="w-16 h-9 rounded object-cover flex-shrink-0 bg-surface-800"
+      />
+    );
+  }
+  return (
+    <div className="w-16 h-9 rounded flex-shrink-0 bg-surface-800 flex items-center justify-center text-surface-500">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <polygon points="23 7 16 12 23 17 23 7" /><rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
+      </svg>
+    </div>
+  );
+}
+
 export function WatchQueuePanel({ queue, onRemove, onAdd, onSkip, onClose }: Props) {
   return (
     <div className="absolute top-0 right-0 bottom-0 z-20 w-64 bg-surface-950/95 backdrop-blur-sm border-l border-white/[0.08] flex flex-col animate-slide-in-right">
@@ -34,15 +56,11 @@ export function WatchQueuePanel({ queue, onRemove, onAdd, onSkip, onClose }: Pro
             Nada na fila. Adicione um vídeo pra tocar assim que o atual terminar.
           </p>
         ) : (
-          queue.map((videoId, i) => (
-            <div key={`${videoId}-${i}`} className="group flex items-center gap-2 rounded-lg p-1.5 hover:bg-white/[0.05] transition-colors">
+          queue.map((source, i) => (
+            <div key={`${source.type}-${source.value}-${i}`} className="group flex items-center gap-2 rounded-lg p-1.5 hover:bg-white/[0.05] transition-colors">
               <span className="text-xs text-surface-500 w-4 text-center flex-shrink-0">{i + 1}</span>
-              <img
-                src={`https://img.youtube.com/vi/${videoId}/mqdefault.jpg`}
-                alt=""
-                className="w-16 h-9 rounded object-cover flex-shrink-0 bg-surface-800"
-              />
-              <span className="flex-1 min-w-0 text-xs text-surface-300 truncate">{videoId}</span>
+              <QueueItemThumb source={source} />
+              <span className="flex-1 min-w-0 text-xs text-surface-300 truncate">{source.value}</span>
               <button
                 onClick={() => onRemove(i)}
                 title="Remover da fila"

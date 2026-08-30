@@ -47,7 +47,6 @@ function CallPanel({ dm, callStatus }: { dm: DmChannel; callStatus: 'calling' | 
   const isGame = mode === 'game';
   const isMuted = useCallStore((s) => s.isMuted);
   const isScreenSharing = useCallStore((s) => s.isScreenSharing);
-  const isSharingAudio = useCallStore((s) => s.isSharingAudio);
   const remoteHasScreen = useCallStore((s) => s.remoteHasScreen);
   const volume = useCallStore((s) => s.volume);
   const setVolume = useCallStore((s) => s.setVolume);
@@ -142,7 +141,6 @@ function CallPanel({ dm, callStatus }: { dm: DmChannel; callStatus: 'calling' | 
   const handleToggleMute = () => window.dispatchEvent(new CustomEvent('call:toggle-mute'));
   const handleHangup = () => window.dispatchEvent(new CustomEvent('call:hangup'));
   const handleScreenShare = () => window.dispatchEvent(new CustomEvent('call:screen-share-toggle'));
-  const handleAudioShare = () => window.dispatchEvent(new CustomEvent('call:audio-share-toggle'));
 
   // ─── User card component ───
   const UserCard = ({ username, avatarUrl, color, speaking, muted, label }: {
@@ -290,31 +288,16 @@ function CallPanel({ dm, callStatus }: { dm: DmChannel; callStatus: 'calling' | 
               </button>
 
               {/* Screen share */}
-              <button onClick={handleScreenShare} disabled={isSharingAudio}
-                title={isSharingAudio ? 'Pare o compartilhamento de áudio primeiro' : isScreenSharing ? 'Parar compartilhamento' : 'Compartilhar tela'}
+              <button onClick={handleScreenShare}
+                title={isScreenSharing ? 'Parar compartilhamento' : 'Compartilhar tela'}
                 className={`p-2.5 rounded-full transition-colors ${
-                  isSharingAudio ? 'opacity-30 cursor-not-allowed bg-white/[0.06] text-surface-300'
-                  : isScreenSharing ? 'bg-success/20 text-success hover:bg-success/30' : 'bg-white/[0.06] text-surface-300 hover:bg-white/[0.12] hover:text-surface-100'
+                  isScreenSharing ? 'bg-success/20 text-success hover:bg-success/30' : 'bg-white/[0.06] text-surface-300 hover:bg-white/[0.12] hover:text-surface-100'
                 }`}
               >
                 <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <rect x="2" y="3" width="20" height="14" rx="2" />
                   <polyline points="8 21 12 17 16 21" />
                   <line x1="12" y1="17" x2="12" y2="21" />
-                </svg>
-              </button>
-
-              {/* Compartilhar apenas o áudio (sem vídeo) */}
-              <button onClick={handleAudioShare} disabled={isScreenSharing}
-                title={isScreenSharing ? 'Pare o compartilhamento de tela primeiro' : isSharingAudio ? 'Parar compartilhamento de áudio' : 'Compartilhar apenas o áudio'}
-                className={`p-2.5 rounded-full transition-colors ${
-                  isScreenSharing ? 'opacity-30 cursor-not-allowed bg-white/[0.06] text-surface-300'
-                  : isSharingAudio ? 'bg-success/20 text-success hover:bg-success/30' : 'bg-white/[0.06] text-surface-300 hover:bg-white/[0.12] hover:text-surface-100'
-                }`}
-              >
-                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M3 18v-6a9 9 0 0 1 18 0v6" />
-                  <path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z" />
                 </svg>
               </button>
 
@@ -383,12 +366,6 @@ function CallPanel({ dm, callStatus }: { dm: DmChannel; callStatus: 'calling' | 
             Você está compartilhando a tela
           </div>
         )}
-        {!isCalling && isSharingAudio && (
-          <div className="px-4 py-2 border-t border-white/[0.05] flex items-center gap-2 text-xs text-success">
-            <div className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
-            Você está compartilhando apenas o áudio
-          </div>
-        )}
       </div>
 
       {/* Tela expandida — fullscreen overlay */}
@@ -439,19 +416,11 @@ function CallPanel({ dm, callStatus }: { dm: DmChannel; callStatus: 'calling' | 
                 </svg>
               )}
             </button>
-            <button onClick={handleScreenShare} disabled={isSharingAudio} title={isScreenSharing ? 'Parar compartilhamento' : 'Compartilhar tela'}
-              className={`p-3 rounded-full transition-colors ${isSharingAudio ? 'opacity-30 cursor-not-allowed bg-white/10 text-white' : isScreenSharing ? 'bg-success text-white' : 'bg-white/10 text-white hover:bg-white/20'}`}
+            <button onClick={handleScreenShare} title={isScreenSharing ? 'Parar compartilhamento' : 'Compartilhar tela'}
+              className={`p-3 rounded-full transition-colors ${isScreenSharing ? 'bg-success text-white' : 'bg-white/10 text-white hover:bg-white/20'}`}
             >
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <rect x="2" y="3" width="20" height="14" rx="2" /><polyline points="8 21 12 17 16 21" /><line x1="12" y1="17" x2="12" y2="21" />
-              </svg>
-            </button>
-            <button onClick={handleAudioShare} disabled={isScreenSharing} title={isSharingAudio ? 'Parar compartilhamento de áudio' : 'Compartilhar apenas o áudio'}
-              className={`p-3 rounded-full transition-colors ${isScreenSharing ? 'opacity-30 cursor-not-allowed bg-white/10 text-white' : isSharingAudio ? 'bg-success text-white' : 'bg-white/10 text-white hover:bg-white/20'}`}
-            >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M3 18v-6a9 9 0 0 1 18 0v6" />
-                <path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z" />
               </svg>
             </button>
             <button onClick={() => setScreenExpanded(false)} title="Minimizar"

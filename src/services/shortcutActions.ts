@@ -9,12 +9,9 @@ import type { ShortcutActionId } from '../stores/keybindingsStore';
 interface VoiceRuntime {
   activeVc: unknown;
   isScreenSharing: boolean;
-  isSharingAudio: boolean;
   toggleMute: () => void;
   startScreenShare: () => void;
   stopScreenShare: () => void;
-  startAudioShare: () => void;
-  stopAudioShare: () => void;
   leave: () => void;
 }
 
@@ -57,19 +54,7 @@ export const SHORTCUT_ACTIONS: ShortcutActionMeta[] = [
       const v = voiceRuntimeRef.current;
       if (!v?.activeVc) return;
       if (v.isScreenSharing) v.stopScreenShare();
-      else if (!v.isSharingAudio) v.startScreenShare();
-    },
-  },
-  {
-    id: 'toggleAudioShare',
-    label: 'Compartilhar / parar áudio do sistema',
-    description: 'Inicia ou para o compartilhamento de só áudio (sem tela) na call ativa',
-    run: () => {
-      if (hasActiveDmCall()) { window.dispatchEvent(new CustomEvent('call:audio-share-toggle')); return; }
-      const v = voiceRuntimeRef.current;
-      if (!v?.activeVc) return;
-      if (v.isSharingAudio) v.stopAudioShare();
-      else if (!v.isScreenSharing) v.startAudioShare();
+      else v.startScreenShare();
     },
   },
   {

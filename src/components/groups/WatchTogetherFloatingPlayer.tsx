@@ -3,11 +3,107 @@ import { useGroupStore } from '../../stores/groupStore';
 import { useUiStore } from '../../stores/uiStore';
 import { useWatchTogetherUiStore } from '../../stores/watchTogetherUiStore';
 import { useYouTubeSync } from '../../hooks/useYouTubeSync';
+import { useDirectVideoSync } from '../../hooks/useDirectVideoSync';
 import type { useVoiceRoom } from '../../hooks/useVoiceRoom';
 import type { WatchTogetherState } from '../../types';
 
 interface Props {
   voice: ReturnType<typeof useVoiceRoom>;
+}
+
+/** Forma comum devolvida por useYouTubeSync/useDirectVideoSync que os
+ *  controles mini do widget flutuante precisam, independente do motor. */
+interface MiniSyncResult {
+  isLoading: boolean;
+  loadError: string | null;
+  isPlayingUI: boolean;
+  volume: number;
+  isMuted: boolean;
+  togglePlay: () => void;
+  changeVolume: (v: number) => void;
+  toggleMute: () => void;
+}
+
+function MiniControls({ sync, mount, onSkip }: { sync: MiniSyncResult; mount: React.ReactNode; onSkip: () => void }) {
+  const { isLoading, loadError, isPlayingUI, volume, isMuted, togglePlay, changeVolume, toggleMute } = sync;
+  return (
+    <div className="relative w-full aspect-video bg-black group/mini">
+      {loadError ? (
+        <div className="absolute inset-0 flex items-center justify-center text-center px-3">
+          <p className="text-[11px] text-red-400">Não foi possível carregar o player.</p>
+        </div>
+      ) : isLoading ? (
+        <div className="absolute inset-0 flex items-center justify-center text-surface-400 text-[11px]">
+          Carregando...
+        </div>
+      ) : null}
+
+      {mount}
+
+      {!isLoading && !loadError && (
+        <div className="absolute bottom-0 inset-x-0 flex items-center gap-2.5 px-2.5 py-1.5 bg-gradient-to-t from-black/85 to-transparent opacity-0 group-hover/mini:opacity-100 transition-opacity">
+          <button onClick={togglePlay} className="text-white hover:text-accent-300 transition-colors flex-shrink-0">
+            {isPlayingUI ? (
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16" /><rect x="14" y="4" width="4" height="16" /></svg>
+            ) : (
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 3 20 12 6 21 6 3" /></svg>
+            )}
+          </button>
+          <div className="flex items-center gap-1.5 group/volume flex-shrink-0">
+            <button onClick={toggleMute} className="text-white hover:text-accent-300 transition-colors flex-shrink-0">
+              {isMuted || volume === 0 ? (
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                  <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="currentColor" stroke="none" />
+                  <line x1="23" y1="9" x2="17" y2="15" /><line x1="17" y1="9" x2="23" y2="15" />
+                </svg>
+              ) : (
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                  <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="currentColor" stroke="none" />
+                  <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+                </svg>
+              )}
+            </button>
+            <input
+              type="range"
+              min={0}
+              max={100}
+              value={isMuted ? 0 : volume}
+              onChange={(e) => changeVolume(Number(e.target.value))}
+              title="Volume"
+              className="w-0 group-hover/volume:w-14 focus:w-14 transition-[width] duration-150 cursor-pointer"
+              style={{
+                background: `linear-gradient(to right, rgb(var(--color-accent-500)) ${isMuted ? 0 : volume}%, rgba(255,255,255,0.15) ${isMuted ? 0 : volume}%)`,
+              }}
+            />
+          </div>
+          <div className="flex-1" />
+          <button onClick={onSkip} title="Pular vídeo" className="text-white hover:text-accent-300 transition-colors flex-shrink-0">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 4 15 12 5 20 5 4" /><rect x="17" y="4" width="3" height="16" /></svg>
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function YouTubeMini({ state, voice, onSkip }: { state: WatchTogetherState; voice: ReturnType<typeof useVoiceRoom>; onSkip: () => void }) {
+  const sync = useYouTubeSync(state, {
+    onPlay: voice.playVideo,
+    onPause: voice.pauseVideo,
+    onSeek: voice.seekVideo,
+    onEnded: (endedSource) => voice.playNextInQueue(endedSource),
+  });
+  return <MiniControls sync={sync} onSkip={onSkip} mount={<div ref={sync.containerRef} className="w-full h-full" />} />;
+}
+
+function DirectVideoMini({ state, voice, onSkip }: { state: WatchTogetherState; voice: ReturnType<typeof useVoiceRoom>; onSkip: () => void }) {
+  const sync = useDirectVideoSync(state, {
+    onPlay: voice.playVideo,
+    onPause: voice.pauseVideo,
+    onSeek: voice.seekVideo,
+    onEnded: (endedSource) => voice.playNextInQueue(endedSource),
+  });
+  return <MiniControls sync={sync} onSkip={onSkip} mount={<video ref={sync.videoRef} className="w-full h-full" playsInline />} />;
 }
 
 const MARGIN = 16;
@@ -32,16 +128,6 @@ function FloatingPlayerWidget({
   // (responsivo sozinho); só vira coordenada absoluta depois do 1º arrasto.
   const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
   const [width, setWidth] = useState(DEFAULT_WIDTH);
-
-  const {
-    containerRef, isLoading, loadError, isPlayingUI, volume, isMuted,
-    togglePlay, changeVolume, toggleMute,
-  } = useYouTubeSync(state, {
-    onPlay: voice.playVideo,
-    onPause: voice.pauseVideo,
-    onSeek: voice.seekVideo,
-    onEnded: (endedVideoId) => voice.playNextInQueue(endedVideoId),
-  });
 
   const clamp = (x: number, y: number) => {
     const el = widgetRef.current;
@@ -109,7 +195,7 @@ function FloatingPlayerWidget({
     useWatchTogetherUiStore.getState().requestCallTab();
   };
 
-  const handleSkip = () => voice.playNextInQueue(state.videoId);
+  const handleSkip = () => voice.playNextInQueue(state.source);
 
   return (
     <div
@@ -151,60 +237,11 @@ function FloatingPlayerWidget({
       </div>
 
       {/* Vídeo */}
-      <div className="relative w-full aspect-video bg-black group/mini">
-        {loadError ? (
-          <div className="absolute inset-0 flex items-center justify-center text-center px-3">
-            <p className="text-[11px] text-red-400">Não foi possível carregar o player.</p>
-          </div>
-        ) : isLoading ? (
-          <div className="absolute inset-0 flex items-center justify-center text-surface-400 text-[11px]">
-            Carregando...
-          </div>
-        ) : null}
-
-        <div ref={containerRef} className="w-full h-full" />
-
-        {!isLoading && !loadError && (
-          <div className="absolute bottom-0 inset-x-0 flex items-center gap-2.5 px-2.5 py-1.5 bg-gradient-to-t from-black/85 to-transparent opacity-0 group-hover/mini:opacity-100 transition-opacity">
-            <button onClick={togglePlay} className="text-white hover:text-accent-300 transition-colors flex-shrink-0">
-              {isPlayingUI ? (
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16" /><rect x="14" y="4" width="4" height="16" /></svg>
-              ) : (
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 3 20 12 6 21 6 3" /></svg>
-              )}
-            </button>
-            <div className="flex items-center gap-1.5 group/volume flex-shrink-0">
-              <button onClick={toggleMute} className="text-white hover:text-accent-300 transition-colors flex-shrink-0">
-                {isMuted || volume === 0 ? (
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="currentColor" stroke="none" />
-                    <line x1="23" y1="9" x2="17" y2="15" /><line x1="17" y1="9" x2="23" y2="15" />
-                  </svg>
-                ) : (
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="currentColor" stroke="none" />
-                    <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
-                  </svg>
-                )}
-              </button>
-              <input
-                type="range"
-                min={0}
-                max={100}
-                value={isMuted ? 0 : volume}
-                onChange={(e) => changeVolume(Number(e.target.value))}
-                title="Volume"
-                className="w-0 group-hover/volume:w-14 focus:w-14 transition-[width] duration-150 cursor-pointer"
-                style={{
-                  background: `linear-gradient(to right, rgb(var(--color-accent-500)) ${isMuted ? 0 : volume}%, rgba(255,255,255,0.15) ${isMuted ? 0 : volume}%)`,
-                }}
-              />
-            </div>
-            <div className="flex-1" />
-            <button onClick={handleSkip} title="Pular vídeo" className="text-white hover:text-accent-300 transition-colors flex-shrink-0">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 4 15 12 5 20 5 4" /><rect x="17" y="4" width="3" height="16" /></svg>
-            </button>
-          </div>
+      <div className="relative">
+        {state.source.type === 'youtube' ? (
+          <YouTubeMini state={state} voice={voice} onSkip={handleSkip} />
+        ) : (
+          <DirectVideoMini state={state} voice={voice} onSkip={handleSkip} />
         )}
 
         {/* Alça de redimensionar — só cresce, nunca encolhe além do padrão
@@ -245,12 +282,12 @@ export function WatchTogetherFloatingPlayer({ voice }: Props) {
   // mini player volta a aparecer sozinho em vez de ficar escondido pra
   // sempre sem o usuário saber que tem algo tocando.
   useEffect(() => {
-    const nextId = watchState?.videoId ?? null;
+    const nextId = watchState?.source.value ?? null;
     if (nextId !== lastVideoIdRef.current) {
       lastVideoIdRef.current = nextId;
       setDismissed(false);
     }
-  }, [watchState?.videoId]);
+  }, [watchState?.source.value]);
 
   if (!watchState || !voice.activeVc || isMainPlayerVisible) return null;
 

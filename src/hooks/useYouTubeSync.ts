@@ -2,25 +2,20 @@ import { useEffect, useRef, useState } from 'react';
 import { loadYouTubeIframeAPI } from '../services/youtube';
 import type { YT } from '../services/youtube';
 import { useSettingsStore } from '../stores/settingsStore';
-import type { WatchTogetherState } from '../types';
+import type { VideoSource, WatchTogetherState } from '../types';
+import { DRIFT_THRESHOLD_SEC, expectedPosition } from './watchSync';
 
-const DRIFT_THRESHOLD_SEC = 1.5;
 const UNSTARTED = -1;
 const ENDED = 0;
 const PLAYING = 1;
 const PAUSED = 2;
-
-function expectedPosition(state: WatchTogetherState): number {
-  if (!state.isPlaying) return state.positionSec;
-  return state.positionSec + (Date.now() - state.updatedAtMs) / 1000;
-}
 
 export interface UseYouTubeSyncOptions {
   onPlay: (positionSec: number) => void;
   onPause: (positionSec: number) => void;
   onSeek: (positionSec: number) => void;
   /** Vídeo chegou ao fim sozinho — quem chama decide se avança a fila. */
-  onEnded: (endedVideoId: string) => void;
+  onEnded: (endedSource: VideoSource) => void;
 }
 
 /**
@@ -71,9 +66,9 @@ export function useYouTubeSync(state: WatchTogetherState, { onPlay, onPause, onS
 
     isSyncingRef.current = true;
 
-    if (loadedVideoIdRef.current !== s.videoId) {
-      loadedVideoIdRef.current = s.videoId;
-      player.loadVideoById(s.videoId);
+    if (loadedVideoIdRef.current !== s.source.value) {
+      loadedVideoIdRef.current = s.source.value;
+      player.loadVideoById(s.source.value);
       player.seekTo(expectedPosition(s), true);
     } else {
       const drift = Math.abs(player.getCurrentTime() - expectedPosition(s));
@@ -99,7 +94,7 @@ export function useYouTubeSync(state: WatchTogetherState, { onPlay, onPause, onS
       if (destroyed || !containerRef.current || !window.YT) return;
 
       const player = new window.YT.Player(containerRef.current, {
-        videoId: stateRef.current.videoId,
+        videoId: stateRef.current.source.value,
         width: '100%',
         height: '100%',
         playerVars: {
@@ -123,7 +118,7 @@ export function useYouTubeSync(state: WatchTogetherState, { onPlay, onPause, onS
           onReady: (e) => {
             if (readyTimeout) clearTimeout(readyTimeout);
             isReadyRef.current = true;
-            loadedVideoIdRef.current = stateRef.current.videoId;
+            loadedVideoIdRef.current = stateRef.current.source.value;
             setIsLoading(false);
             setDuration(e.target.getDuration());
             e.target.setVolume(volume);
@@ -138,7 +133,10 @@ export function useYouTubeSync(state: WatchTogetherState, { onPlay, onPause, onS
             if (!p) return;
             if (e.data === PLAYING) onPlayRef.current(p.getCurrentTime());
             else if (e.data === PAUSED) onPauseRef.current(p.getCurrentTime());
-            else if (e.data === ENDED) onEndedRef.current(loadedVideoIdRef.current ?? stateRef.current.videoId);
+            else if (e.data === ENDED) {
+              const endedValue = loadedVideoIdRef.current ?? stateRef.current.source.value;
+              onEndedRef.current({ type: 'youtube', value: endedValue });
+            }
           },
         },
       });
@@ -175,7 +173,7 @@ export function useYouTubeSync(state: WatchTogetherState, { onPlay, onPause, onS
   useEffect(() => {
     applyRemoteState(state);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.videoId, state.isPlaying, state.positionSec, state.updatedAtMs]);
+  }, [state.source.value, state.isPlaying, state.positionSec, state.updatedAtMs]);
 
   // Atualiza a barra de progresso E corrige deriva de reprodução em relação
   // ao grupo a cada 500ms — verificação contínua, não só reação a eventos.

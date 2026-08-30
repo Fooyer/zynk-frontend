@@ -703,8 +703,18 @@ app.whenReady().then(async () => {
             // local, quebrando a call pra qualquer um atrás de NAT/rede
             // diferente (era exatamente esse o sintoma: call sem áudio nem
             // vídeo pra quem entra depois, sem nenhum erro no console).
-            " connect-src 'self' https://zynk.fooyer.com ws://zynk.fooyer.com wss://zynk.fooyer.com wss://signaling.yjs.dev stun: turn:;" +
+            // https: solto (sem host fixo) além da allowlist de sempre —
+            // "assistir junto" com link direto deixa qualquer participante
+            // colar a URL de um vídeo de qualquer host, e hls.js busca
+            // manifesto/segmentos de HLS via fetch/XHR, então precisam
+            // passar por connect-src também (não só o <video src> em si).
+            " connect-src 'self' https://zynk.fooyer.com ws://zynk.fooyer.com wss://zynk.fooyer.com wss://signaling.yjs.dev stun: turn: https:;" +
             " img-src 'self' data: blob: https://zynk.fooyer.com;" +
+            // Sem media-src, default-src 'self' bloqueia qualquer <video
+            // src> de host externo — é o que quebra silenciosamente o
+            // "assistir junto" com link direto em build de produção (dev
+            // não tem CSP, por isso não aparece testando local).
+            " media-src 'self' https: blob:;" +
             // Sem frame-src, default-src 'self' bloqueia o próprio <iframe>
             // que a IFrame Player API cria pra embutir o vídeo.
             " frame-src https://www.youtube.com;"

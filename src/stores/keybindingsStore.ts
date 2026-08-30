@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { KeyCombo } from '../utils/keyCombo';
 
-export type ShortcutActionId = 'toggleMute' | 'toggleScreenShare' | 'toggleAudioShare' | 'leaveCall';
+export type ShortcutActionId = 'toggleMute' | 'toggleScreenShare' | 'leaveCall';
 
 interface KeybindingsState {
   // Sem nada por padrão — atalho é opt-in, pra não colidir de surpresa com

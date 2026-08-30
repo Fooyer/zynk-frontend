@@ -25,11 +25,7 @@ function ParticipantTile({ participant, isSelf, isMuted, isSpeaking }: {
       <div className="relative">
         <div
           className={`w-20 h-20 rounded-full ring-2 flex items-center justify-center text-white text-2xl font-bold overflow-hidden transition-all duration-150 ${
-            isSpeaking
-              ? 'ring-accent-500 shadow-glow-accent'
-              : participant.isSharingAudio
-              ? 'ring-success'
-              : 'ring-white/[0.10]'
+            isSpeaking ? 'ring-accent-500 shadow-glow-accent' : 'ring-white/[0.10]'
           }`}
           style={{ backgroundColor: getUserColor(participant.username) }}
         >
@@ -44,17 +40,6 @@ function ParticipantTile({ participant, isSelf, isMuted, isSpeaking }: {
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round">
               <line x1="1" y1="1" x2="23" y2="23" />
               <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6" />
-            </svg>
-          </div>
-        )}
-        {participant.isSharingAudio && (
-          <div
-            className="absolute -bottom-1 -left-1 w-7 h-7 rounded-full bg-success flex items-center justify-center border-2 border-surface-950"
-            title="Compartilhando áudio"
-          >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M3 18v-6a9 9 0 0 1 18 0v6" />
-              <path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z" />
             </svg>
           </div>
         )}
@@ -104,7 +89,7 @@ function ParticipantChip({ participant, isFocused, isSpeaking, onClick }: {
 }
 
 /**
- * Seletor "Tela / YouTube" — só aparece quando as duas fontes estão ativas
+ * Seletor "Tela / Vídeo" — só aparece quando as duas fontes estão ativas
  * ao mesmo tempo (alguém compartilhando tela E um "assistir junto" rolando),
  * já que só dá pra ver uma delas grande por vez. Fica dentro da mesma barra
  * superior (hover) que já existe nas duas visões, pra não introduzir mais um
@@ -127,7 +112,7 @@ function MediaSwitcher({ focus, onSelect }: { focus: MediaFocus; onSelect: (f: M
       </button>
       <button
         onClick={() => onSelect('watch')}
-        title="Assistir junto — YouTube"
+        title="Assistir junto"
         className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
           focus === 'watch' ? 'bg-accent-600 text-white' : 'text-surface-200 hover:bg-white/10'
         }`}
@@ -135,7 +120,7 @@ function MediaSwitcher({ focus, onSelect }: { focus: MediaFocus; onSelect: (f: M
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <rect x="2" y="4" width="20" height="16" rx="3" /><polygon points="10 9 15 12 10 15" fill="currentColor" stroke="none" />
         </svg>
-        YouTube
+        Vídeo
       </button>
     </div>
   );
@@ -304,20 +289,15 @@ export function GroupCallView({ voice }: Props) {
     else setShowPicker(true);
   };
 
-  const handleAudioShareClick = () => {
-    if (voice.isSharingAudio) voice.stopAudioShare();
-    else voice.startAudioShare();
-  };
-
   const handlePickerSelect = (source: ScreenSource) => {
     setShowPicker(false);
     voice.startScreenShare(source.id);
   };
 
-  // Passa o videoId atual como referência — o servidor usa isso pra ignorar
+  // Passa a fonte atual como referência — o servidor usa isso pra ignorar
   // um "pular" tardio/duplicado se o vídeo já tiver avançado por outro meio.
   const handleSkip = () => {
-    if (voice.watchState) voice.playNextInQueue(voice.watchState.videoId);
+    if (voice.watchState) voice.playNextInQueue(voice.watchState.source);
   };
 
   const nameFor = (uid: number) => vc.participants.find((p) => p.userId === uid)?.username ?? 'Alguém';
@@ -434,23 +414,11 @@ export function GroupCallView({ voice }: Props) {
                 </button>
                 <button
                   onClick={handleScreenClick}
-                  disabled={voice.isSharingAudio}
-                  title={voice.isSharingAudio ? 'Pare o compartilhamento de áudio primeiro' : voice.isScreenSharing ? 'Parar compartilhamento' : 'Compartilhar tela'}
-                  className={`p-3 rounded-full transition-colors ${voice.isSharingAudio ? 'opacity-30 cursor-not-allowed bg-white/10 text-white' : voice.isScreenSharing ? 'bg-success text-white' : 'bg-white/10 text-white hover:bg-white/20'}`}
+                  title={voice.isScreenSharing ? 'Parar compartilhamento' : 'Compartilhar tela'}
+                  className={`p-3 rounded-full transition-colors ${voice.isScreenSharing ? 'bg-success text-white' : 'bg-white/10 text-white hover:bg-white/20'}`}
                 >
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <rect x="2" y="3" width="20" height="14" rx="2" /><polyline points="8 21 12 17 16 21" /><line x1="12" y1="17" x2="12" y2="21" />
-                  </svg>
-                </button>
-                <button
-                  onClick={handleAudioShareClick}
-                  disabled={voice.isScreenSharing}
-                  title={voice.isScreenSharing ? 'Pare o compartilhamento de tela primeiro' : voice.isSharingAudio ? 'Parar compartilhamento de áudio' : 'Compartilhar apenas o áudio'}
-                  className={`p-3 rounded-full transition-colors ${voice.isScreenSharing ? 'opacity-30 cursor-not-allowed bg-white/10 text-white' : voice.isSharingAudio ? 'bg-success text-white' : 'bg-white/10 text-white hover:bg-white/20'}`}
-                >
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M3 18v-6a9 9 0 0 1 18 0v6" />
-                    <path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z" />
                   </svg>
                 </button>
                 <button
@@ -490,7 +458,7 @@ export function GroupCallView({ voice }: Props) {
                 onPlay={voice.playVideo}
                 onPause={voice.pauseVideo}
                 onSeek={voice.seekVideo}
-                onEnded={(endedVideoId) => voice.playNextInQueue(endedVideoId)}
+                onEnded={(endedSource) => voice.playNextInQueue(endedSource)}
                 onSkip={handleSkip}
                 isTheater={cinemaMode}
                 onToggleTheater={() => setCinemaMode((v) => !v)}
@@ -501,7 +469,9 @@ export function GroupCallView({ voice }: Props) {
               <div className="absolute top-0 inset-x-0 z-10 flex items-center justify-between px-4 py-3 bg-gradient-to-b from-black/80 to-transparent opacity-0 group-hover/watch:opacity-100 transition-opacity">
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 rounded-full bg-danger animate-pulse" />
-                  <span className="text-sm font-medium text-white">Assistindo junto — YouTube</span>
+                  <span className="text-sm font-medium text-white">
+                    Assistindo junto{voice.watchState?.source.type === 'youtube' ? ' — YouTube' : ''}
+                  </span>
                 </div>
                 {showSwitcher && (
                   <div className="absolute left-1/2 -translate-x-1/2">
@@ -620,7 +590,7 @@ export function GroupCallView({ voice }: Props) {
           )}
         </ControlButton>
 
-        <ControlButton onClick={handleScreenClick} title={voice.isSharingAudio ? 'Pare o compartilhamento de áudio primeiro' : voice.isScreenSharing ? 'Parar compartilhamento' : 'Compartilhar tela'} active={voice.isScreenSharing}>
+        <ControlButton onClick={handleScreenClick} title={voice.isScreenSharing ? 'Parar compartilhamento' : 'Compartilhar tela'} active={voice.isScreenSharing}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <rect x="2" y="3" width="20" height="14" rx="2" />
             <polyline points="8 21 12 17 16 21" />
@@ -628,16 +598,9 @@ export function GroupCallView({ voice }: Props) {
           </svg>
         </ControlButton>
 
-        <ControlButton onClick={handleAudioShareClick} title={voice.isScreenSharing ? 'Pare o compartilhamento de tela primeiro' : voice.isSharingAudio ? 'Parar compartilhamento de áudio' : 'Compartilhar apenas o áudio'} active={voice.isSharingAudio}>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M3 18v-6a9 9 0 0 1 18 0v6" />
-            <path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z" />
-          </svg>
-        </ControlButton>
-
         <ControlButton
           onClick={() => setWatchModalMode('add')}
-          title={voice.watchState ? 'Adicionar à fila' : 'Assistir YouTube junto'}
+          title={voice.watchState ? 'Adicionar à fila' : 'Assistir vídeo junto'}
           active={!!voice.watchState}
         >
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -659,7 +622,7 @@ export function GroupCallView({ voice }: Props) {
         <WatchTogetherModal
           mode={watchModalMode}
           onClose={() => setWatchModalMode(null)}
-          onSubmit={(videoId) => (watchModalMode === 'swap' ? voice.loadVideo(videoId) : voice.addToQueue(videoId))}
+          onSubmit={(source) => (watchModalMode === 'swap' ? voice.loadVideo(source) : voice.addToQueue(source))}
         />
       )}
     </div>

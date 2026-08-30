@@ -151,9 +151,6 @@ export interface VoiceParticipant {
   isSharing?: boolean;
   /** Mesma ideia do isSharing — roster, não estado local do peer. */
   isMuted?: boolean;
-  /** Compartilhando só áudio do sistema (sem vídeo) — mutuamente exclusivo
-   *  com isSharing na UI, mas é um campo de roster independente. */
-  isSharingAudio?: boolean;
 }
 
 export type CallMode = 'normal' | 'game';
@@ -169,17 +166,24 @@ export interface VoiceChannel {
   createdAt: string;
 }
 
-/** Estado do "assistir junto" (YouTube) de um canal de voz — autoritativo no
- *  servidor, pra quem entra depois já sincronizar sem depender de quem
- *  estava tocando no momento. */
+export type VideoSourceType = 'youtube' | 'url';
+
+export interface VideoSource {
+  type: VideoSourceType;
+  value: string;
+}
+
+/** Estado do "assistir junto" (YouTube ou link direto) de um canal de voz —
+ *  autoritativo no servidor, pra quem entra depois já sincronizar sem
+ *  depender de quem estava tocando no momento. */
 export interface WatchTogetherState {
-  videoId: string;
+  source: VideoSource;
   isPlaying: boolean;
   positionSec: number;
   updatedAtMs: number;
   updatedBy: number;
   /** Próximos vídeos, em ordem — o vídeo atual não está incluído aqui. */
-  queue: string[];
+  queue: VideoSource[];
 }
 
 export interface GroupTextChannel {
