@@ -1,0 +1,137 @@
+# .github/workflows/cr-hybrid-static.yml
+#
+# Método B — Híbrido (análise estática + LLM)
+#
+# Roda tsc --noEmit e oxlint (zero-config) ANTES do modelo, e instrui o
+# agente a tratar esses achados como fundamento e focar seu raciocínio no
+# que ferramentas determinísticas não enxergam (lógica, arquitetura,
+# segurança, hooks). Pesquisas de mercado reportam 94-98% menos falsos
+# positivos nesse padrão híbrido vs. LLM sozinho. Ver .github/CODE_REVIEW_METHODS.md.
+#
+# Uso: comente "/cr-hybrid" em um PR, ou dispare manualmente (workflow_dispatch).
+
+name: cr-hybrid-static
+
+on:
+  issue_comment:
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: "Número do PR para revisar"
+        required: true
+        type: number
+
+jobs:
+  review:
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'issue_comment' &&
+       github.event.issue.pull_request != null &&
+       contains(github.event.comment.body, '/cr-hybrid') &&
+       contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association))
+    runs-on: ubuntu-latest
+    concurrency:
+      group: cr-hybrid-${{ github.event.issue.number || inputs.pr_number }}
+      cancel-in-progress: true
+    permissions:
+      id-token: write
+      contents: read
+      pull-requests: write
+      issues: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Resolve PR number
+        id: pr
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "number=${{ inputs.pr_number }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "number=${{ github.event.issue.number }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout PR head
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh pr checkout ${{ steps.pr.outputs.number }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Determine changed TS/TSX files
+        id: diff
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BASE=$(gh pr view ${{ steps.pr.outputs.number }} --json baseRefName -q .baseRefName)
+          git fetch origin "$BASE" --depth=50
+          git diff --name-only "origin/$BASE"...HEAD -- '*.ts' '*.tsx' > cr-changed-files.txt || true
+          echo "count=$(wc -l < cr-changed-files.txt | tr -d ' ')" >> "$GITHUB_OUTPUT"
+
+      - name: Install dependencies
+        if: steps.diff.outputs.count != '0'
+        # --ignore-scripts: o PR pode vir de um fork e trazer package.json
+        # arbitrário; não precisamos de postinstall pra rodar tsc/oxlint.
+        run: npm install --no-audit --no-fund --ignore-scripts
+
+      - name: Run static analysis (tsc + oxlint)
+        if: steps.diff.outputs.count != '0'
+        continue-on-error: true
+        run: |
+          mkdir -p cr-artifacts
+          npx tsc --noEmit --pretty false > cr-artifacts/tsc-report.txt 2>&1
+          npx --yes oxlint@latest $(cat cr-changed-files.txt) --format unix > cr-artifacts/oxlint-report.txt 2>&1
+
+      - uses: anomalyco/opencode/github@latest
+        if: steps.diff.outputs.count != '0'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          model: anthropic/claude-sonnet-5
+          use_github_token: true
+          prompt: |
+            Antes de revisar, leia os arquivos `cr-artifacts/tsc-report.txt` e
+            `cr-artifacts/oxlint-report.txt` na raiz do repo (podem estar vazios
+            — tudo bem se estiverem). Eles contêm achados de ferramentas
+            determinísticas (erros de tipo do TypeScript, lint estático) sobre
+            este mesmo diff.
+
+            Regra central deste método: NÃO repita o que essas ferramentas já
+            reportaram. Use os relatórios apenas como mapa do que já está
+            coberto. Seu trabalho é o que ferramenta estática estruturalmente
+            não vê:
+
+            - Lógica errada, edge cases, condições de corrida.
+            - Arquitetura: componente fora do lugar, lógica de negócio dentro
+              do componente em vez de hook/service, duplicação.
+            - State management: props drilling que devia ser Context; Context
+              sem memoização do value.
+            - Hooks: dependências semanticamente erradas em useEffect (tsc/lint
+              não julgam se a dependência está semanticamente certa, só se
+              existe).
+            - Integração REST: fetch fora de services/hook, sem tratamento de
+              erro, resposta não validada contra `{ success, data, error }`.
+            - Segurança: dangerouslySetInnerHTML sem sanitização, dado de API
+              renderizado sem escaping, segredo hardcoded.
+
+            Revise apenas o diff deste PR (linhas adicionadas/modificadas),
+            ignorando mudanças fora de src/ a menos que quebrem o build.
+
+            ## Formato da resposta
+            Comece com uma linha: "🔧 Método: híbrido (estática + LLM). N
+            achados de ferramenta / M achados de raciocínio." (conte a partir
+            dos relatórios lidos).
+
+            Depois, markdown direto ao ponto, um item por problema:
+            **`arquivo:linha`** — [categoria] descrição objetiva (1-2 frases).
+            ```lang
+                        correção sugerida
+            ```
+            Omita o bloco de código se não houver correção relevante. Se não
+            houver achados de raciocínio além do que as ferramentas já
+            cobrem, diga isso explicitamente em vez de inventar ressalvas.

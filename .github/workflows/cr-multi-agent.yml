@@ -1,0 +1,241 @@
+# .github/workflows/cr-multi-agent.yml
+#
+# Método C — Multi-agente especializado
+#
+# Em vez de um único prompt genérico cobrindo tudo, dispara 4 agentes em
+# paralelo, cada um com escopo estreito (arquitetura/estado, performance/
+# dados, segurança/tipos, convenções). Espelha o padrão usado por
+# ferramentas comerciais (Qodo 2.0, CodeX-Verify) e por pesquisa acadêmica
+# (AutoReview, Code Broker): agentes especializados reduzem a chance de um
+# único prompt "genérico" diluir atenção entre categorias concorrentes.
+# Cada agente posta seu próprio comentário — dá pra comparar visualmente
+# contra o comentário único do método baseline. Ver .github/CODE_REVIEW_METHODS.md.
+#
+# Uso: comente "/cr-agents" em um PR, ou dispare manualmente (workflow_dispatch).
+
+name: cr-multi-agent
+
+on:
+  issue_comment:
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: "Número do PR para revisar"
+        required: true
+        type: number
+
+jobs:
+  resolve:
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'issue_comment' &&
+       github.event.issue.pull_request != null &&
+       contains(github.event.comment.body, '/cr-agents') &&
+       contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association))
+    runs-on: ubuntu-latest
+    outputs:
+      pr_number: ${{ steps.pr.outputs.number }}
+    steps:
+      - name: Resolve PR number
+        id: pr
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "number=${{ inputs.pr_number }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "number=${{ github.event.issue.number }}" >> "$GITHUB_OUTPUT"
+          fi
+
+  architecture-state:
+    needs: resolve
+    runs-on: ubuntu-latest
+    concurrency:
+      group: cr-agents-arch-${{ needs.resolve.outputs.pr_number }}
+      cancel-in-progress: true
+    permissions:
+      id-token: write
+      contents: read
+      pull-requests: write
+      issues: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh pr checkout ${{ needs.resolve.outputs.pr_number }}
+      - uses: anomalyco/opencode/github@latest
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          model: anthropic/claude-sonnet-5
+          use_github_token: true
+          prompt: |
+            Você é o agente de ARQUITETURA E ESTADO em uma revisão dividida
+            entre múltiplos agentes especializados. Revise APENAS o diff deste
+            PR e APENAS estes dois critérios (ignore performance, segurança,
+            tipos e convenções — outros agentes cobrem isso):
+
+            **Arquitetura**: componente fora do lugar (pages/, components/,
+            hooks/, contexts/, services/); lógica de negócio/fetch dentro do
+            componente em vez de custom hook ou services/; duplicação de
+            lógica já existente.
+
+            **State management**: props drilling que devia ser Context;
+            Context usado onde useState resolveria; Provider sem memoização
+            do value, causando re-render da árvore inteira.
+
+            ## Formato da resposta
+            Comece a resposta com "🏗️ **Agente: Arquitetura & Estado**" em
+            uma linha própria. Depois, markdown direto, um item por problema:
+            **`arquivo:linha`** — descrição objetiva (1-2 frases). Correção:
+            ```lang
+                        trecho
+            ```
+            Se não houver problema nessas duas categorias, responda apenas
+            "🏗️ **Agente: Arquitetura & Estado** — sem problemas no escopo."
+
+  performance-data:
+    needs: resolve
+    runs-on: ubuntu-latest
+    concurrency:
+      group: cr-agents-perf-${{ needs.resolve.outputs.pr_number }}
+      cancel-in-progress: true
+    permissions:
+      id-token: write
+      contents: read
+      pull-requests: write
+      issues: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh pr checkout ${{ needs.resolve.outputs.pr_number }}
+      - uses: anomalyco/opencode/github@latest
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          model: anthropic/claude-sonnet-5
+          use_github_token: true
+          prompt: |
+            Você é o agente de PERFORMANCE E INTEGRAÇÃO em uma revisão
+            dividida entre múltiplos agentes especializados. Revise APENAS o
+            diff deste PR e APENAS estes dois critérios (ignore arquitetura,
+            segurança, tipos e convenções — outros agentes cobrem isso):
+
+            **Performance**: dependências erradas/faltando em useEffect;
+            função/objeto recriado a cada render quebrando React.memo;
+            useMemo/useCallback faltando em ponto custoso OU usado sem
+            necessidade; fetch ou loop pesado fora de efeito.
+
+            **Integração REST**: fetch fora de services/ ou hook dedicado;
+            sem tratamento de erro (status HTTP, try/catch); resposta não
+            validada contra o formato { success, data, error }; token exposto
+            ou mal manuseado no client.
+
+            ## Formato da resposta
+            Comece a resposta com "⚡ **Agente: Performance & Integração**"
+            em uma linha própria. Depois, markdown direto, um item por
+            problema:
+            **`arquivo:linha`** — descrição objetiva (1-2 frases). Correção:
+            ```lang
+                        trecho
+            ```
+            Se não houver problema nessas duas categorias, responda apenas
+            "⚡ **Agente: Performance & Integração** — sem problemas no
+            escopo."
+
+  security-types:
+    needs: resolve
+    runs-on: ubuntu-latest
+    concurrency:
+      group: cr-agents-sec-${{ needs.resolve.outputs.pr_number }}
+      cancel-in-progress: true
+    permissions:
+      id-token: write
+      contents: read
+      pull-requests: write
+      issues: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh pr checkout ${{ needs.resolve.outputs.pr_number }}
+      - uses: anomalyco/opencode/github@latest
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          model: anthropic/claude-sonnet-5
+          use_github_token: true
+          prompt: |
+            Você é o agente de SEGURANÇA E TIPOS em uma revisão dividida
+            entre múltiplos agentes especializados. Revise APENAS o diff
+            deste PR e APENAS estes dois critérios (ignore arquitetura,
+            performance e convenções — outros agentes cobrem isso):
+
+            **Segurança**: dangerouslySetInnerHTML sem sanitização; dado de
+            API renderizado sem escaping; segredo ou URL interna hardcoded;
+            innerHTML/eval.
+
+            **TypeScript**: `any` evitável; tipo de resposta de API divergente
+            do formato real; prop sem interface/type.
+
+            ## Formato da resposta
+            Comece a resposta com "🔒 **Agente: Segurança & Tipos**" em uma
+            linha própria. Depois, markdown direto, um item por problema:
+            **`arquivo:linha`** — descrição objetiva (1-2 frases). Correção:
+            ```lang
+                        trecho
+            ```
+            Se não houver problema nessas duas categorias, responda apenas
+            "🔒 **Agente: Segurança & Tipos** — sem problemas no escopo."
+
+  conventions:
+    needs: resolve
+    runs-on: ubuntu-latest
+    concurrency:
+      group: cr-agents-conv-${{ needs.resolve.outputs.pr_number }}
+      cancel-in-progress: true
+    permissions:
+      id-token: write
+      contents: read
+      pull-requests: write
+      issues: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh pr checkout ${{ needs.resolve.outputs.pr_number }}
+      - uses: anomalyco/opencode/github@latest
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          model: anthropic/claude-sonnet-5
+          use_github_token: true
+          prompt: |
+            Você é o agente de CONVENÇÕES em uma revisão dividida entre
+            múltiplos agentes especializados. Revise APENAS o diff deste PR e
+            APENAS este critério (ignore arquitetura, performance, segurança
+            e tipos — outros agentes cobrem isso):
+
+            **Convenções**: hook sem prefixo `use`; componente fora de
+            PascalCase; CSS vazando escopo; import desorganizado onde haveria
+            alias do Vite. Não comente formatação (espaçamento, ponto e
+            vírgula) — assuma linter/formatter cobrindo isso.
+
+            ## Formato da resposta
+            Comece a resposta com "📐 **Agente: Convenções**" em uma linha
+            própria. Depois, markdown direto, um item por problema:
+            **`arquivo:linha`** — descrição objetiva (1-2 frases).
+            Se não houver problema, responda apenas "📐 **Agente:
+            Convenções** — sem problemas no escopo."

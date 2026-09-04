@@ -1,0 +1,162 @@
+# .github/workflows/cr-verify.yml
+#
+# Método E — Propor-então-verificar (duas passadas)
+#
+# Pass 1 gera candidatos a achado sem se preocupar demais em confirmar cada
+# um. Pass 2 roda DEPOIS, relê o código real e só mantém o que confirma,
+# descartando falso positivo com justificativa. É o mesmo princípio por
+# trás do próprio /code-review (skill do Claude Code) com veredito
+# CONFIRMED/PLAUSIBLE, e do padrão "self-consistency / chain-of-verification"
+# usado por sistemas multi-agente de revisão (ex. AutoReview) para reduzir
+# ruído. Os dois comentários (rascunho e verificado) ficam visíveis no PR —
+# dá pra comparar quantos candidatos sobreviveram. Ver .github/CODE_REVIEW_METHODS.md.
+#
+# Uso: comente "/cr-verify" em um PR, ou dispare manualmente (workflow_dispatch).
+
+name: cr-verify
+
+on:
+  issue_comment:
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: "Número do PR para revisar"
+        required: true
+        type: number
+
+jobs:
+  draft:
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'issue_comment' &&
+       github.event.issue.pull_request != null &&
+       contains(github.event.comment.body, '/cr-verify') &&
+       contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association))
+    runs-on: ubuntu-latest
+    concurrency:
+      group: cr-verify-${{ github.event.issue.number || inputs.pr_number }}
+      cancel-in-progress: true
+    permissions:
+      id-token: write
+      contents: read
+      pull-requests: write
+      issues: write
+    outputs:
+      pr_number: ${{ steps.pr.outputs.number }}
+      draft_body: ${{ steps.fetch.outputs.body }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Resolve PR number
+        id: pr
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "number=${{ inputs.pr_number }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "number=${{ github.event.issue.number }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout PR head
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh pr checkout ${{ steps.pr.outputs.number }}
+
+      - uses: anomalyco/opencode/github@latest
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          model: anthropic/claude-sonnet-5
+          use_github_token: true
+          prompt: |
+            Esta é a PASS 1 de 2 (rascunho) de uma revisão em duas etapas.
+            Gere candidatos a achado revisando o diff deste PR pelos mesmos
+            critérios do CR padrão do repo (arquitetura, state management,
+            performance, integração REST, segurança, TypeScript, convenções).
+            Não precisa reler o arquivo inteiro com cuidado nem confirmar cada
+            item — é aceitável (e esperado) incluir candidatos incertos, a
+            verificação acontece na pass 2.
+
+            ## Formato da resposta — siga exatamente
+            A PRIMEIRA linha do comentário deve ser exatamente:
+            🔍 **DRAFT — pass 1/2 (não verificado)**
+
+            Depois, uma lista numerada, um candidato por linha:
+            N. **`arquivo:linha`** — [categoria] descrição objetiva (1 frase).
+            Confiança: alta | média | baixa.
+
+            Não inclua blocos de código de correção nesta passada. Se nenhum
+            candidato for encontrado, responda só com o título e "nenhum
+            candidato".
+
+      - name: Fetch the draft comment just posted
+        id: fetch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BODY=$(gh api "repos/${{ github.repository }}/issues/${{ steps.pr.outputs.number }}/comments" \
+            --jq '[.[] | select(.body | startswith("🔍 **DRAFT"))] | last | .body')
+          {
+            echo "body<<CRDRAFTEOF"
+            echo "$BODY"
+            echo "CRDRAFTEOF"
+          } >> "$GITHUB_OUTPUT"
+
+  verify:
+    needs: draft
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+      pull-requests: write
+      issues: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Checkout PR head
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh pr checkout ${{ needs.draft.outputs.pr_number }}
+
+      - uses: anomalyco/opencode/github@latest
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          model: anthropic/claude-sonnet-5
+          use_github_token: true
+          prompt: |
+            Esta é a PASS 2 de 2 (verificação) de uma revisão em duas etapas.
+            A pass 1 gerou os candidatos abaixo SEM confirmar cada um com
+            cuidado contra o código real:
+
+            ${{ needs.draft.outputs.draft_body }}
+
+            Sua tarefa: para cada candidato numerado, releia o trecho real em
+            `arquivo:linha` no código atual do PR (não confie na descrição do
+            candidato — verifique). Decida:
+            - CONFIRMADO: o problema existe como descrito. Inclua no
+              resultado final, com correção sugerida.
+            - DESCARTADO: não existe, está impreciso, ou já é tratado em
+              outro lugar que a pass 1 não viu. Não inclua no resultado
+              final — só conte.
+
+            ## Formato da resposta
+            Primeira linha: "✅ **VERIFIED — pass 2/2.** N confirmados de M
+            candidatos."
+
+            Depois, apenas os itens CONFIRMADOS, no formato final de review:
+            **`arquivo:linha`** — [categoria] descrição objetiva (1-2 frases).
+            ```lang
+                        correção sugerida
+            ```
+
+            Por fim, uma linha "Descartados: <razão agregada em poucas
+            palavras>" resumindo por que os demais caíram (não repita cada um
+            em detalhe). Se todos os candidatos foram descartados, diga isso
+            explicitamente em vez de inventar um achado confirmado.

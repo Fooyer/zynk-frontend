@@ -1,0 +1,139 @@
+# .github/workflows/cr-context-aware.yml
+#
+# Método D — Consciente de contexto (cross-file, não só o diff)
+#
+# Os outros métodos revisam só os hunks do diff. Este monta um pacote de
+# contexto ANTES de chamar o modelo: conteúdo completo de cada arquivo
+# alterado + quem importa esse arquivo em src/. É uma versão simplificada
+# (grep, não AST) do que ferramentas como Qodo chamam de "context engine" —
+# a pesquisa de mercado atribui a elas taxas maiores de detecção de bug
+# justamente por não se limitarem ao diff isolado. Ver .github/CODE_REVIEW_METHODS.md.
+#
+# Uso: comente "/cr-context" em um PR, ou dispare manualmente (workflow_dispatch).
+
+name: cr-context-aware
+
+on:
+  issue_comment:
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: "Número do PR para revisar"
+        required: true
+        type: number
+
+jobs:
+  review:
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'issue_comment' &&
+       github.event.issue.pull_request != null &&
+       contains(github.event.comment.body, '/cr-context') &&
+       contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association))
+    runs-on: ubuntu-latest
+    concurrency:
+      group: cr-context-${{ github.event.issue.number || inputs.pr_number }}
+      cancel-in-progress: true
+    permissions:
+      id-token: write
+      contents: read
+      pull-requests: write
+      issues: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Resolve PR number
+        id: pr
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "number=${{ inputs.pr_number }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "number=${{ github.event.issue.number }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout PR head
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh pr checkout ${{ steps.pr.outputs.number }}
+
+      - name: Build extended context (full files + importers)
+        id: ctx
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BASE=$(gh pr view ${{ steps.pr.outputs.number }} --json baseRefName -q .baseRefName)
+          git fetch origin "$BASE" --depth=50
+          CHANGED=$(git diff --name-only "origin/$BASE"...HEAD -- '*.ts' '*.tsx')
+
+          mkdir -p cr-artifacts
+          {
+            echo "# Contexto estendido para revisão"
+            echo
+            if [ -z "$CHANGED" ]; then
+              echo "(nenhum arquivo .ts/.tsx alterado)"
+            fi
+            for f in $CHANGED; do
+              [ -f "$f" ] || continue
+              echo "## Arquivo alterado: $f (conteúdo completo, não só o diff)"
+              echo '```'
+              cat "$f"
+              echo '```'
+              echo
+              modname=$(basename "${f%.*}")
+              echo "### Arquivos em src/ que importam de '$modname'"
+              MATCHES=$(grep -rlE "from ['\"].*/${modname}['\"]" src --include='*.ts' --include='*.tsx' 2>/dev/null | grep -vFx "$f" || true)
+              if [ -z "$MATCHES" ]; then
+                echo "(nenhum encontrado por grep)"
+              else
+                echo "$MATCHES" | while read -r importer; do echo "- $importer"; done
+              fi
+              echo
+            done
+          } > cr-artifacts/context.md
+          echo "changed_count=$(echo "$CHANGED" | grep -c . || true)" >> "$GITHUB_OUTPUT"
+
+      - uses: anomalyco/opencode/github@latest
+        if: steps.ctx.outputs.changed_count != '0'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          model: anthropic/claude-sonnet-5
+          use_github_token: true
+          prompt: |
+            Leia `cr-artifacts/context.md` na raiz do repo antes de revisar.
+            Ele contém, para cada arquivo alterado neste PR: o conteúdo
+            COMPLETO do arquivo (não só as linhas do diff) e a lista de
+            arquivos em src/ que importam dele (achados por grep, podem ter
+            ruído/lacunas — use como pista, não verdade absoluta).
+
+            Diferente de uma revisão diff-only, seu foco aqui é justamente o
+            que só aparece olhando o arquivo inteiro e quem depende dele:
+
+            - Uma mudança de assinatura/contrato (props, tipo de retorno,
+              formato de dados) que quebra algum dos arquivos importadores
+              listados, mesmo que o importador não tenha sido tocado no PR.
+            - Um efeito colateral do trecho alterado que só faz sentido à luz
+              do resto do arquivo (estado, closures, ordem de inicialização).
+            - Uma duplicação entre o trecho novo e algo que já existe em
+              outro lugar do mesmo arquivo.
+
+            Não repita problemas puramente locais ao hunk que qualquer
+            revisão diff-only já pegaria — só vale a pena aqui o que exige
+            olhar o arquivo completo ou os importadores.
+
+            ## Formato da resposta
+            Comece com "🔗 **Método: contexto estendido (cross-file)**".
+            Depois, markdown direto, um item por problema:
+            **`arquivo:linha`** — [impacto: local | cross-file] descrição
+            objetiva (1-2 frases), citando o arquivo importador afetado
+            quando for o caso.
+            ```lang
+                        correção sugerida
+            ```
+            Se nada além do que uma revisão diff-only pegaria for encontrado,
+            responda apenas "🔗 **Método: contexto estendido** — nenhum
+            impacto cross-file identificado."
