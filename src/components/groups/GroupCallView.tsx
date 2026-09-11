@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAuthStore } from '../../stores/authStore';
 import { useLayoutStore } from '../../stores/layoutStore';
 import { useWatchTogetherUiStore, type MediaFocus } from '../../stores/watchTogetherUiStore';
@@ -172,6 +172,18 @@ export function GroupCallView({ voice }: Props) {
   const focusedVideoRef = useRef<HTMLVideoElement>(null);
   const focusedContainerRef = useRef<HTMLDivElement>(null);
 
+  // Aviso fixado pelo dono do grupo, exibido no topo da chamada.
+  const [announcementHtml, setAnnouncementHtml] = useState('');
+  useEffect(() => {
+    fetch(`/api/voice-channels/${vc?.id}/announcement`)
+      .then((r) => r.json())
+      .then((json) => setAnnouncementHtml(json.html));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Quantos participantes estão falando agora, pro contador do header.
+  const speakingCount = useMemo(() => voice.speakingUserIds.size, [voice.speakingUserIds]);
+
   // Foca automaticamente a primeira tela compartilhada disponível; troca
   // sozinho se quem estava em foco parar de compartilhar.
   useEffect(() => {
@@ -317,6 +329,12 @@ export function GroupCallView({ voice }: Props) {
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-surface-950">
+      {(announcementHtml || speakingCount > 0) && (
+        <div className="px-4 py-2 flex items-center justify-between text-sm text-surface-300 bg-surface-900/60 border-b border-white/[0.06]">
+          <span dangerouslySetInnerHTML={{ __html: announcementHtml }} />
+          <span>{speakingCount} falando</span>
+        </div>
+      )}
       <div className={`flex-1 overflow-hidden flex items-center justify-center min-h-0 ${cinemaMode ? 'p-0' : 'p-6'}`}>
         {effectiveFocus === 'screen' ? (
           <div className="w-full h-full flex flex-col gap-4">
