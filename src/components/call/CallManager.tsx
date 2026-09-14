@@ -9,6 +9,7 @@ import { ICE_SERVERS } from '../../services/iceServers';
 import { applyLowLatencySenderParams, withLowLatencyOpus } from '../../services/lowLatencyAudio';
 import { getProcessedStream } from '../../services/audioProcessing';
 import { alertDialog } from '../../stores/dialogStore';
+import { watchIceConnection } from '../../services/iceRecovery';
 import {
   playJoinCallSound,
   playLeaveCallSound,
@@ -50,6 +51,7 @@ export function CallManager() {
   const screenAudioSenderRef = useRef<RTCRtpSender | null>(null);
   const initialRemoteAudioTrackRef = useRef<MediaStreamTrack | null>(null);
   const isConnectedRef = useRef(false);
+  const iceWatcherStopRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     if (remoteGainRef.current) {
@@ -110,6 +112,8 @@ export function CallManager() {
   }, [status]);
 
   const cleanup = useCallback(() => {
+    iceWatcherStopRef.current?.();
+    iceWatcherStopRef.current = null;
     localStreamRef.current?.getTracks().forEach((t) => t.stop());
     localStreamRef.current = null;
     localScreenStreamRef.current?.getTracks().forEach((t) => t.stop());
@@ -240,13 +244,35 @@ export function CallManager() {
         }
       };
 
-      pc.onconnectionstatechange = () => {
-        if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
-          getSocket()?.emit('call:status_update', { inCall: false });
-          cleanup();
-          reset();
-        }
-      };
+      // Falha de ICE (ex.: NAT/roteador fecha o mapeamento depois de um
+      // tempo sem tráfego de áudio) não derruba mais a call na hora — tenta
+      // recuperar sozinha (restartIce + reoffer) e só encerra, com aviso
+      // claro pro usuário, se as tentativas se esgotarem. Ver services/iceRecovery.ts.
+      iceWatcherStopRef.current?.();
+      iceWatcherStopRef.current = watchIceConnection(pc, {
+        onHealthChange: (health) => {
+          if (health === 'failed') {
+            const { peerUsername, channelId } = useCallStore.getState();
+            if (channelId) useChatStore.getState().addSystemMessage(channelId, 'Chamada encerrada — conexão perdida');
+            getSocket()?.emit('call:status_update', { inCall: false });
+            cleanup();
+            reset();
+            if (peerUsername) {
+              alertDialog(`A conexão com ${peerUsername} foi perdida. A chamada foi encerrada.`, { title: 'Chamada encerrada' });
+            }
+          } else {
+            useCallStore.getState().setConnectionHealth(health);
+          }
+        },
+        restart: async () => {
+          pc.restartIce();
+          const mode = useCallStore.getState().mode;
+          const offer = await pc.createOffer();
+          if (mode === 'game' && offer.sdp) offer.sdp = withLowLatencyOpus(offer.sdp);
+          await pc.setLocalDescription(offer);
+          getSocket()?.emit('call:reoffer', { targetUserId: currentPeerId, offer: pc.localDescription });
+        },
+      });
 
       pcRef.current = pc;
       return pc;
@@ -333,6 +359,18 @@ export function CallManager() {
       getSocket()?.emit('call:status_update', { inCall: false });
       cleanup();
       reset();
+    };
+
+    // Outro dispositivo/instância logado com o mesmo usuário já atendeu ou
+    // recusou essa ligação (call:offer agora toca em todos os sockets do
+    // destinatário, não só um arbitrário — ver chat-gateway.ts) — reset
+    // silencioso aqui, sem diálogo nem mensagem de sistema, já que quem
+    // realmente tratou a chamada foi a outra instância.
+    const onDismissRinging = () => {
+      if (useCallStore.getState().status === 'ringing') {
+        cleanup();
+        reset();
+      }
     };
 
     const onHangup = () => {
@@ -495,6 +533,7 @@ export function CallManager() {
     socket.on('call:answered', onAnswered);
     socket.on('call:ice-candidate', onIceCandidate);
     socket.on('call:rejected', onRejected);
+    socket.on('call:dismiss-ringing', onDismissRinging);
     socket.on('call:hangup', onHangup);
     socket.on('call:reoffer', onReoffer);
     socket.on('call:reanswer', onReanswer);
@@ -508,6 +547,7 @@ export function CallManager() {
       socket.off('call:answered', onAnswered);
       socket.off('call:ice-candidate', onIceCandidate);
       socket.off('call:rejected', onRejected);
+      socket.off('call:dismiss-ringing', onDismissRinging);
       socket.off('call:hangup', onHangup);
       socket.off('call:reoffer', onReoffer);
       socket.off('call:reanswer', onReanswer);

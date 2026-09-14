@@ -7,6 +7,7 @@ import { useUserVolumeStore } from '../stores/userVolumeStore';
 import { captureScreenWithAudioFallback } from '../services/screenCapture';
 import { alertDialog } from '../stores/dialogStore';
 import { ICE_SERVERS } from '../services/iceServers';
+import { watchIceConnection, type IceHealth } from '../services/iceRecovery';
 import { applyLowLatencySenderParams, withLowLatencyOpus } from '../services/lowLatencyAudio';
 import { getProcessedStream } from '../services/audioProcessing';
 import {
@@ -63,6 +64,11 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
   // AnalyserNode logo abaixo, consumido pelos indicadores visuais (anel no
   // avatar da grade da call, linha destacada na lista de participantes).
   const [speakingUserIds, setSpeakingUserIds] = useState<Set<number>>(new Set());
+  // Saúde da conexão WebRTC por participante — ausente do Map = saudável.
+  // 'reconnecting' enquanto uma falha de ICE está sendo recuperada
+  // automaticamente; 'failed' é terminal (tentativas esgotadas), só sai
+  // desse estado com reconnectPeer(). Ver services/iceRecovery.ts.
+  const [peerHealth, setPeerHealth] = useState<Map<number, IceHealth>>(new Map());
 
   const localStream = useRef<MediaStream | null>(null);
   const localScreenStream = useRef<MediaStream | null>(null);
@@ -99,6 +105,7 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
   const locallyMutedIdsRef = useRef<Set<number>>(new Set());
   locallyMutedIdsRef.current = locallyMutedIds;
   const screenSenders = useRef<Map<number, ScreenSenders>>(new Map());
+  const iceWatchers = useRef<Map<number, () => void>>(new Map());
   const activeVcIdRef = useRef<number | null>(null);
   activeVcIdRef.current = activeVcId;
   // Ids dos outros participantes da call conectada — usado só pra decidir
@@ -370,13 +377,36 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
       if (e.candidate) getSocket().emit('voice:ice', { targetUserId, candidate: e.candidate });
     };
     // Sem isso, uma falha de ICE (ex.: CSP bloqueando os servidores STUN/TURN,
-    // ou os dois lados atrás de NAT sem candidato viável) é totalmente muda —
-    // nem áudio/vídeo chegam (então nenhum log de ontrack dispara) nem o
-    // WebRTC lança exceção nenhuma, só fica preso em "failed"/"disconnected"
-    // pra sempre e ninguém percebe olhando o console.
+    // ou os dois lados atrás de NAT sem candidato viável, ou o mapeamento do
+    // NAT/roteador fechando depois de um tempo sem tráfego de áudio) é
+    // totalmente muda — nem áudio/vídeo chegam (então nenhum log de ontrack
+    // dispara) nem o WebRTC lança exceção nenhuma, só fica preso em
+    // "failed"/"disconnected" pra sempre e ninguém percebe olhando o console.
+    // watchIceConnection tenta recuperar sozinho (restartIce + renegociação)
+    // e reporta o estado pra UI em vez de só logar — ver services/iceRecovery.ts.
     pc.oniceconnectionstatechange = () => {
       console.log(`[voice-ice] estado da conexão com ${targetUserId}: ${pc.iceConnectionState}`);
     };
+    iceWatchers.current.get(targetUserId)?.();
+    iceWatchers.current.set(targetUserId, watchIceConnection(pc, {
+      onHealthChange: (health) => {
+        setPeerHealth((prev) => {
+          const next = new Map(prev);
+          if (health === 'connected') next.delete(targetUserId);
+          else next.set(targetUserId, health);
+          return next;
+        });
+        // Falha terminal: fecha só essa conexão morta (libera recursos) sem
+        // tirar a pessoa da grade — quem manda na lista de participantes
+        // visível é o roster do servidor (connectedVc.participants), não o
+        // estado do WebRTC. reconnectPeer() tenta de novo do zero depois.
+        if (health === 'failed') closePeer(targetUserId);
+      },
+      restart: async () => {
+        pc.restartIce();
+        await renegotiate(targetUserId, pc);
+      },
+    }));
     pc.ontrack = (e) => {
       const track = e.track;
       if (track.kind === 'audio') {
@@ -530,6 +560,8 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
   };
 
   const closePeer = (uid: number) => {
+    iceWatchers.current.get(uid)?.();
+    iceWatchers.current.delete(uid);
     peers.current.get(uid)?.close();
     peers.current.delete(uid);
     const audio = audioRefs.current.get(uid);
@@ -561,12 +593,38 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
     remoteAnalyserCtxRef.current?.close().catch(() => {});
     remoteAnalyserCtxRef.current = null;
     setSpeakingUserIds(new Set());
+    setPeerHealth(new Map());
     setActiveVcId(null);
     setConnectedVc(null);
     setIsMuted(false);
     setLocallyMutedIds(new Set());
     setWatchState(null);
     activeModeRef.current = 'normal';
+  };
+
+  /**
+   * Tentativa manual de reconexão com um participante cuja conexão P2P
+   * chegou ao estado terminal 'failed' (tentativas automáticas de
+   * watchIceConnection esgotadas) — refaz o RTCPeerConnection do zero e
+   * reenvia um offer, mesmo caminho usado ao entrar numa sala com gente já
+   * presente (onRoomState). Não mexe no roster do servidor: se a pessoa
+   * ainda estiver lá, o offer chega normalmente.
+   */
+  const reconnectPeer = async (targetUserId: number) => {
+    if (!activeVcIdRef.current) return;
+    if (!connectedVc?.participants.some((p) => p.userId === targetUserId)) return;
+    closePeer(targetUserId);
+    setPeerHealth((prev) => {
+      if (!prev.has(targetUserId)) return prev;
+      const next = new Map(prev);
+      next.delete(targetUserId);
+      return next;
+    });
+    const pc = createPeer(targetUserId);
+    const offer = await pc.createOffer();
+    if (activeModeRef.current === 'game' && offer.sdp) offer.sdp = withLowLatencyOpus(offer.sdp);
+    await pc.setLocalDescription(offer);
+    getSocket().emit('voice:offer', { targetUserId, offer, voiceChannelId: activeVcIdRef.current });
   };
 
   const join = async (vc: VoiceChannel) => {
@@ -819,9 +877,11 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
     screenStreams,
     locallyMutedIds,
     speakingUserIds,
+    peerHealth,
     watchState,
     join,
     leave,
+    reconnectPeer,
     toggleMute,
     toggleLocalMute,
     setUserVolume,
