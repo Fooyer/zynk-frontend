@@ -19,7 +19,9 @@ export function ActiveCallOverlay() {
   const mode = useCallStore((s) => s.mode);
   const isMuted = useCallStore((s) => s.isMuted);
   const isScreenSharing = useCallStore((s) => s.isScreenSharing);
+  const connectionHealth = useCallStore((s) => s.connectionHealth);
   const callStartedAt = useCallStore((s) => s.callStartedAt);
+  const isReconnecting = status === 'active' && connectionHealth === 'reconnecting';
   const [, forceTick] = useState(0);
   const isGame = mode === 'game';
 
@@ -64,8 +66,8 @@ export function ActiveCallOverlay() {
               </span>
             )}
           </div>
-          <p className={`text-xs ${status === 'active' ? (isGame ? 'text-warning' : 'text-success') : 'text-surface-300'}`}>
-            {status === 'calling' ? 'Chamando...' : status === 'ringing' ? 'Conectando...' : formatDuration(seconds)}
+          <p className={`text-xs ${isReconnecting ? 'text-warning animate-pulse' : status === 'active' ? (isGame ? 'text-warning' : 'text-success') : 'text-surface-300'}`}>
+            {status === 'calling' ? 'Chamando...' : status === 'ringing' ? 'Conectando...' : isReconnecting ? 'Reconectando...' : formatDuration(seconds)}
           </p>
         </div>
 

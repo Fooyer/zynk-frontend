@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type { CallMode } from '../types';
 
 export type CallStatus = 'idle' | 'calling' | 'ringing' | 'active';
+export type CallConnectionHealth = 'connected' | 'reconnecting';
 
 interface CallState {
   status: CallStatus;
@@ -14,6 +15,9 @@ interface CallState {
   volume: number;
   isScreenSharing: boolean;
   remoteHasScreen: boolean;
+  // Reflete o watchIceConnection() do CallManager — 'reconnecting' enquanto
+  // uma falha de ICE está sendo recuperada (ver services/iceRecovery.ts).
+  connectionHealth: CallConnectionHealth;
   // Timestamp de início da chamada — fica na store (não em estado local de
   // componente) porque a barra flutuante e o painel inline montam/desmontam
   // conforme a navegação, e um estado local reiniciaria o cronômetro do zero.
@@ -26,6 +30,7 @@ interface CallState {
   setVolume: (volume: number) => void;
   setScreenSharing: (v: boolean) => void;
   setRemoteHasScreen: (v: boolean) => void;
+  setConnectionHealth: (health: CallConnectionHealth) => void;
   reset: () => void;
 }
 
@@ -40,22 +45,24 @@ export const useCallStore = create<CallState>((set) => ({
   volume: 1,
   isScreenSharing: false,
   remoteHasScreen: false,
+  connectionHealth: 'connected',
   callStartedAt: null,
 
   initCall: (peerId, peerUsername, channelId, mode = 'normal') =>
-    set({ status: 'calling', peerId, peerUsername, channelId, mode, callStartedAt: null }),
+    set({ status: 'calling', peerId, peerUsername, channelId, mode, connectionHealth: 'connected', callStartedAt: null }),
 
   receiveCall: (from, channelId, offer, mode = 'normal') =>
-    set({ status: 'ringing', peerId: from.id, peerUsername: from.username, channelId, pendingOffer: offer, mode, callStartedAt: null }),
+    set({ status: 'ringing', peerId: from.id, peerUsername: from.username, channelId, pendingOffer: offer, mode, connectionHealth: 'connected', callStartedAt: null }),
 
   setActive: () => set({ status: 'active', pendingOffer: null, callStartedAt: Date.now() }),
   setMuted: (isMuted) => set({ isMuted }),
   setVolume: (volume) => set({ volume }),
   setScreenSharing: (isScreenSharing) => set({ isScreenSharing }),
   setRemoteHasScreen: (remoteHasScreen) => set({ remoteHasScreen }),
+  setConnectionHealth: (connectionHealth) => set({ connectionHealth }),
   reset: () => set({
     status: 'idle', peerId: null, peerUsername: null, channelId: null, mode: 'normal',
     pendingOffer: null, isMuted: false, volume: 1, isScreenSharing: false, remoteHasScreen: false,
-    callStartedAt: null,
+    connectionHealth: 'connected', callStartedAt: null,
   }),
 }));

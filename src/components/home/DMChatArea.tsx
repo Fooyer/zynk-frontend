@@ -48,6 +48,8 @@ function CallPanel({ dm, callStatus }: { dm: DmChannel; callStatus: 'calling' | 
   const isMuted = useCallStore((s) => s.isMuted);
   const isScreenSharing = useCallStore((s) => s.isScreenSharing);
   const remoteHasScreen = useCallStore((s) => s.remoteHasScreen);
+  const connectionHealth = useCallStore((s) => s.connectionHealth);
+  const isReconnecting = connectionHealth === 'reconnecting';
   const volume = useCallStore((s) => s.volume);
   const setVolume = useCallStore((s) => s.setVolume);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -233,8 +235,10 @@ function CallPanel({ dm, callStatus }: { dm: DmChannel; callStatus: 'calling' | 
           <div className="py-5 px-4">
             {/* Timer */}
             <div className="flex items-center justify-center gap-2 mb-4">
-              <div className={`w-1.5 h-1.5 rounded-full animate-pulse ${isGame ? 'bg-warning' : 'bg-success'}`} />
-              <span className="text-xs text-surface-400 font-mono tracking-wide">{formatDuration(callDuration)}</span>
+              <div className={`w-1.5 h-1.5 rounded-full animate-pulse ${isReconnecting ? 'bg-warning' : isGame ? 'bg-warning' : 'bg-success'}`} />
+              <span className={`text-xs font-mono tracking-wide ${isReconnecting ? 'text-warning' : 'text-surface-400'}`}>
+                {isReconnecting ? 'Reconectando...' : formatDuration(callDuration)}
+              </span>
               {isGame && (
                 <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-warning/15 text-warning text-[10px] font-semibold ml-1">
                   <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor">
