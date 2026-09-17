@@ -159,14 +159,14 @@ function Toggle({ label, description, checked, onChange }: {
   onChange: (v: boolean) => void;
 }) {
   return (
-    <div className="flex items-center justify-between py-2">
-      <div>
+    <div className="flex items-center justify-between gap-4 py-2">
+      <div className="flex-1 min-w-0">
         <p className="text-sm font-medium text-surface-200">{label}</p>
         {description && <p className="text-xs text-surface-500 mt-0.5">{description}</p>}
       </div>
       <button
         onClick={() => onChange(!checked)}
-        className={`relative w-11 h-6 rounded-full transition-colors ${
+        className={`relative w-11 h-6 rounded-full transition-colors flex-shrink-0 ${
           checked ? 'bg-accent-600 hover:bg-accent-500' : 'bg-white/[0.10] hover:bg-white/[0.16]'
         }`}
       >
@@ -544,7 +544,7 @@ function ProcessingSection() {
 
         <Toggle
           label="Cancelamento de eco do sistema (experimental)"
-          description="Pra quando o eco vem de um jogo ou som do Windows tocando na caixa de som (não do próprio Zynk) — o cancelamento de eco normal não alcança isso. Usa o loopback do sistema como referência; pode custar um pouco de CPU e o resultado pode variar. Se soar estranho, desligue."
+          description="Cancela eco de jogos ou sons do Windows tocando na caixa de som. O cancelamento de eco normal não resolve isso. Pode usar mais CPU. Se soar estranho, desligue."
           checked={systemEchoCancellation}
           onChange={handleToggleSystemEchoCancellation}
         />
