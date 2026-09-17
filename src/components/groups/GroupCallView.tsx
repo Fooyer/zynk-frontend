@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAuthStore } from '../../stores/authStore';
 import { useLayoutStore } from '../../stores/layoutStore';
 import { useWatchTogetherUiStore, type MediaFocus } from '../../stores/watchTogetherUiStore';
@@ -209,9 +209,6 @@ export function GroupCallView({ voice }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Quantos participantes estão falando agora, pro contador do header.
-  const speakingCount = useMemo(() => voice.speakingUserIds.size, [voice.speakingUserIds]);
-
   // Foca automaticamente a primeira tela compartilhada disponível; troca
   // sozinho se quem estava em foco parar de compartilhar.
   useEffect(() => {
@@ -361,10 +358,9 @@ export function GroupCallView({ voice }: Props) {
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-surface-950">
-      {(announcementHtml || speakingCount > 0) && (
-        <div className="px-4 py-2 flex items-center justify-between text-sm text-surface-300 bg-surface-900/60 border-b border-white/[0.06]">
+      {announcementHtml && (
+        <div className="px-4 py-2 flex items-center text-sm text-surface-300 bg-surface-900/60 border-b border-white/[0.06]">
           <span dangerouslySetInnerHTML={{ __html: announcementHtml }} />
-          <span>{speakingCount} falando</span>
         </div>
       )}
       {unstableNames.length > 0 && (
