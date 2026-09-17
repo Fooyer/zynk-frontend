@@ -1,6 +1,6 @@
 {
   "name": "zynk",
-  "version": "0.7.7",
+  "version": "0.8.0",
   "description": "Zynk — Electron + Vite + React",
   "main": "dist-electron/main.js",
   "scripts": {
