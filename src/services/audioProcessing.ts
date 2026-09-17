@@ -244,9 +244,19 @@ export async function getProcessedStream(
     wetGain.gain.value = 0.85;
     rnnoise.connect(wetGain);
 
+    // RNNoise processa em quadros fixos de 480 amostras (10ms a 48kHz) —
+    // isso atrasa a saída processada em relação à entrada. O caminho dry
+    // (sinal cru, sem passar pelo RNNoise) não tinha esse atraso, então a
+    // mistura somava a MESMA voz com ela mesma ~10ms fora de fase — ouvido
+    // como um eco curtinho/voz duplicada (ticket "Duplicação de voz"). Esse
+    // delay realinha o dry com o atraso do RNNoise antes de misturar.
+    const dryDelay = forceMono(audioCtx.createDelay(0.05));
+    dryDelay.delayTime.value = 480 / audioCtx.sampleRate;
+
     const dryGain = forceMono(audioCtx.createGain());
     dryGain.gain.value = 0.15;
-    lowPass.connect(dryGain);
+    lowPass.connect(dryDelay);
+    dryDelay.connect(dryGain);
 
     const mixed = forceMono(audioCtx.createGain());
     wetGain.connect(mixed);
