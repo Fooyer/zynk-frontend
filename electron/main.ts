@@ -14,6 +14,23 @@ import {
   type GamepadInputState,
 } from './gamepadEmulator';
 
+// Impede duas instâncias do Zynk rodando ao mesmo tempo na mesma máquina —
+// sem isso, reabrir o atalho achando que o app não está rodando (ele só
+// minimiza pra bandeja, ver mainWindow.on('close') abaixo) sobe um SEGUNDO
+// processo ao lado do primeiro; se um auto-update reinicia só um deles nesse
+// meio tempo, sobram duas versões diferentes rodando juntas — e cada uma
+// briga pela mesma porta do servidor local (ver LOCAL_SERVER_PORTS), o que
+// pode fazer um relançamento cair numa origem de localStorage diferente da
+// anterior e parecer um logout forçado. process.exit(0) logo após app.quit()
+// é o que garante que a instância perdedora nem chega a chamar
+// startLocalServer() e disputar essa porta.
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+  process.exit(0);
+}
+
+app.on('second-instance', () => showMainWindow());
+
 // On Linux/Wayland the PipeWire screen capturer tries DMA-BUF with EGL and
 // fails with EGL_BAD_DISPLAY, producing a black stream.
 // ozone-platform-hint=auto makes Electron detect X11 vs Wayland and set up
@@ -135,6 +152,13 @@ let tray: Tray | null = null;
 let trayIcon: Electron.NativeImage | null = null;
 let isQuitting = false;
 let pendingScreenSource: DesktopCapturerSource | null = null;
+
+function showMainWindow() {
+  if (!mainWindow) return;
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show();
+  mainWindow.focus();
+}
 
 function getIconPath(): string {
   if (app.isPackaged) {
@@ -735,10 +759,7 @@ app.whenReady().then(async () => {
   const trayMenu = Menu.buildFromTemplate([
     {
       label: 'Abrir Zynk',
-      click: () => {
-        mainWindow?.show();
-        mainWindow?.focus();
-      },
+      click: () => showMainWindow(),
     },
     { type: 'separator' },
     {
@@ -751,10 +772,7 @@ app.whenReady().then(async () => {
   ]);
 
   tray.setContextMenu(trayMenu);
-  tray.on('double-click', () => {
-    mainWindow?.show();
-    mainWindow?.focus();
-  });
+  tray.on('double-click', () => showMainWindow());
 });
 
 app.on('before-quit', () => {

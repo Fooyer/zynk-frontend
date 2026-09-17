@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAuthStore } from '../../stores/authStore';
 import { useLayoutStore } from '../../stores/layoutStore';
 import { useWatchTogetherUiStore, type MediaFocus } from '../../stores/watchTogetherUiStore';
@@ -8,24 +8,31 @@ import { WatchTogetherPlayer } from './WatchTogetherPlayer';
 import { WatchTogetherModal } from './WatchTogetherModal';
 import { WatchQueuePanel } from './WatchQueuePanel';
 import type { useVoiceRoom } from '../../hooks/useVoiceRoom';
+import type { IceHealth } from '../../services/iceRecovery';
 import type { ScreenSource, VoiceParticipant } from '../../types';
 
 interface Props {
   voice: ReturnType<typeof useVoiceRoom>;
 }
 
-function ParticipantTile({ participant, isSelf, isMuted, isSpeaking }: {
+function ParticipantTile({ participant, isSelf, isMuted, isSpeaking, health, onReconnect }: {
   participant: VoiceParticipant;
   isSelf: boolean;
   isMuted: boolean;
   isSpeaking: boolean;
+  health?: IceHealth;
+  onReconnect: () => void;
 }) {
+  const isReconnecting = health === 'reconnecting';
+  const isFailed = health === 'failed';
   return (
     <div className="flex flex-col items-center gap-2 w-28">
       <div className="relative">
         <div
           className={`w-20 h-20 rounded-full ring-2 flex items-center justify-center text-white text-2xl font-bold overflow-hidden transition-all duration-150 ${
-            isSpeaking ? 'ring-accent-500 shadow-glow-accent' : 'ring-white/[0.10]'
+            isFailed ? 'opacity-40' : ''
+          } ${
+            isReconnecting ? 'ring-warning animate-pulse' : isSpeaking ? 'ring-accent-500 shadow-glow-accent' : 'ring-white/[0.10]'
           }`}
           style={{ backgroundColor: getUserColor(participant.username) }}
         >
@@ -43,10 +50,31 @@ function ParticipantTile({ participant, isSelf, isMuted, isSpeaking }: {
             </svg>
           </div>
         )}
+        {isReconnecting && (
+          <div className="absolute -bottom-1 -left-1 w-7 h-7 rounded-full bg-warning flex items-center justify-center border-2 border-surface-950" title="Reconectando...">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="animate-spin">
+              <path d="M21 12a9 9 0 1 1-3-6.7" />
+              <polyline points="21 3 21 9 15 9" />
+            </svg>
+          </div>
+        )}
+        {isFailed && (
+          <button
+            onClick={onReconnect}
+            title="Sem conexão — clique para tentar novamente"
+            className="absolute -bottom-1 -left-1 w-7 h-7 rounded-full bg-danger flex items-center justify-center border-2 border-surface-950 hover:bg-red-700 transition-colors cursor-pointer"
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M23 4v6h-6M1 20v-6h6" />
+              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+            </svg>
+          </button>
+        )}
       </div>
       <span className="text-sm font-medium text-surface-200 truncate max-w-full">
         {isSelf ? 'Você' : participant.username}
       </span>
+      {isFailed && <span className="text-[10px] text-danger -mt-1.5">Sem conexão</span>}
     </div>
   );
 }
@@ -171,6 +199,18 @@ export function GroupCallView({ voice }: Props) {
   const [cinemaMode, setCinemaMode] = useState(false);
   const focusedVideoRef = useRef<HTMLVideoElement>(null);
   const focusedContainerRef = useRef<HTMLDivElement>(null);
+
+  // Aviso fixado pelo dono do grupo, exibido no topo da chamada.
+  const [announcementHtml, setAnnouncementHtml] = useState('');
+  useEffect(() => {
+    fetch(`/api/voice-channels/${vc?.id}/announcement`)
+      .then((r) => r.json())
+      .then((json) => setAnnouncementHtml(json.html));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Quantos participantes estão falando agora, pro contador do header.
+  const speakingCount = useMemo(() => voice.speakingUserIds.size, [voice.speakingUserIds]);
 
   // Foca automaticamente a primeira tela compartilhada disponível; troca
   // sozinho se quem estava em foco parar de compartilhar.
@@ -302,6 +342,10 @@ export function GroupCallView({ voice }: Props) {
 
   const nameFor = (uid: number) => vc.participants.find((p) => p.userId === uid)?.username ?? 'Alguém';
 
+  // Nomes de quem está reconectando ou com a conexão perdida agora — banner
+  // de topo some sozinho quando voice.peerHealth esvazia (ver useVoiceRoom).
+  const unstableNames = Array.from(voice.peerHealth.keys()).map(nameFor);
+
   const gridCols = vc.participants.length <= 1 ? 1 : vc.participants.length <= 4 ? 2 : vc.participants.length <= 6 ? 3 : 4;
 
   // Seletor "Tela / YouTube" (MediaSwitcher) só faz sentido quando as duas
@@ -317,6 +361,21 @@ export function GroupCallView({ voice }: Props) {
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-surface-950">
+      {(announcementHtml || speakingCount > 0) && (
+        <div className="px-4 py-2 flex items-center justify-between text-sm text-surface-300 bg-surface-900/60 border-b border-white/[0.06]">
+          <span dangerouslySetInnerHTML={{ __html: announcementHtml }} />
+          <span>{speakingCount} falando</span>
+        </div>
+      )}
+      {unstableNames.length > 0 && (
+        <div className="px-4 py-1.5 flex items-center gap-2 text-xs text-warning bg-warning/10 border-b border-warning/20">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
+            <path d="M21 12a9 9 0 1 1-3-6.7" />
+            <polyline points="21 3 21 9 15 9" />
+          </svg>
+          Conexão instável com {unstableNames.join(', ')}
+        </div>
+      )}
       <div className={`flex-1 overflow-hidden flex items-center justify-center min-h-0 ${cinemaMode ? 'p-0' : 'p-6'}`}>
         {effectiveFocus === 'screen' ? (
           <div className="w-full h-full flex flex-col gap-4">
@@ -559,6 +618,8 @@ export function GroupCallView({ voice }: Props) {
                   // quem não sou eu (antes só aparecia o ícone pra mim mesmo).
                   isMuted={isSelf ? voice.isMuted : !!p.isMuted}
                   isSpeaking={voice.speakingUserIds.has(p.userId)}
+                  health={isSelf ? undefined : voice.peerHealth.get(p.userId)}
+                  onReconnect={() => voice.reconnectPeer(p.userId)}
                 />
               );
             })}
