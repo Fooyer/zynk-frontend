@@ -152,6 +152,7 @@ export interface TicketCard {
   title: string;
   description: string | null;
   status: 'backlog' | 'in_progress' | 'done';
+  imageUrls: string[] | null;
   creator: Pick<User, 'id' | 'username' | 'avatarUrl'>;
   createdAt: string;
   likesCount: number;

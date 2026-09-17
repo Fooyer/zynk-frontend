@@ -13,7 +13,7 @@ interface TicketState {
   // mundo, mas likedByMe é por pessoa — só quem curtiu de fato muda o seu).
   applyLike: (payload: { ticketId: number; likesCount: number; userId: number; liked: boolean }, myUserId: number | undefined) => void;
 
-  createTicket: (data: { title: string; description?: string }) => Promise<TicketCard>;
+  createTicket: (data: { title: string; description?: string; imageUrls?: string[] }) => Promise<TicketCard>;
   updateTicket: (id: number, data: { status?: string; title?: string; description?: string }) => Promise<TicketCard>;
   deleteTicket: (id: number) => Promise<void>;
   toggleLike: (id: number) => Promise<void>;

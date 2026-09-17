@@ -697,10 +697,10 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
     }
   };
 
-  const startScreenShare = async (sourceId?: string) => {
+  const startScreenShare = async (sourceId?: string, withAudio = true) => {
     if (!activeVcId || isScreenSharing) return;
     try {
-      const screenStream = await captureScreenWithAudioFallback(sourceId);
+      const screenStream = await captureScreenWithAudioFallback(sourceId, withAudio);
       const videoTrack = screenStream.getVideoTracks()[0];
       if (!videoTrack) return;
       videoTrack.contentHint = 'detail';

@@ -39,7 +39,7 @@ export function CallManager() {
     setActive, setMuted, setScreenSharing, setRemoteHasScreen, reset,
   } = useCallStore();
   const [showScreenPicker, setShowScreenPicker] = useState(false);
-  const startScreenShareRef = useRef<((sourceId: string) => Promise<void>) | null>(null);
+  const startScreenShareRef = useRef<((sourceId: string, withAudio: boolean) => Promise<void>) | null>(null);
 
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
@@ -488,14 +488,14 @@ export function CallManager() {
     };
 
     // Função chamada pelo picker após o usuário escolher o source
-    startScreenShareRef.current = async (sourceId: string) => {
+    startScreenShareRef.current = async (sourceId: string, withAudio: boolean) => {
       const pc = pcRef.current;
       if (!pc) return;
       const { peerId: pid } = useCallStore.getState();
       if (!pid) return;
 
       try {
-        const screenStream = await captureScreenWithAudioFallback(sourceId);
+        const screenStream = await captureScreenWithAudioFallback(sourceId, withAudio);
 
         const videoTrack = screenStream.getVideoTracks()[0];
         if (!videoTrack) return;
@@ -612,9 +612,9 @@ export function CallManager() {
     reset();
   }, [cleanup, reset]);
 
-  const handlePickerSelect = useCallback((source: ScreenSource) => {
+  const handlePickerSelect = useCallback((source: ScreenSource, withAudio: boolean) => {
     setShowScreenPicker(false);
-    startScreenShareRef.current?.(source.id);
+    startScreenShareRef.current?.(source.id, withAudio);
   }, []);
 
   const handlePickerCancel = useCallback(() => {

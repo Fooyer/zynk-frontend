@@ -150,7 +150,7 @@ export const eventsAPI = {
 
 export const ticketsAPI = {
   list: () => api.get('/tickets'),
-  create: (data: { title: string; description?: string }) => api.post('/tickets', data),
+  create: (data: { title: string; description?: string; imageUrls?: string[] }) => api.post('/tickets', data),
   // status/title/description só têm efeito se quem chama for admin — o backend recusa senão.
   update: (id: number, data: { status?: string; title?: string; description?: string }) =>
     api.patch(`/tickets/${id}`, data),

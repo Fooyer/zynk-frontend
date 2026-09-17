@@ -28,9 +28,9 @@ export function VoiceStatusBar({ voice }: Props) {
     else setShowPicker(true);
   };
 
-  const handlePickerSelect = (source: ScreenSource) => {
+  const handlePickerSelect = (source: ScreenSource, withAudio: boolean) => {
     setShowPicker(false);
-    voice.startScreenShare(source.id);
+    voice.startScreenShare(source.id, withAudio);
   };
 
   // Barra de status é só "eu" — a lista com todo mundo da call fica na

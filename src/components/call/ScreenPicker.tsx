@@ -3,7 +3,7 @@ import { ScreenPickerSkeleton } from '../common/Skeleton';
 import type { ScreenSource } from '../../types';
 
 interface Props {
-  onSelect: (source: ScreenSource) => void;
+  onSelect: (source: ScreenSource, withAudio: boolean) => void;
   onCancel: () => void;
 }
 
@@ -12,6 +12,9 @@ export function ScreenPicker({ onSelect, onCancel }: Props) {
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'screens' | 'windows'>('screens');
+  // Padrão ligado — mesmo comportamento de antes (sempre tentava áudio);
+  // agora é escolha explícita, igual ao Google Meet.
+  const [withAudio, setWithAudio] = useState(true);
 
   useEffect(() => {
     window.electronAPI?.getScreenSources().then((s) => {
@@ -35,7 +38,7 @@ export function ScreenPicker({ onSelect, onCancel }: Props) {
 
   const handleConfirm = () => {
     const source = sources.find((s) => s.id === selected);
-    if (source) onSelect(source);
+    if (source) onSelect(source, withAudio);
   };
 
   return (
@@ -109,20 +112,40 @@ export function ScreenPicker({ onSelect, onCancel }: Props) {
         </div>
 
         {/* Footer */}
-        <div className="px-5 py-3 border-t border-white/[0.06] flex items-center justify-end gap-3">
+        <div className="px-5 py-3 border-t border-white/[0.06] flex items-center justify-between gap-3">
           <button
-            onClick={onCancel}
-            className="px-4 py-2 text-sm rounded-lg text-surface-300 hover:text-surface-100 hover:bg-white/[0.08] transition-colors"
+            onClick={() => setWithAudio((v) => !v)}
+            className="flex items-center gap-2.5"
           >
-            Cancelar
+            <span
+              className={`relative w-9 h-5 rounded-full transition-colors flex-shrink-0 ${
+                withAudio ? 'bg-accent-600' : 'bg-white/[0.14]'
+              }`}
+            >
+              <span
+                className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${
+                  withAudio ? 'translate-x-[18px]' : 'translate-x-0.5'
+                }`}
+              />
+            </span>
+            <span className="text-sm text-surface-300">Compartilhar áudio</span>
           </button>
-          <button
-            onClick={handleConfirm}
-            disabled={!selected}
-            className="px-4 py-2 zk-btn-primary text-sm rounded-lg"
-          >
-            Compartilhar
-          </button>
+
+          <div className="flex items-center gap-3">
+            <button
+              onClick={onCancel}
+              className="px-4 py-2 text-sm rounded-lg text-surface-300 hover:text-surface-100 hover:bg-white/[0.08] transition-colors"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={handleConfirm}
+              disabled={!selected}
+              className="px-4 py-2 zk-btn-primary text-sm rounded-lg"
+            >
+              Compartilhar
+            </button>
+          </div>
         </div>
       </div>
     </div>

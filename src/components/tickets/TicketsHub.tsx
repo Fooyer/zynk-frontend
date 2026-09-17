@@ -1,17 +1,36 @@
 import { useEffect, useRef, useState } from 'react';
-import { ticketsAPI } from '../../services/api';
+import { ticketsAPI, messagesAPI } from '../../services/api';
 import { useAuthStore } from '../../stores/authStore';
 import { useTicketStore } from '../../stores/ticketStore';
-import { confirmDialog } from '../../stores/dialogStore';
+import { confirmDialog, alertDialog } from '../../stores/dialogStore';
 import { useEditableContextMenu } from '../../hooks/useEditableContextMenu';
 import { getInitials, getUserColor } from '../../utils/formatDate';
 import type { TicketCard, TicketComment } from '../../types';
+
+const API_URL = 'https://zynk.fooyer.com';
 
 const COLUMNS: { id: TicketCard['status']; label: string; accent: string; dot: string }[] = [
   { id: 'backlog',     label: 'Backlog',        accent: 'border-white/[0.14]',   dot: 'bg-surface-500' },
   { id: 'in_progress', label: 'Em Andamento',   accent: 'border-yellow-500/60',  dot: 'bg-yellow-400' },
   { id: 'done',        label: 'Concluído',      accent: 'border-green-500/60',   dot: 'bg-green-400' },
 ];
+
+// Reaproveita o endpoint genérico de upload das mensagens (/messages/upload)
+// — não é lógica de chat, só "recebe um arquivo, devolve uma URL".
+const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+const MAX_IMAGE_SIZE = 25 * 1024 * 1024; // 25 MB — igual ao limite do backend
+const MAX_IMAGES = 6;
+
+function ImageLightbox({ src, onClose }: { src: string; onClose: () => void }) {
+  return (
+    <div
+      className="fixed inset-0 bg-black/80 flex items-center justify-center z-[60] p-8 animate-fade-in"
+      onClick={(e) => { e.stopPropagation(); onClose(); }}
+    >
+      <img src={src} alt="" className="max-w-full max-h-full rounded-lg shadow-panel" />
+    </div>
+  );
+}
 
 function Avatar({ name, avatarUrl, size = 6 }: { name: string; avatarUrl?: string | null; size?: number }) {
   const s = `w-${size} h-${size}`;
@@ -51,19 +70,56 @@ function CreateTicketModal({ onClose }: CreateTicketModalProps) {
   const createTicket = useTicketStore((s) => s.createTicket);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
+  const [images, setImages] = useState<File[]>([]);
+  const [previews, setPreviews] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const titleRef = useRef<HTMLInputElement>(null);
   const handleTitleContextMenu = useEditableContextMenu(titleRef);
   const descriptionRef = useRef<HTMLTextAreaElement>(null);
   const handleDescriptionContextMenu = useEditableContextMenu(descriptionRef);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const previewsRef = useRef<string[]>([]);
+  previewsRef.current = previews;
+
+  // Libera os object URLs de preview quando o modal fecha, mesmo se o
+  // usuário nunca chegou a enviar o ticket.
+  useEffect(() => () => { previewsRef.current.forEach((p) => URL.revokeObjectURL(p)); }, []);
+
+  const handleFilesSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []);
+    e.target.value = '';
+    if (files.length === 0) return;
+
+    const room = MAX_IMAGES - images.length;
+    const accepted = files.filter((f) => IMAGE_TYPES.includes(f.type) && f.size <= MAX_IMAGE_SIZE).slice(0, room);
+    if (accepted.length === 0) return;
+
+    setImages((prev) => [...prev, ...accepted]);
+    setPreviews((prev) => [...prev, ...accepted.map((f) => URL.createObjectURL(f))]);
+  };
+
+  const removeImage = (index: number) => {
+    setPreviews((prev) => {
+      URL.revokeObjectURL(prev[index]);
+      return prev.filter((_, i) => i !== index);
+    });
+    setImages((prev) => prev.filter((_, i) => i !== index));
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim() || isSaving) return;
     setIsSaving(true);
     try {
-      await createTicket({ title: title.trim(), description: description.trim() || undefined });
+      let imageUrls: string[] | undefined;
+      if (images.length > 0) {
+        const uploaded = await Promise.all(images.map((file) => messagesAPI.uploadFile(file)));
+        imageUrls = uploaded.map((r) => r.data.imageUrl).filter((u): u is string => !!u);
+      }
+      await createTicket({ title: title.trim(), description: description.trim() || undefined, imageUrls });
       onClose();
+    } catch {
+      alertDialog('Erro ao abrir o ticket. Tente novamente.', { title: 'Falha ao enviar' });
     } finally {
       setIsSaving(false);
     }
@@ -99,6 +155,41 @@ function CreateTicketModal({ onClose }: CreateTicketModalProps) {
           className="zk-input w-full px-3 py-2 rounded-xl text-sm resize-none"
         />
 
+        {previews.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {previews.map((src, i) => (
+              <div key={src} className="relative">
+                <img src={src} alt="" className="w-16 h-16 rounded-lg object-cover border border-white/[0.08]" />
+                <button
+                  type="button"
+                  onClick={() => removeImage(i)}
+                  className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center text-[10px] transition-colors"
+                  aria-label="Remover imagem"
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div>
+          <input ref={fileInputRef} type="file" accept="image/*" multiple hidden onChange={handleFilesSelect} />
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={images.length >= MAX_IMAGES}
+            className="flex items-center gap-1.5 text-xs text-surface-400 hover:text-surface-200 disabled:opacity-40 disabled:hover:text-surface-400 transition-colors"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="2" />
+              <circle cx="8.5" cy="8.5" r="1.5" />
+              <path d="M21 15l-5-5L5 21" />
+            </svg>
+            Anexar imagem{images.length > 0 ? ` (${images.length}/${MAX_IMAGES})` : ''}
+          </button>
+        </div>
+
         <div className="flex gap-2 justify-end">
           <button type="button" onClick={onClose} className="px-3 py-1.5 text-sm text-surface-400 hover:text-surface-100 transition-colors">
             Cancelar
@@ -130,6 +221,7 @@ function TicketDetailModal({ ticket, isAdmin, onClose }: TicketDetailModalProps)
   const [isLoadingComments, setIsLoadingComments] = useState(true);
   const [newComment, setNewComment] = useState('');
   const [isCommenting, setIsCommenting] = useState(false);
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
   const titleRef = useRef<HTMLInputElement>(null);
   const handleTitleContextMenu = useEditableContextMenu(titleRef);
   const descriptionRef = useRef<HTMLTextAreaElement>(null);
@@ -218,6 +310,20 @@ function TicketDetailModal({ ticket, isAdmin, onClose }: TicketDetailModalProps)
             <p className="text-sm text-surface-600 italic">Sem descrição.</p>
           )}
         </div>
+
+        {ticket.imageUrls && ticket.imageUrls.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {ticket.imageUrls.map((url) => (
+              <img
+                key={url}
+                src={`${API_URL}${url}`}
+                alt=""
+                onClick={() => setLightboxUrl(`${API_URL}${url}`)}
+                className="w-20 h-20 rounded-lg object-cover border border-white/[0.08] cursor-pointer hover:opacity-80 transition-opacity"
+              />
+            ))}
+          </div>
+        )}
 
         {isAdmin && (
           <div>
@@ -313,6 +419,8 @@ function TicketDetailModal({ ticket, isAdmin, onClose }: TicketDetailModalProps)
           </div>
         )}
       </div>
+
+      {lightboxUrl && <ImageLightbox src={lightboxUrl} onClose={() => setLightboxUrl(null)} />}
     </div>
   );
 }
@@ -430,6 +538,17 @@ export function TicketsHub() {
                       <div className="flex items-center gap-2 mt-2.5">
                         <Avatar name={ticket.creator.username} avatarUrl={ticket.creator.avatarUrl} size={5} />
                         <span className="text-[10px] text-surface-600 truncate">{ticket.creator.username}</span>
+
+                        {ticket.imageUrls && ticket.imageUrls.length > 0 && (
+                          <span className="flex items-center gap-0.5 text-[10px] text-surface-600" title={`${ticket.imageUrls.length} imagem(ns)`}>
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <rect x="3" y="3" width="18" height="18" rx="2" />
+                              <circle cx="8.5" cy="8.5" r="1.5" />
+                              <path d="M21 15l-5-5L5 21" />
+                            </svg>
+                            {ticket.imageUrls.length}
+                          </span>
+                        )}
 
                         {ticket.status === 'backlog' && (
                           <div className="ml-auto">

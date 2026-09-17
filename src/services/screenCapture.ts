@@ -4,8 +4,11 @@ import { selectDialog } from '../stores/dialogStore';
  * Captura a tela usando getDisplayMedia.
  * Se sourceId é fornecido (Electron), avisa o main process antes para que o
  * setDisplayMediaRequestHandler use o source escolhido pelo usuário.
+ * withAudio controla o switch "Compartilhar áudio" do ScreenPicker — quando
+ * false, nem pede a faixa de áudio (e o fallback do Linux abaixo nem chega a
+ * perguntar dispositivo nenhum).
  */
-export async function captureScreen(sourceId?: string): Promise<MediaStream> {
+export async function captureScreen(sourceId?: string, withAudio = true): Promise<MediaStream> {
   try {
     // O await garante que o main process já guardou o source ANTES
     // de getDisplayMedia disparar o handler.
@@ -19,7 +22,7 @@ export async function captureScreen(sourceId?: string): Promise<MediaStream> {
     // volta só com vídeo. Mesmo assim, no Linux o stream ainda volta sem
     // áudio (loopback só existe no Windows/macOS) — ver
     // captureScreenWithAudioFallback logo abaixo.
-    return await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+    return await navigator.mediaDevices.getDisplayMedia({ video: true, audio: withAudio });
   } catch (e) {
     console.error('[captureScreen] getDisplayMedia falhou:', e);
     throw e;
@@ -59,14 +62,16 @@ async function pickFallbackAudioTrack(): Promise<MediaStreamTrack | null> {
 }
 
 /**
- * Captura a tela e, se o stream não vier com áudio (comum no Linux — ver
- * pickFallbackAudioTrack acima), pergunta ao usuário um dispositivo
- * alternativo e anexa a faixa resultante ao mesmo stream antes de devolver —
- * assim quem chama continua lendo `getAudioTracks()[0]` normalmente.
+ * Captura a tela e, se withAudio estiver ligado mas o stream não vier com
+ * áudio (comum no Linux — ver pickFallbackAudioTrack acima), pergunta ao
+ * usuário um dispositivo alternativo e anexa a faixa resultante ao mesmo
+ * stream antes de devolver — assim quem chama continua lendo
+ * `getAudioTracks()[0]` normalmente. Com withAudio desligado, nem chega a
+ * perguntar — a pessoa escolheu explicitamente compartilhar só o vídeo.
  */
-export async function captureScreenWithAudioFallback(sourceId?: string): Promise<MediaStream> {
-  const stream = await captureScreen(sourceId);
-  if (stream.getAudioTracks().length === 0) {
+export async function captureScreenWithAudioFallback(sourceId?: string, withAudio = true): Promise<MediaStream> {
+  const stream = await captureScreen(sourceId, withAudio);
+  if (withAudio && stream.getAudioTracks().length === 0) {
     const fallbackTrack = await pickFallbackAudioTrack();
     if (fallbackTrack) stream.addTrack(fallbackTrack);
   }

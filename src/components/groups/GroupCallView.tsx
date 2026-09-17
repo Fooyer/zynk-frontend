@@ -329,9 +329,9 @@ export function GroupCallView({ voice }: Props) {
     else setShowPicker(true);
   };
 
-  const handlePickerSelect = (source: ScreenSource) => {
+  const handlePickerSelect = (source: ScreenSource, withAudio: boolean) => {
     setShowPicker(false);
-    voice.startScreenShare(source.id);
+    voice.startScreenShare(source.id, withAudio);
   };
 
   // Passa a fonte atual como referência — o servidor usa isso pra ignorar
