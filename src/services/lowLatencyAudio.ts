@@ -6,14 +6,17 @@
  */
 
 /**
- * getUserMedia sem AEC/NS/AGC — cada um desses processamentos do navegador
- * adiciona buffer e portanto delay. Conversa normal quer eles ligados (evita
- * eco, estabiliza volume); call de jogo abre mão disso pra cortar o delay.
- * Sem fone de ouvido pode voltar a captar o próprio áudio do jogo (sem AEC),
- * então isso é pensado pra quem já joga de headset.
+ * getUserMedia sem NS/AGC — cada um desses processamentos do navegador
+ * adiciona buffer e portanto delay, e call de jogo abre mão disso pra cortar
+ * o delay. echoCancellation FICA DE FORA daqui de propósito: quem joga de
+ * caixa de som (sem fone) captava de volta o próprio áudio do jogo/sistema
+ * (ticket "Eco do sistema") porque esse modo sempre ia com AEC desligado,
+ * sem nenhuma forma de religar. Agora quem monta os constraints (ver
+ * getProcessedStream em audioProcessing.ts) aplica `settings.echoCancellation`
+ * por cima disso — AEC sozinho não pesa tanto no delay quanto NS/AGC juntos,
+ * então dá pra manter ligado (o padrão) mesmo em call de jogo.
  */
 export const LOW_LATENCY_AUDIO_CONSTRAINTS: MediaTrackConstraints = {
-  echoCancellation: false,
   noiseSuppression: false,
   autoGainControl: false,
 };

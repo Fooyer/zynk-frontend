@@ -108,12 +108,16 @@ export async function getProcessedStream(
   const settings = useSettingsStore.getState();
   const monitor = opts.monitor ?? false;
 
-  // Call de jogo: ignora as preferências de processamento do usuário e vai
-  // sempre de áudio cru — é o próprio propósito desse modo (menor delay
-  // possível, abre mão de eco/ruído em troca disso).
+  // Call de jogo: ignora as preferências de supressão de ruído/ganho do
+  // usuário e vai de áudio cru nesses dois pontos — é o próprio propósito
+  // desse modo (menor delay possível). echoCancellation continua seguindo a
+  // preferência normal (Configurações > Áudio, padrão ligado): sem isso,
+  // quem joga de caixa de som (sem fone) captava de volta o próprio áudio
+  // do jogo/sistema, sem nenhuma forma de evitar (ticket "Eco do sistema").
   if (mode === 'game') {
     const deviceConstraints: MediaTrackConstraints = {
       ...LOW_LATENCY_AUDIO_CONSTRAINTS,
+      echoCancellation: settings.echoCancellation,
       channelCount: 1,
       sampleRate: 48000,
     };
