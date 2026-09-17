@@ -59,14 +59,14 @@ O processo main **nunca** confia em argumentos vindos do renderer. Para todo
 IPC handler que recebe dados (especialmente paths de arquivo):
 
 - **Path traversal** — **PROIBIDO** aceitar paths arbitrários sem validação.
-  Os handlers de filesystem/código (`fs:*`, `tunnel:*`) recebem paths do
-  renderer; validar que estão dentro da pasta de trabalho escolhida pelo
-  usuário antes de ler/escrever. Ex.: `tunnel:write-remote-file` faz
-  `path.join(folderPath, relativePath)` — garantir que `relativePath` não
-  escapole com `..` e que o resultado permanece sob `folderPath`.
+  Não existe hoje nenhum handler IPC que exponha leitura/escrita de
+  filesystem arbitrário ao renderer (o recurso "Code Sessions" que fazia
+  isso foi removido por ser inseguro). Se um handler assim for reintroduzido
+  no futuro, ele DEVE validar que qualquer path recebido do renderer fica
+  confinado a uma pasta de trabalho escolhida pelo usuário — nunca fazer
+  `path.join(base, userInput)` sem checar que o resultado permanece sob
+  `base` (guarda contra `..`).
 - Validar tipos (número/string), tamanhos e limites:
-  - Arquivos a ler/processar devem ter limite de tamanho (ex.: o file
-    watcher ignora arquivos > 1 MB — `if (stat.size > 1024 * 1024) return`).
   - Validar números de slot de gamepad (1..N), channelId, etc., no main.
 - Tratar erros com `try/catch` e retornar estado de falha **sem** vazar
   detalhes internos (stack traces, paths internos) para o renderer.

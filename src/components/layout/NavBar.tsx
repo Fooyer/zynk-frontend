@@ -4,6 +4,7 @@ import { useFriendStore } from '../../stores/friendStore';
 import { useGroupStore } from '../../stores/groupStore';
 import { useUnreadStore } from '../../stores/unreadStore';
 import { useEventStore } from '../../stores/eventStore';
+import { useTicketStore } from '../../stores/ticketStore';
 import { useAuthStore } from '../../stores/authStore';
 import { confirmDialog } from '../../stores/dialogStore';
 import { useContextMenuStore } from '../../stores/contextMenuStore';
@@ -108,6 +109,7 @@ export function NavBar() {
   const unreadCounts = useUnreadStore((s) => s.counts);
   const channelGroupMap = useUnreadStore((s) => s.channelGroup);
   const events = useEventStore((s) => s.events);
+  const tickets = useTicketStore((s) => s.tickets);
   const groups = useGroupStore((s) => s.groups);
   const isLoadingGroups = useGroupStore((s) => s.isLoading);
   const activeGroupId = useGroupStore((s) => s.activeGroupId);
@@ -143,6 +145,12 @@ export function NavBar() {
   const pendingInvitesCount = useMemo(
     () => events.filter((e) => e.myStatus === null && Number(e.creator.id) !== Number(currentUser?.id)).length,
     [events, currentUser?.id],
+  );
+
+  // Badge de "Tickets" = quantos estão no backlog (ainda não triados).
+  const backlogTicketsCount = useMemo(
+    () => tickets.filter((t) => t.status === 'backlog').length,
+    [tickets],
   );
 
   // Badge de cada grupo (servidor) = soma das não lidas de todos os seus canais de texto
@@ -287,6 +295,13 @@ export function NavBar() {
                 </svg>
               </NavIconButton>
 
+              <NavIconButton active={view === 'tickets'} onClick={() => setView('tickets')} title="Tickets" badge={backlogTicketsCount}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M3 9a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v2a2 2 0 0 0 0 4v2a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-2a2 2 0 0 0 0-4V9z" />
+                  <line x1="10" y1="7" x2="10" y2="17" strokeDasharray="2 2" />
+                </svg>
+              </NavIconButton>
+
               <div className="w-6 h-px bg-white/[0.08] flex-shrink-0 my-1" />
 
               {isLoadingGroups && groups.length === 0 && <GroupRailSkeleton collapsed />}
@@ -409,6 +424,20 @@ export function NavBar() {
                   </svg>
                 }
                 label="Eventos"
+              />
+
+              {/* Tickets */}
+              <NavRow
+                active={view === 'tickets'}
+                onClick={() => setView('tickets')}
+                badge={backlogTicketsCount}
+                icon={
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M3 9a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v2a2 2 0 0 0 0 4v2a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-2a2 2 0 0 0 0-4V9z" />
+                    <line x1="10" y1="7" x2="10" y2="17" strokeDasharray="2 2" />
+                  </svg>
+                }
+                label="Tickets"
               />
 
               {/* Grupos (servidores) */}

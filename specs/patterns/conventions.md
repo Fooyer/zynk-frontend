@@ -97,8 +97,8 @@
 - Novos métodos IPC devem ser adicionados em: `electron/preload.ts` (bridge),
   `electron/main.ts` (handler), e tipados em `src/types/index.ts` (interface
   `Window.electronAPI`).
-- Siga as convenções de nome: `dominio:acao` (ex.: `fs:read-dir`,
-  `screen:get-sources`, `gamepad:create-slot`).
+- Siga as convenções de nome: `dominio:acao` (ex.: `screen:get-sources`,
+  `gamepad:create-slot`).
 
 ## 10. Segurança de dados exibidos
 

@@ -10,6 +10,7 @@ import { generateAccentRamp, getReadableTextColor, mixHex, rgbTriple } from './u
 import { PRESET_RAMPS } from './utils/accentPresets';
 import { useCallStore } from './stores/callStore';
 import { useEventStore } from './stores/eventStore';
+import { useTicketStore } from './stores/ticketStore';
 import { useSocket } from './hooks/useSocket';
 import { useVoiceRoom } from './hooks/useVoiceRoom';
 import { ActiveCallOverlay } from './components/call/ActiveCallOverlay';
@@ -23,6 +24,7 @@ import { SettingsPage } from './components/settings/SettingsPage';
 import { GroupLayout } from './components/groups/GroupLayout';
 import { WatchTogetherFloatingPlayer } from './components/groups/WatchTogetherFloatingPlayer';
 import { EventsHub } from './components/events/EventsHub';
+import { TicketsHub } from './components/tickets/TicketsHub';
 import { EventInviteModal } from './components/events/EventInviteModal';
 import { EventCountdownOverlay } from './components/events/EventCountdownOverlay';
 import { DialogHost } from './components/common/DialogHost';
@@ -108,13 +110,15 @@ function AppLayout() {
   const voice = useVoiceRoom(activeGroupId ?? 0, activeGroup?.channelId ?? null);
 
   const loadEvents = useEventStore((s) => s.loadEvents);
+  const loadTickets = useTicketStore((s) => s.loadTickets);
 
   useEffect(() => {
     loadFriends();
     loadDmChannels();
     loadGroups();
     loadEvents();
-  }, [loadFriends, loadDmChannels, loadGroups, loadEvents]);
+    loadTickets();
+  }, [loadFriends, loadDmChannels, loadGroups, loadEvents, loadTickets]);
 
   // A barra flutuante só aparece quando a chamada está ativa e o usuário
   // não está olhando para a própria conversa (que já tem os controles inline).
@@ -132,6 +136,7 @@ function AppLayout() {
         {view === 'settings' ? <SettingsPage />
           : view === 'group' ? <GroupLayout voice={voice} />
           : view === 'events' ? <EventsHub />
+          : view === 'tickets' ? <TicketsHub />
           : <HomeLayout voice={voice} />}
       </div>
       <CallManager />

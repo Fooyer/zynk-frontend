@@ -8,8 +8,9 @@ import { useUiStore } from '../stores/uiStore';
 import { useUnreadStore } from '../stores/unreadStore';
 import { usePollStore } from '../stores/pollStore';
 import { useEventStore } from '../stores/eventStore';
+import { useTicketStore } from '../stores/ticketStore';
 import { useAuthStore } from '../stores/authStore';
-import type { Message, Poll, ServerEvent, TypingEvent, UserStatusEvent } from '../types';
+import type { Message, Poll, ServerEvent, TicketCard, TypingEvent, UserStatusEvent } from '../types';
 
 export function useSocket() {
   const addMessage = useChatStore((s) => s.addMessage);
@@ -108,6 +109,15 @@ export function useSocket() {
       useEventStore.getState().removeEvent(data.eventId);
     });
 
+    // Board de tickets é autoritativo do servidor (ver notifyTicket* no
+    // gateway) — chega pra todo mundo autenticado, incluindo quem agiu.
+    socket.on('tickets:created', (ticket: TicketCard) => useTicketStore.getState().upsertTicket(ticket));
+    socket.on('tickets:updated', (ticket: TicketCard) => useTicketStore.getState().upsertTicket(ticket));
+    socket.on('tickets:deleted', (data: { ticketId: number }) => useTicketStore.getState().removeTicket(data.ticketId));
+    socket.on('tickets:liked', (payload: { ticketId: number; likesCount: number; userId: number; liked: boolean }) => {
+      useTicketStore.getState().applyLike(payload, useAuthStore.getState().user?.id);
+    });
+
     socket.on('error', (err: { message: string }) => {
       console.error('[Socket Error]', err.message);
     });
@@ -193,6 +203,10 @@ export function useSocket() {
       socket.off('poll:deleted');
       socket.off('event:created');
       socket.off('event:deleted');
+      socket.off('tickets:created');
+      socket.off('tickets:updated');
+      socket.off('tickets:deleted');
+      socket.off('tickets:liked');
       socket.off('error');
       socket.off('connect');
       socket.off('disconnect');

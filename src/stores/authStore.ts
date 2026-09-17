@@ -5,6 +5,7 @@ import type { User } from '../types';
 import { useChatStore } from './chatStore';
 import { useFriendStore } from './friendStore';
 import { useUiStore } from './uiStore';
+import { useTicketStore } from './ticketStore';
 
 interface AuthState {
   user: User | null;
@@ -59,6 +60,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     useChatStore.getState().clearMessages();
     useChatStore.setState({ typingUsers: {} });
     useFriendStore.setState({ friends: [], requests: [], sent: [], dmChannels: [], activeDmChannelId: null, error: null });
+    useTicketStore.setState({ tickets: [], isLoaded: false });
     useUiStore.setState({ view: 'home' });
     set({ user: null, token: null });
   },

@@ -21,7 +21,6 @@
 | Token JWT (autenticação) | Alta |
 | Dados de usuário/conversas | Alta |
 | Credenciais TURN / tokens de API | Média |
-| Código/arquivos locais (code sessions) | Alta |
 | Marcador de gamepad / screen capture | Baixa-Média |
 | Acesso ao sistema via IPC do main | **Crítica** |
 
@@ -31,7 +30,6 @@
 |---|---|---|---|---|
 | T1 | **RCE no renderer via XSS** que escala para o main | Crítico | Conteúdo de chat malicioso; `dangerouslySetInnerHTML`; `eval` | `contextIsolation: true`, `nodeIntegration: false`, ponte estreita via preload, CSP rígida, escaping React, sanitização |
 | T2 | **Escalada de privilégio via IPC** (renderer chama handler cru) | Crítico | Expor `ipcRenderer` genérico na bridge | `contextBridge` com métodos estreitos e tipados; estilo `dominio:acao`; sem `invoke` coringa |
-| T3 | **Path traversal** em handlers de filesystem/código | Alto | `fs:*`, `tunnel:*` com path do renderer contendo `..` | Validar path dentro do root escolhido; limites de tamanho; try/catch fail-closed |
 | T4 | **Exfiltração de dados/dados entre contas** | Alto | Troca de conta sem limpar estado | `logout` limpa todos os stores; remove token; desconecta socket |
 | T5 | **Seqüestro/roubo de token** | Crítico | XSS, log indevido, MitM em transporte | Token em `localStorage`; HTTPS (`https://zynk.fooyer.com`) no transporte; PROIBIDO logar token; interceptor 401 limpa token |
 | T6 | **Conteúdo remoto malicioso renderizado** (iframe/webview) | Alto | `frame-src` aberto, link externo abrindo dentro da janela | CSP `frame-src` só YouTube; `setWindowOpenHandler` → `shell.openExternal` + deny; não navegar o webContents |
@@ -49,8 +47,6 @@
 2. **Conteúdo renderizado** (chat, mensagens, código colaborativo, links) —
    origem de XSS. Apenas texto escapado.
 3. **Redes/media** — transporte já HTTPS; WebRTC protegido por SRTP/DTLS.
-4. **Filesystem local** — handlers `fs:*`/`tunnel:*` — risco de leitura/
-   escrita arbitrária; validar paths.
 
 ## 5. Pressupostos e limites
 

@@ -8,6 +8,9 @@ export interface User {
   avatarUrl: string | null;
   status: 'online' | 'offline' | 'away' | 'in_call';
   createdAt: string;
+  // Admin único do app (dono do Zynk) — controla quem pode mover/editar/
+  // apagar tickets e comentar neles. Calculado no backend por e-mail.
+  isAdmin?: boolean;
 }
 
 export interface ReplyTo {
@@ -139,6 +142,27 @@ export interface KanbanCard {
   status: 'todo' | 'doing' | 'done';
   creator: Pick<User, 'id' | 'username' | 'avatarUrl'>;
   assignee: Pick<User, 'id' | 'username' | 'avatarUrl'> | null;
+  createdAt: string;
+}
+
+// ─── Tickets (board global, não escopado a grupo) ──────────
+
+export interface TicketCard {
+  id: number;
+  title: string;
+  description: string | null;
+  status: 'backlog' | 'in_progress' | 'done';
+  creator: Pick<User, 'id' | 'username' | 'avatarUrl'>;
+  createdAt: string;
+  likesCount: number;
+  likedByMe: boolean;
+}
+
+export interface TicketComment {
+  id: number;
+  ticketId: number;
+  body: string;
+  author: Pick<User, 'id' | 'username' | 'avatarUrl'>;
   createdAt: string;
 }
 
@@ -301,19 +325,6 @@ declare global {
       gamepadDestroySlot: (slot: number) => Promise<void>;
       gamepadDestroyAllSlots: () => Promise<void>;
       gamepadInputSlot: (slot: number, state: { index: number; timestamp: number; buttons: { pressed: boolean; value: number }[]; axes: number[] }) => void;
-      // Filesystem (code sessions)
-      fsSelectFolder: () => Promise<string | null>;
-      fsReadDir: (dirPath: string) => Promise<Array<{ name: string; isDirectory: boolean; path: string }>>;
-      fsReadFile: (filePath: string) => Promise<string | null>;
-      fsSaveFile: (filePath: string, content: string) => Promise<boolean>;
-      // Code tunnel (VS Code + file watcher)
-      tunnelOpenVSCode: (folderPath: string) => Promise<{ success: boolean; error?: string }>;
-      tunnelWatchFolder: (folderPath: string) => Promise<{ success: boolean; error?: string }>;
-      tunnelStopWatching: () => Promise<void>;
-      tunnelWriteRemoteFile: (folderPath: string, relativePath: string, content: string) => Promise<boolean>;
-      tunnelDeleteRemoteFile: (folderPath: string, relativePath: string) => Promise<boolean>;
-      tunnelOnFileChanged: (callback: (data: { relativePath: string; action: 'change' | 'create' | 'delete'; content: string | null }) => void) => void;
-      tunnelOffFileChanged: () => void;
       // Atalhos globais (funcionam mesmo com o Zynk em segundo plano, ex.:
       // mutar durante um jogo) — registrados via globalShortcut no main.
       setGlobalShortcuts: (items: { action: string; accelerator: string }[]) => Promise<{ failed: string[] }>;
