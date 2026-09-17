@@ -11,6 +11,12 @@ interface SettingsState {
   noiseSuppression: boolean; // liga/desliga só — RNNoise contínuo, sem níveis
   echoCancellation: boolean;
   autoGainControl: boolean;
+  // Experimental: cancela eco de áudio que o PRÓPRIO Zynk não está tocando
+  // (jogo separado, sons do Windows) usando o loopback do sistema como
+  // referência — o echoCancellation nativo acima só cancela o que o Zynk
+  // reproduz. Ver systemLoopback.ts/systemEchoCancelWorklet.js. Desligado
+  // por padrão: é um filtro adaptativo calibrado sem teste de áudio ao vivo.
+  systemEchoCancellation: boolean;
   // Isolamento de voz — atenua (não corta) o que sobra de ruído de fundo
   // depois do RNNoise, principalmente nas pausas entre falas. Complementa a
   // supressão de ruído, não substitui — só roda dentro do mesmo pipeline
@@ -35,6 +41,7 @@ interface SettingsState {
   setNoiseSuppression: (v: boolean) => void;
   setEchoCancellation: (v: boolean) => void;
   setAutoGainControl: (v: boolean) => void;
+  setSystemEchoCancellation: (v: boolean) => void;
   setNoiseGateEnabled: (v: boolean) => void;
   setNoiseGateAuto: (v: boolean) => void;
   setNoiseGateThreshold: (v: number) => void;
@@ -53,6 +60,7 @@ export const useSettingsStore = create<SettingsState>()(
       noiseSuppression: true,
       echoCancellation: true,
       autoGainControl: true,
+      systemEchoCancellation: false,
       noiseGateEnabled: true,
       noiseGateAuto: true,
       noiseGateThreshold: -40,
@@ -69,6 +77,7 @@ export const useSettingsStore = create<SettingsState>()(
       setNoiseSuppression: (noiseSuppression) => set({ noiseSuppression }),
       setEchoCancellation: (echoCancellation) => set({ echoCancellation }),
       setAutoGainControl: (autoGainControl) => set({ autoGainControl }),
+      setSystemEchoCancellation: (systemEchoCancellation) => set({ systemEchoCancellation }),
       setNoiseGateEnabled: (noiseGateEnabled) => set({ noiseGateEnabled }),
       setNoiseGateAuto: (noiseGateAuto) => set({ noiseGateAuto }),
       setNoiseGateThreshold: (noiseGateThreshold) => set({ noiseGateThreshold }),

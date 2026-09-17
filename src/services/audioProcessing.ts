@@ -4,8 +4,10 @@ import rnnoiseWasmSimdPath from '@sapphi-red/web-noise-suppressor/rnnoise_simd.w
 import rnnoiseWorkletPath from '@sapphi-red/web-noise-suppressor/rnnoiseWorklet.js?url';
 import agcWorkletPath from './agcWorklet.js?url';
 import noiseGateWorkletPath from './noiseGateWorklet.js?url';
+import systemEchoCancelWorkletPath from './systemEchoCancelWorklet.js?url';
 import { useSettingsStore } from '../stores/settingsStore';
 import { LOW_LATENCY_AUDIO_CONSTRAINTS } from './lowLatencyAudio';
+import { getOrCreateSystemLoopbackTrack } from './systemLoopback';
 import type { CallMode } from '../types';
 
 // Binário do RNNoise é ~600KB — busca/compila uma vez só e reaproveita em
@@ -143,8 +145,9 @@ export async function getProcessedStream(
 
   const rawStream = await navigator.mediaDevices.getUserMedia({ audio: deviceConstraints });
 
-  // Supressão desligada — retorna stream cru sem processamento
-  if (!settings.noiseSuppression) {
+  // Nem supressão de ruído nem AEC de sistema ligados — retorna stream cru
+  // sem processamento nenhum.
+  if (!settings.noiseSuppression && !settings.systemEchoCancellation) {
     const { analyser, stop } = monitorRawStream(rawStream, monitor);
     return { stream: rawStream, analyser, stop };
   }
@@ -155,6 +158,52 @@ export async function getProcessedStream(
 
     const source = forceMono(audioCtx.createMediaStreamSource(rawStream));
     const destination = forceMono(audioCtx.createMediaStreamDestination());
+
+    // Cancelamento de eco "de sistema" (experimental, ver systemLoopback.ts)
+    // — roda ANTES de qualquer outra coisa de propósito: precisa do sinal do
+    // microfone o mais cru possível pra correlacionar direito com a
+    // referência (loopback do sistema). Se a captura do loopback falhar por
+    // qualquer motivo (permissão, Linux, sem gesto do usuário — ver
+    // systemLoopback.ts), simplesmente não entra no grafo; resto do
+    // pipeline segue normal.
+    let micNode: AudioNode = source;
+    if (settings.systemEchoCancellation) {
+      const loopbackTrack = await getOrCreateSystemLoopbackTrack();
+      if (loopbackTrack) {
+        await audioCtx.audioWorklet.addModule(systemEchoCancelWorkletPath);
+        const refSource = forceMono(audioCtx.createMediaStreamSource(new MediaStream([loopbackTrack])));
+        const aecNode = forceMono(
+          new AudioWorkletNode(audioCtx, 'system-aec-processor', {
+            numberOfInputs: 2,
+            numberOfOutputs: 1,
+            channelCount: 1,
+            channelCountMode: 'explicit',
+            channelInterpretation: 'speakers',
+          }),
+        );
+        micNode.connect(aecNode, 0, 0);
+        refSource.connect(aecNode, 0, 1);
+        micNode = aecNode;
+      }
+    }
+
+    // Supressão de ruído desligada (mas AEC de sistema ligado, senão já
+    // teria caído no early-return acima) — conecta o mic (já com AEC de
+    // sistema aplicado) direto no destino, sem RNNoise/gate/compressor/AGC.
+    if (!settings.noiseSuppression) {
+      micNode.connect(destination);
+      const rawAnalyser = forceMono(audioCtx.createAnalyser());
+      rawAnalyser.fftSize = 256;
+      micNode.connect(rawAnalyser);
+      if (monitor) micNode.connect(audioCtx.destination);
+
+      const outStream = new MediaStream([...destination.stream.getAudioTracks()]);
+      const stop = () => {
+        rawStream.getTracks().forEach((t) => t.stop());
+        audioCtx.close().catch(() => {});
+      };
+      return { stream: outStream, analyser: rawAnalyser, stop };
+    }
 
     const inputGain = forceMono(audioCtx.createGain());
     inputGain.gain.value = settings.inputVolume;
@@ -171,7 +220,7 @@ export async function getProcessedStream(
     lowPass.frequency.value = 11000;
     lowPass.Q.value = 0.71;
 
-    source.connect(inputGain);
+    micNode.connect(inputGain);
     inputGain.connect(highPass);
     highPass.connect(lowPass);
 

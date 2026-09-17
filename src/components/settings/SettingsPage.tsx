@@ -5,6 +5,7 @@ import { useThemeStore, type AccentMode, type AccentPreset } from '../../stores/
 import { PRESET_SWATCH, PRESET_LABELS } from '../../utils/accentPresets';
 import { useAuthStore } from '../../stores/authStore';
 import { getProcessedStream } from '../../services/audioProcessing';
+import { getOrCreateSystemLoopbackTrack, releaseSystemLoopbackTrack } from '../../services/systemLoopback';
 import { useEditableContextMenu } from '../../hooks/useEditableContextMenu';
 import { useKeybindingsStore, type ShortcutActionId } from '../../stores/keybindingsStore';
 import { useShortcutStatusStore } from '../../stores/shortcutStatusStore';
@@ -437,11 +438,21 @@ function OutputSection({ outputs }: { outputs: DeviceInfo[] }) {
 
 function ProcessingSection() {
   const {
-    noiseSuppression, echoCancellation, autoGainControl,
+    noiseSuppression, echoCancellation, autoGainControl, systemEchoCancellation,
     noiseGateEnabled, noiseGateAuto, noiseGateThreshold,
-    setNoiseSuppression, setEchoCancellation, setAutoGainControl,
+    setNoiseSuppression, setEchoCancellation, setAutoGainControl, setSystemEchoCancellation,
     setNoiseGateEnabled, setNoiseGateAuto, setNoiseGateThreshold,
   } = useSettingsStore();
+
+  // Liga: captura o loopback do sistema JÁ nesse clique (getDisplayMedia
+  // normalmente só funciona logo após um gesto do usuário — ver
+  // systemLoopback.ts) e reaproveita daqui pra frente, inclusive em calls
+  // futuras. Desliga: libera a captura de vez.
+  const handleToggleSystemEchoCancellation = (v: boolean) => {
+    setSystemEchoCancellation(v);
+    if (v) getOrCreateSystemLoopbackTrack();
+    else releaseSystemLoopbackTrack();
+  };
 
   return (
     <section className="space-y-4">
@@ -527,6 +538,15 @@ function ProcessingSection() {
           description="Evita que o som do seu alto-falante volte pelo microfone"
           checked={echoCancellation}
           onChange={setEchoCancellation}
+        />
+
+        <div className="h-px bg-white/[0.06]" />
+
+        <Toggle
+          label="Cancelamento de eco do sistema (experimental)"
+          description="Pra quando o eco vem de um jogo ou som do Windows tocando na caixa de som (não do próprio Zynk) — o cancelamento de eco normal não alcança isso. Usa o loopback do sistema como referência; pode custar um pouco de CPU e o resultado pode variar. Se soar estranho, desligue."
+          checked={systemEchoCancellation}
+          onChange={handleToggleSystemEchoCancellation}
         />
 
         <Toggle
