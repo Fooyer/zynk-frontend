@@ -82,16 +82,38 @@ async function uploadAsset(release, filePath) {
   const contentType = path.extname(fileName).toLowerCase() === '.yml' ? 'text/yaml' : 'application/octet-stream';
   const uploadUrl = release.upload_url.split('{')[0];
 
-  const res = await fetch(`${uploadUrl}?name=${encodeURIComponent(fileName)}`, {
-    method: 'POST',
-    headers: { ...headers, 'Content-Type': contentType, 'Content-Length': String(data.length) },
-    body: data,
-  });
-  if (!res.ok) {
-    const body = await res.text().catch(() => '');
-    throw new Error(`Falha ao subir ${fileName}: ${res.status} ${body}`);
+  // Upload grande (instalador do Windows passa de 100MB) numa conexão
+  // instável já falhou algumas vezes com erro de rede genérico ("fetch
+  // failed") sem nada corromper do lado do GitHub — vale tentar de novo
+  // antes de desistir, em vez de exigir rodar o script inteiro nas mãos.
+  const MAX_ATTEMPTS = 3;
+  let lastErr;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
+      const res = await fetch(`${uploadUrl}?name=${encodeURIComponent(fileName)}`, {
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': contentType, 'Content-Length': String(data.length) },
+        body: data,
+      });
+      if (!res.ok) {
+        const body = await res.text().catch(() => '');
+        throw new Error(`Falha ao subir ${fileName}: ${res.status} ${body}`);
+      }
+      console.log(`[publish-release] ✓ ${fileName} (${(data.length / 1024 / 1024).toFixed(1)} MB)`);
+      return;
+    } catch (err) {
+      lastErr = err;
+      const detail = err.cause ? `${err.message} (${err.cause.message || err.cause})` : err.message;
+      console.warn(`[publish-release] Tentativa ${attempt}/${MAX_ATTEMPTS} de ${fileName} falhou: ${detail}`);
+      if (attempt < MAX_ATTEMPTS) {
+        // Antes de tentar de novo, limpa um upload parcial que possa ter
+        // ficado registrado no GitHub mesmo com a resposta tendo falhado.
+        await deleteExistingAsset(release.id, fileName).catch(() => {});
+        await new Promise((r) => setTimeout(r, attempt * 5000));
+      }
+    }
   }
-  console.log(`[publish-release] ✓ ${fileName} (${(data.length / 1024 / 1024).toFixed(1)} MB)`);
+  throw lastErr;
 }
 
 function collectAssets() {
