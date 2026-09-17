@@ -505,6 +505,16 @@ export function CallManager() {
         screenSenderRef.current = pc.addTrack(videoTrack, screenStream);
 
         const audioTracks = screenStream.getAudioTracks();
+        // Diagnóstico: confirma se a captura trouxe áudio (ticket
+        // "Compartilhamento de áudio") — se hasAudioTrack sai false, o
+        // problema é na captura (permissão/loopback do sistema), não em
+        // como o outro lado recebe.
+        console.log('[screen-share] captura concluída:', {
+          withAudio,
+          hasAudioTrack: audioTracks.length > 0,
+          audioTrackReadyState: audioTracks[0]?.readyState,
+          audioTrackMuted: audioTracks[0]?.muted,
+        });
         if (audioTracks.length > 0) {
           screenAudioSenderRef.current = pc.addTrack(audioTracks[0], screenStream);
         }

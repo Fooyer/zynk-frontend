@@ -469,7 +469,19 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
           if (gainNode && ctx) {
             try {
               ctx.createMediaStreamTrackSource(track).connect(gainNode);
-            } catch { /* segue sem essa track no grafo — já está no <audio> nativo se o fallback acima rodou */ }
+              console.log(`[voice-ontrack] faixa extra (ex.: áudio de tela) conectada ao gain de ${targetUserId}`);
+            } catch (e) {
+              // Segue sem essa track no grafo — já está no <audio> nativo
+              // (stream.addTrack acima) se o fallback do primeiro track
+              // rodou. Antes esse erro era engolido em silêncio (ticket
+              // "Compartilhamento de áudio") — logando pra saber se é aqui
+              // que trava.
+              console.error(`[voice-ontrack] falha ao conectar faixa extra de ${targetUserId} no gain:`, e);
+            }
+          } else {
+            console.warn(`[voice-ontrack] faixa extra de ${targetUserId} sem gainNode/ctx pra conectar — só via <audio> nativo`, {
+              hasGainNode: !!gainNode, hasCtx: !!ctx,
+            });
           }
         }
         // `autoplay` sozinho não é confiável (política de autoplay do
@@ -707,6 +719,17 @@ export function useVoiceRoom(groupId: number, groupChannelId: number | null) {
       localScreenStream.current = screenStream;
 
       const audioTrack = screenStream.getAudioTracks()[0];
+
+      // Diagnóstico: confirma se a captura de fato trouxe uma faixa de
+      // áudio (ticket "Compartilhamento de áudio") — se `hasAudioTrack` sai
+      // false aqui, o problema é na CAPTURA (permissão/loopback do sistema),
+      // não no lado de quem recebe.
+      console.log('[voice-screen-share] captura concluída:', {
+        withAudio,
+        hasAudioTrack: !!audioTrack,
+        audioTrackReadyState: audioTrack?.readyState,
+        audioTrackMuted: audioTrack?.muted,
+      });
 
       for (const [uid, pc] of peers.current) {
         const senders: ScreenSenders = { video: pc.addTrack(videoTrack, screenStream) };
