@@ -4,6 +4,7 @@ import { useUiStore } from '../../stores/uiStore';
 import { useThemeStore, type AccentMode, type AccentPreset } from '../../stores/themeStore';
 import { PRESET_SWATCH, PRESET_LABELS } from '../../utils/accentPresets';
 import { useAuthStore } from '../../stores/authStore';
+import { confirmDialog } from '../../stores/dialogStore';
 import { getProcessedStream } from '../../services/audioProcessing';
 import { getOrCreateSystemLoopbackTrack, releaseSystemLoopbackTrack } from '../../services/systemLoopback';
 import { useEditableContextMenu } from '../../hooks/useEditableContextMenu';
@@ -353,6 +354,107 @@ function AccountSection() {
             <p className="text-xs text-surface-400">Nome: 3–32 caracteres (letras, números e underscore). Tag: 3–5 letras/números.</p>
           )}
         </form>
+      </div>
+    </section>
+  );
+}
+
+function DangerZoneSection() {
+  const deleteAccount = useAuthStore((s) => s.deleteAccount);
+  const [expanded, setExpanded] = useState(false);
+  const [password, setPassword] = useState('');
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const passwordRef = useRef<HTMLInputElement>(null);
+  const handlePasswordContextMenu = useEditableContextMenu(passwordRef);
+
+  const handleDelete = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!password || deleting) return;
+
+    const confirmed = await confirmDialog(
+      'Isso apaga sua conta e tudo que ela é dona (mensagens, canais, grupos, tickets, enquetes) para sempre. Não tem como desfazer.',
+      { title: 'Excluir conta permanentemente?', confirmLabel: 'Excluir conta', danger: true },
+    );
+    if (!confirmed) return;
+
+    setDeleting(true);
+    setError(null);
+    try {
+      await deleteAccount(password);
+      // authStore.logout() já limpa token/estado — a tela de login aparece sozinha.
+    } catch (err: any) {
+      const msg = err.response?.data?.message;
+      setError(Array.isArray(msg) ? msg[0] : (msg ?? 'Erro ao excluir a conta'));
+      setDeleting(false);
+    }
+  };
+
+  return (
+    <section className="space-y-4">
+      <SectionHeader
+        title="Zona de perigo"
+        icon={
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+            <line x1="12" y1="9" x2="12" y2="13" />
+            <line x1="12" y1="17" x2="12.01" y2="17" />
+          </svg>
+        }
+      />
+
+      <div className="bg-surface-800 rounded-2xl p-5 border border-danger/30 shadow-panel space-y-4">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <p className="text-sm font-medium text-surface-200">Excluir conta</p>
+            <p className="text-xs text-surface-500 mt-0.5">
+              Apaga permanentemente sua conta e todo o conteúdo do qual você é dono.
+            </p>
+          </div>
+          {!expanded && (
+            <button
+              type="button"
+              onClick={() => setExpanded(true)}
+              className="px-3 py-1.5 text-xs font-medium rounded-lg bg-danger/15 text-danger hover:bg-danger/25 transition-colors flex-shrink-0"
+            >
+              Excluir conta
+            </button>
+          )}
+        </div>
+
+        {expanded && (
+          <form onSubmit={handleDelete} className="flex flex-col gap-2 pt-2 border-t border-white/[0.06]">
+            <label className="text-sm font-medium text-surface-300">Confirme sua senha para excluir</label>
+            <div className="flex items-center gap-1.5">
+              <input
+                ref={passwordRef}
+                type="password"
+                value={password}
+                onChange={(e) => { setPassword(e.target.value); setError(null); }}
+                onContextMenu={handlePasswordContextMenu}
+                placeholder="Sua senha"
+                autoComplete="current-password"
+                className="flex-1 min-w-0 px-3 py-2 rounded-xl text-sm zk-input"
+              />
+              <button
+                type="button"
+                onClick={() => { setExpanded(false); setPassword(''); setError(null); }}
+                disabled={deleting}
+                className="px-3 py-2 text-sm rounded-lg bg-white/[0.06] text-surface-300 hover:bg-white/[0.12] flex-shrink-0"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={!password || deleting}
+                className="px-4 py-2 text-sm rounded-lg bg-danger text-white hover:bg-danger/90 disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
+              >
+                {deleting ? 'Excluindo...' : 'Excluir permanentemente'}
+              </button>
+            </div>
+            {error && <p className="text-xs text-danger">{error}</p>}
+          </form>
+        )}
       </div>
     </section>
   );
@@ -1111,6 +1213,7 @@ const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
 
 const SECTION_META: { id: string; tabId: TabId; label: string; keywords: string }[] = [
   { id: 'account', tabId: 'account', label: 'Conta', keywords: 'conta usuário username nome perfil account' },
+  { id: 'danger', tabId: 'account', label: 'Zona de perigo', keywords: 'excluir apagar deletar conta danger delete account' },
   { id: 'mic', tabId: 'audio', label: 'Microfone', keywords: 'microfone entrada input volume mic teste' },
   { id: 'output', tabId: 'audio', label: 'Saída de áudio', keywords: 'saída output alto-falante speaker áudio' },
   { id: 'processing', tabId: 'audio', label: 'Processamento de áudio', keywords: 'ruído noise supressão eco echo cancelamento ganho gain isolamento voz gate sensibilidade fundo' },
@@ -1132,6 +1235,7 @@ export function SettingsPage() {
 
   const sectionNodes: Record<string, React.ReactNode> = {
     account: <AccountSection />,
+    danger: <DangerZoneSection />,
     mic: <MicSection inputs={inputs} />,
     output: <OutputSection outputs={outputs} />,
     processing: <ProcessingSection />,
@@ -1245,7 +1349,12 @@ export function SettingsPage() {
               </div>
 
               <div key={activeTab} className="space-y-10 pb-8 animate-fade-in">
-                {activeTab === 'account' && sectionNodes.account}
+                {activeTab === 'account' && (
+                  <>
+                    {sectionNodes.account}
+                    {sectionNodes.danger}
+                  </>
+                )}
                 {activeTab === 'audio' && (
                   <>
                     {sectionNodes.mic}

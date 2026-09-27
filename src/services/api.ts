@@ -39,6 +39,7 @@ export const authAPI = {
 
 export const usersAPI = {
   updateMe: (data: { username: string; tag: string }) => api.patch("/users/me", data),
+  deleteMe: (data: { password: string }) => api.delete("/users/me", { data }),
 };
 
 // ─── Channels (DMs) ───────────────────────────────

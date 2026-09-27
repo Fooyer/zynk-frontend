@@ -18,10 +18,11 @@ interface AuthState {
   logout: () => void;
   loadUser: () => Promise<void>;
   updateIdentity: (username: string, tag: string) => Promise<void>;
+  deleteAccount: (password: string) => Promise<void>;
   clearError: () => void;
 }
 
-export const useAuthStore = create<AuthState>((set) => ({
+export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   token: localStorage.getItem('token'),
   isLoading: false,
@@ -91,6 +92,11 @@ export const useAuthStore = create<AuthState>((set) => ({
       user: s.user ? { ...s.user, username: data.user.username, tag: data.user.tag } : (data.user as User),
     }));
     connectSocket();
+  },
+
+  deleteAccount: async (password) => {
+    await usersAPI.deleteMe({ password });
+    get().logout();
   },
 
   clearError: () => set({ error: null }),
