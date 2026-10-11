@@ -18,6 +18,7 @@ import { NavBar } from './components/layout/NavBar';
 import { HomeLayout } from './components/home/HomeLayout';
 import { LoginForm } from './components/auth/LoginForm';
 import { RegisterForm } from './components/auth/RegisterForm';
+import { ForgotPasswordForm } from './components/auth/ForgotPasswordForm';
 import { CallManager } from './components/call/CallManager';
 import { ShortcutManager } from './components/call/ShortcutManager';
 import { SettingsPage } from './components/settings/SettingsPage';
@@ -153,18 +154,18 @@ function AppLayout() {
 }
 
 function AuthScreen() {
-  const [isLogin, setIsLogin] = useState(true);
+  const [screen, setScreen] = useState<'login' | 'register' | 'forgot'>('login');
   return (
     <div className="window-shell h-screen flex flex-col bg-surface-950">
       <TitleBar />
       <div className="relative flex-1 flex items-center justify-center overflow-hidden">
         {/* Glow decorativo atrás do card — dá profundidade ao fundo sólido sem sair do preto/cinza */}
         <div className="pointer-events-none absolute -top-32 left-1/2 -translate-x-1/2 w-[560px] h-[560px] rounded-full bg-accent-500/[0.07] blur-[120px]" />
-        {isLogin ? (
-          <LoginForm onSwitch={() => setIsLogin(false)} />
-        ) : (
-          <RegisterForm onSwitch={() => setIsLogin(true)} />
+        {screen === 'login' && (
+          <LoginForm onSwitch={() => setScreen('register')} onForgot={() => setScreen('forgot')} />
         )}
+        {screen === 'register' && <RegisterForm onSwitch={() => setScreen('login')} />}
+        {screen === 'forgot' && <ForgotPasswordForm onBack={() => setScreen('login')} />}
       </div>
     </div>
   );

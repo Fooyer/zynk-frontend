@@ -4,9 +4,10 @@ import { useEditableContextMenu } from '../../hooks/useEditableContextMenu';
 
 interface Props {
   onSwitch: () => void;
+  onForgot: () => void;
 }
 
-export function LoginForm({ onSwitch }: Props) {
+export function LoginForm({ onSwitch, onForgot }: Props) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const { login, isLoading, error, clearError } = useAuthStore();
@@ -62,6 +63,12 @@ export function LoginForm({ onSwitch }: Props) {
               className="w-full px-4 py-3 zk-input rounded-xl"
               placeholder="Sua senha"
             />
+          </div>
+
+          <div className="text-right -mt-2">
+            <button type="button" onClick={onForgot} className="text-xs text-accent-400 hover:text-accent-500 font-medium">
+              Esqueci minha senha
+            </button>
           </div>
 
           <button

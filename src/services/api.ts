@@ -33,6 +33,9 @@ export const authAPI = {
   login: (data: { email: string; password: string }) =>
     api.post("/auth/login", data),
   me: () => api.get("/users/me"),
+  forgotPassword: (data: { email: string }) => api.post("/auth/forgot-password", data),
+  resetPassword: (data: { email: string; code: string; newPassword: string }) =>
+    api.post("/auth/reset-password", data),
 };
 
 // ─── Users ────────────────────────────────────────
